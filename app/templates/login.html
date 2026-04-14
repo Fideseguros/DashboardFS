@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>fide. Seguros &mdash; Iniciar Sesi&oacute;n</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fide-teal: #00a79d;
+  --fide-teal-dark: #008f87;
+  --fide-mint: #85ffaa;
+  --fide-mint-light: #dbffe6;
+  --fide-black: #1a1a1a;
+  --fide-gray: #e6e7e8;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--fide-teal) 0%, var(--fide-teal-dark) 50%, #007a73 100%);
+  position: relative;
+  overflow: hidden;
+}
+body::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  right: -15%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(133,255,170,0.15) 0%, transparent 70%);
+  border-radius: 50%;
+}
+body::after {
+  content: '';
+  position: absolute;
+  bottom: -30%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(133,255,170,0.1) 0%, transparent 70%);
+  border-radius: 50%;
+}
+.login-card {
+  background: white;
+  border-radius: 20px;
+  padding: 3rem 2.5rem;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  z-index: 1;
+  text-align: center;
+}
+.logo-area {
+  margin-bottom: 2rem;
+}
+.logo-area svg { height: 56px; }
+.logo-area .subtitle {
+  font-size: 0.85rem;
+  color: #5a6a6e;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+.form-group {
+  margin-bottom: 1.2rem;
+  text-align: left;
+}
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fide-teal);
+  margin-bottom: 0.35rem;
+}
+.form-group input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #d4e8e5;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--fide-black);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.form-group input:focus {
+  outline: none;
+  border-color: var(--fide-teal);
+  box-shadow: 0 0 0 4px rgba(0,167,157,0.12);
+}
+.btn-login {
+  width: 100%;
+  padding: 0.85rem;
+  background: var(--fide-teal);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  margin-top: 0.5rem;
+}
+.btn-login:hover { background: var(--fide-teal-dark); transform: translateY(-1px); }
+.btn-login:active { transform: translateY(0); }
+.btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.error-msg {
+  color: #d94444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-top: 0.8rem;
+  min-height: 1.2em;
+}
+.footer {
+  margin-top: 2rem;
+  font-size: 0.75rem;
+  color: #a0a8ab;
+}
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="logo-area">
+    <svg viewBox="0 0 160 50" xmlns="http://www.w3.org/2000/svg">
+      <text x="10" y="40" font-family="Nunito, sans-serif" font-size="44" font-weight="800" font-style="italic" fill="#00a79d" letter-spacing="-2">fide.</text>
+    </svg>
+    <div class="subtitle">Dashboard de Cartera</div>
+  </div>
+  <form id="loginForm">
+    <div class="form-group">
+      <label>Usuario</label>
+      <input type="text" id="username" autocomplete="username" required placeholder="Tu usuario">
+    </div>
+    <div class="form-group">
+      <label>Contrase&ntilde;a</label>
+      <input type="password" id="password" autocomplete="current-password" required placeholder="Tu contrase&ntilde;a">
+    </div>
+    <button type="submit" class="btn-login" id="btnLogin">Iniciar Sesi&oacute;n</button>
+    <div class="error-msg" id="errorMsg"></div>
+  </form>
+  <div class="footer">fide. Seguros &copy; 2026</div>
+</div>
+
+<script>
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('btnLogin');
+  const err = document.getElementById('errorMsg');
+  btn.disabled = true;
+  btn.textContent = 'Ingresando...';
+  err.textContent = '';
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      err.textContent = data.detail || 'Credenciales invalidas';
+      btn.disabled = false;
+      btn.textContent = 'Iniciar Sesion';
+      return;
+    }
+    // Store token and redirect
+    sessionStorage.setItem('fide_token', data.token);
+    sessionStorage.setItem('fide_user', data.name);
+    document.cookie = `fide_token=${data.token}; path=/; max-age=${60*60*24*30}; SameSite=Strict`;
+    window.location.href = '/';
+  } catch (e) {
+    err.textContent = 'Error de conexion. Intenta de nuevo.';
+    btn.disabled = false;
+    btn.textContent = 'Iniciar Sesion';
+  }
+});
+
+// If already logged in, redirect
+if (sessionStorage.getItem('fide_token')) {
+  window.location.href = '/';
+}
+</script>
+</body>
+</html>
