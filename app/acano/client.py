@@ -1,6 +1,15 @@
 """HTTP client for ACANO API (REST + SOAP fallback)."""
+import os
 import httpx
 from app.config import ACANO_BASE_URL, ACANO_AUTH_TOKEN, ACANO_WSDL_URL, ACANO_PRODUCTS_ENDPOINT
+
+
+def _get_proxy() -> dict | None:
+    """Return httpx proxy config if FIXIE_URL is set."""
+    fixie_url = os.getenv("FIXIE_URL")
+    if fixie_url:
+        return {"http://": fixie_url, "https://": fixie_url}
+    return None
 
 
 class AcanoClient:
@@ -12,7 +21,7 @@ class AcanoClient:
         return await self._fetch_rest()
 
     async def _fetch_rest(self) -> list[dict]:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=120, proxies=_get_proxy()) as client:
             response = await client.get(
                 f"{ACANO_BASE_URL}{ACANO_PRODUCTS_ENDPOINT}",
                 headers={"Authorization": f"Bearer {ACANO_AUTH_TOKEN}"}
