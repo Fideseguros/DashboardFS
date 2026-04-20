@@ -708,6 +708,12 @@ body {
       <div class="kpi-value" id="kpiMora">-</div>
       <div class="kpi-sub" id="kpiMoraSub"></div>
     </div>
+    <div class="kpi-card blue">
+      <div class="kpi-icon">&#127919;</div>
+      <div class="kpi-label">Ticket Promedio</div>
+      <div class="kpi-value" id="kpiTicket">-</div>
+      <div class="kpi-sub" id="kpiTicketSub"></div>
+    </div>
   </div>
 
   <!-- Tabs -->
@@ -1148,6 +1154,16 @@ function updateKPIs() {
   document.getElementById('kpiTasaSub').textContent = `Rango: ${tasas.length?Math.min(...tasas).toFixed(1):0}% - ${tasas.length?Math.max(...tasas).toFixed(1):0}%`;
   document.getElementById('kpiMora').textContent = fmt(enMora.length);
   document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSal)})`;
+
+  // Ticket promedio = valor crédito promedio (todos los filtrados con valor > 0)
+  const vals = d.map(r => parseFloat(r.valor_credito)).filter(v => !isNaN(v) && v>0);
+  const ticket = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  const valsAct = act.map(r => parseFloat(r.valor_credito)).filter(v => !isNaN(v) && v>0);
+  const ticketAct = valsAct.length ? valsAct.reduce((a,b)=>a+b,0)/valsAct.length : 0;
+  document.getElementById('kpiTicket').textContent = fmtM(ticket);
+  document.getElementById('kpiTicketSub').textContent = valsAct.length
+    ? `Activos: ${fmtM(ticketAct)}` : `Sobre ${fmt(vals.length)} créditos`;
+
   document.getElementById('totalRecords').textContent = fmt(d.length);
 }
 
