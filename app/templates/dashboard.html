@@ -109,6 +109,35 @@ body {
   z-index: 1;
 }
 .header-right strong { color: var(--fide-mint); }
+.header-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 0.35rem; }
+.header-btn {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-family: inherit;
+  font-weight: 700;
+  transition: background 0.15s;
+}
+.header-btn:hover { background: rgba(255,255,255,0.28); }
+#btnUpload { background: rgba(133,255,170,0.25); border-color: rgba(133,255,170,0.5); }
+#btnUpload:hover { background: rgba(133,255,170,0.4); }
+.cross-filter-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(90deg, rgba(133,255,170,0.18), rgba(0,167,157,0.08));
+  border-left: 3px solid var(--fide-teal);
+  padding: 0.55rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 0 0 1rem 0;
+}
+.cross-filter-hint span { font-size: 1rem; }
 
 /* =================== FILTERS =================== */
 .filters {
@@ -587,7 +616,13 @@ body {
   .data-table th.hide-mobile, .data-table td.hide-mobile { display: none; }
 }
 @media (max-width: 480px) {
-  .kpi-grid { grid-template-columns: 1fr; }
+  /* Mantener 2 KPIs por línea siempre (nunca apilar en 1 columna) */
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+  .kpi-card { padding: 0.7rem 0.55rem; }
+  .kpi-icon { font-size: 1.2rem; width: 32px; height: 32px; }
+  .kpi-value { font-size: 1.1rem; }
+  .kpi-label { font-size: 0.62rem; }
+  .kpi-sub { font-size: 0.6rem; }
   .filter-group { flex: 1 1 100%; }
 }
 @media print {
@@ -611,15 +646,14 @@ body {
     </div>
   </div>
   <div class="header-right">
-    <div id="syncInfo" style="font-size:0.75rem;opacity:0.7;"></div>
-    <div><strong>Generado:</strong> 31/03/2026 17:13</div>
-    <div><strong>Registros:</strong> <span id="totalRecords">-</span>
-    <div style="margin-top:0.3rem;">
+    <div><strong>Actualizado:</strong> <span id="lastSync">&mdash;</span></div>
+    <div><strong>Registros:</strong> <span id="totalRecords">-</span></div>
+    <div class="header-actions">
       <span id="userName" style="font-weight:700;"></span>
-      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;background:rgba(133,255,170,0.25);border:1px solid rgba(133,255,170,0.5);color:white;padding:0.2rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.75rem;font-family:inherit;font-weight:700;margin-left:0.5rem;">Subir Excel</button>
-      <button onclick="doLogout()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:0.2rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.75rem;font-family:inherit;font-weight:700;margin-left:0.5rem;">Salir</button>
+      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;" class="header-btn">Subir Excel</button>
+      <button onclick="doLogout()" class="header-btn">Salir</button>
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
-    </div></div>
+    </div>
   </div>
 </div>
 
@@ -722,6 +756,9 @@ body {
     <div class="tab" data-tab="cartera">An&aacute;lisis de Cartera</div>
     <div class="tab" data-tab="aliados">Aliados &amp; Geograf&iacute;a</div>
     <div class="tab" data-tab="detalle">Detalle Cr&eacute;ditos</div>
+  </div>
+  <div class="cross-filter-hint">
+    <span>&#128161;</span> Haz clic en cualquier gr&aacute;fica para filtrar din&aacute;micamente. Vuelve a hacer clic para quitar el filtro.
   </div>
 
   <!-- Tab: Resumen -->
@@ -871,7 +908,7 @@ async function loadData() {
     updateAll();
     loadSyncStatus();
   } catch(e) {
-    document.querySelector('.container').innerHTML = '<div style="text-align:center;padding:4rem;"><h2>Error de conexion</h2><p>No se pudo cargar los datos. <a href="/login">Reiniciar sesion</a></p></div>';
+    document.querySelector('.container').innerHTML = '<div style="text-align:center;padding:4rem;"><h2>Error de conexión</h2><p>No se pudo cargar los datos. <a href="/login">Reiniciar sesión</a></p></div>';
   }
 }
 async function loadSyncStatus() {
@@ -879,9 +916,14 @@ async function loadSyncStatus() {
     const res = await apiGet('/api/sync/status');
     if (res.ok) {
       const s = await res.json();
-      const el = document.getElementById('syncInfo');
+      const el = document.getElementById('lastSync');
       if (el && s.completed_at) {
-        el.textContent = 'Sync: ' + s.completed_at.substring(0,16).replace('T',' ') + ' (' + (s.records_count||0) + ' reg)';
+        // Convert UTC ISO to local Colombian friendly format: 20/04/2026 17:13
+        const dt = new Date(s.completed_at + 'Z');
+        const pad = n => String(n).padStart(2, '0');
+        el.textContent = `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      } else if (el) {
+        el.textContent = 'Sin datos cargados';
       }
     }
   } catch(e) {}
@@ -898,7 +940,7 @@ const FIDE = {
   gray: '#e6e7e8', black: '#1a1a1a'
 };
 const CHART_COLORS = [FIDE.teal, FIDE.blue, FIDE.mint, FIDE.coral, FIDE.yellow, FIDE.magenta, '#38b2ac', '#667eea', '#f6ad55', '#76e4f7', '#b794f4', '#68d391', '#fbb6ce', '#d69e2e', '#fc8181'];
-const CALIF_COLORS = {'A': FIDE.teal, 'B': '#ecc94b', 'C': '#ed8936', 'D': FIDE.coral, 'E': FIDE.gray};
+const CALIF_COLORS = {'A': FIDE.teal, 'B': '#ecc94b', 'C': '#ed8936', 'D': FIDE.coral, 'E': FIDE.magenta};
 const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
 const MORA_COLORS = [FIDE.teal, FIDE.mint, '#ecc94b', '#ed8936', FIDE.coral, '#c53030', '#742a2a'];
 
@@ -1005,7 +1047,7 @@ function sumBy(arr, gk, sk) {
 const chartFilters = {};
 // Supported filter dimensions from chart clicks
 const FILTER_LABELS = {
-  estado: 'Estado', linea: 'Linea', calificacion: 'Calificacion',
+  estado: 'Estado', linea: 'Línea', calificacion: 'Calificación',
   mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado', ciudad: 'Ciudad'
 };
 
@@ -1137,7 +1179,7 @@ function updateKPIs() {
   const act = d.filter(r => r.estado==='ACTIVO');
   const tVal = d.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
   const tSal = d.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
-  const tasas = act.map(r => parseFloat(r.tasa_efectiva)).filter(t => !isNaN(t) && t>0);
+  const tasas = d.map(r => parseFloat(r.tasa_efectiva)).filter(t => !isNaN(t) && t>0);
   const tProm = tasas.length ? tasas.reduce((a,b)=>a+b,0)/tasas.length : 0;
   const enMora = act.filter(r => (parseInt(r.dias_mora)||0)>0);
   const sMora = enMora.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
@@ -1146,8 +1188,9 @@ function updateKPIs() {
   document.getElementById('kpiTotalSub').textContent = `${fmt(act.length)} activos / ${fmt(d.length-act.length)} cancelados`;
   document.getElementById('kpiActivos').textContent = fmt(act.length);
   document.getElementById('kpiActivosSub').textContent = pct(act.length, d.length) + ' del total';
+  const tValAct = act.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
   document.getElementById('kpiValor').textContent = fmtM(tVal);
-  document.getElementById('kpiValorSub').textContent = 'Valor total desembolsado';
+  document.getElementById('kpiValorSub').textContent = `Activos: ${fmtM(tValAct)}`;
   document.getElementById('kpiSaldo').textContent = fmtM(tSal);
   document.getElementById('kpiSaldoSub').textContent = pct(tSal, tVal) + ' del valor original';
   document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
@@ -1430,15 +1473,50 @@ function updateTable() {
 function goPage(p) { currentPage=p; updateTable(); }
 
 // ---- EXPORT CSV ----
-function exportCSV() {
-  const data=getSearchFiltered();
-  const h=['Cliente','Identificacion','Estado','Linea','Valor_Credito','Saldo_Capital','Calificacion','Dias_Mora','Tasa_Efectiva','Fecha_Desembolso','Fecha_Vencimiento','Aliado','Ciudad'];
-  const k=['cliente','identificacion','estado','linea','valor_credito','saldo_capital','calificacion','dias_mora','tasa_efectiva','fecha_desembolso','fecha_vencimiento','aliado','ciudad'];
-  let csv = h.join(',')+`\n`;
-  data.forEach(r=>{ csv+=k.map(key=>{ let v=r[key]==null?'':String(r[key]); if(v.includes(',')||v.includes('"'))v='"'+v.replace(/"/g,'""')+'"'; return v; }).join(',')+`\n`; });
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='fide_cartera_export.csv'; a.click();
+async function exportCSV() {
+  const role = sessionStorage.getItem('fide_role') || '';
+  // Superadmin: hit backend to get decrypted PII. Viewer: export masked client-side.
+  if (role === 'superadmin') {
+    try {
+      const q = new URLSearchParams();
+      const mapping = { estado:'fEstado', linea:'fLinea', calificacion:'fCalif',
+                        aliado:'fAliado', ciudad:'fCiudad' };
+      for (const [k, id] of Object.entries(mapping)) {
+        const v = document.getElementById(id)?.value;
+        if (v) q.append(k, v);
+      }
+      const res = await fetch('/api/credits/export/csv' + (q.toString() ? '?' + q.toString() : ''),
+                              { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('export failed');
+      const blob = await res.blob();
+      // Prepend UTF-8 BOM so Excel opens with tildes correctly.
+      const bom = new Blob(['\uFEFF'], { type: 'text/csv;charset=utf-8;' });
+      const finalBlob = new Blob([bom, blob], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'fide_cartera_export.csv'; a.click();
+      URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      alert('Error al exportar. Se descargará la versión enmascarada.');
+    }
+  }
+  // Fallback / viewer: masked client-side export
+  const data = getSearchFiltered();
+  const h = ['Cliente','Identificación','Estado','Línea','Valor_Crédito','Saldo_Capital','Calificación','Días_Mora','Tasa_Efectiva','Fecha_Desembolso','Fecha_Vencimiento','Aliado','Ciudad'];
+  const k = ['cliente','identificacion','estado','linea','valor_credito','saldo_capital','calificacion','dias_mora','tasa_efectiva','fecha_desembolso','fecha_vencimiento','aliado','ciudad'];
+  let csv = '\uFEFF' + h.join(',') + '\n';
+  data.forEach(r => {
+    csv += k.map(key => {
+      let v = r[key] == null ? '' : String(r[key]);
+      if (v.includes(',') || v.includes('"')) v = '"' + v.replace(/"/g, '""') + '"';
+      return v;
+    }).join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'fide_cartera_export.csv'; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -1478,8 +1556,8 @@ function registerChartClicks() {
   addChartClick('chartEvolucion', 'mes_desembolso');
   addChartClick('chartSaldoLinea', 'linea');
   addChartClick('chartCalifLinea', 'linea');
-  addChartClick('chartTasas', 'calificacion', null); // no direct mapping, skip
-  addChartClick('chartPlazos', 'calificacion', null);
+  // chartTasas and chartPlazos don't have a meaningful cross-filter dimension;
+  // clicking them used to set a bogus calificacion filter. Disabled on purpose.
   addChartClick('chartMoraSaldo', 'mora');
   addChartClick('chartAliados', 'aliado');
   addChartClick('chartAliadosCount', 'aliado');
@@ -1528,7 +1606,7 @@ async function uploadExcel(file) {
       location.reload();
     }
   } catch (e) {
-    alert('Error de conexion al subir el archivo');
+    alert('Error de conexión al subir el archivo. Verifica tu conexión.');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
