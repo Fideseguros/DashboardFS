@@ -1,6 +1,7 @@
 """Fide Seguros Dashboard - FastAPI Application."""
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 import os
@@ -15,6 +16,9 @@ app.include_router(credits.router)
 app.include_router(sync.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _log = logging.getLogger("fide.startup")
 
 

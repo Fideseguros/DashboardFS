@@ -83,8 +83,10 @@ body {
   z-index: 1;
 }
 .fide-logo {
-  height: 48px;
+  height: 54px;
   width: auto;
+  /* Logo is teal; invert to white over the teal header. */
+  filter: brightness(0) invert(1);
 }
 .header-title {
   border-left: 2px solid rgba(133,255,170,0.4);
@@ -615,7 +617,7 @@ body {
     gap: 0.5rem;
   }
   .header-left { gap: 0.8rem; }
-  .fide-logo { height: 34px; }
+  .fide-logo { height: 38px; }
   .header-title { padding-left: 0.8rem; }
   .header-title h1 { font-size: 0.95rem; }
   .header-title .subtitle { font-size: 0.7rem; }
@@ -689,10 +691,7 @@ body {
 
 <div class="header">
   <div class="header-left">
-    <svg viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg" class="fide-logo">
-  <text x="0" y="48" font-family='Nunito, sans-serif' font-size="52" font-weight="800" font-style="italic" fill="white" letter-spacing="-2">fide.</text>
-  <text x="130" y="22" font-family='Nunito, sans-serif' font-size="11" font-weight="700" fill="rgba(255,255,255,0.85)" letter-spacing="1.5" transform="rotate(-30, 150, 20)">SEGUROS</text>
-</svg>
+    <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-logo">
     <div class="header-title">
       <h1>Dashboard de Cartera</h1>
       <div class="subtitle">Consulta de Productos &mdash; Operaci&oacute;n en Tiempo Real</div>
