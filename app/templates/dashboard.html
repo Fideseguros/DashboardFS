@@ -217,31 +217,25 @@ body {
 }
 .kpi-card {
   background: var(--card);
-  border-radius: var(--radius);
-  padding: 1.3rem 1.5rem;
-  box-shadow: var(--shadow);
-  border-top: 4px solid var(--fide-teal);
-  transition: transform 0.2s, box-shadow 0.2s;
+  border-radius: 8px;
+  padding: 1.1rem 1.25rem 1rem;
+  border: 1px solid #E1DFDD;
+  border-left: 3px solid var(--fide-teal);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: box-shadow 0.2s, transform 0.2s;
   position: relative;
-  overflow: hidden;
 }
-.kpi-card::after {
-  content: '';
-  position: absolute;
-  top: 0; right: 0;
-  width: 80px; height: 80px;
-  background: radial-gradient(circle at top right, rgba(133,255,170,0.12), transparent 70%);
-}
+.kpi-card::after { content: none; }
 .kpi-card:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
 }
-.kpi-card.mint { border-top-color: var(--fide-mint); }
-.kpi-card.blue { border-top-color: var(--fide-blue); }
-.kpi-card.yellow { border-top-color: var(--fide-yellow); }
-.kpi-card.coral { border-top-color: var(--fide-coral); }
-.kpi-card.teal { border-top-color: var(--fide-teal); }
-.kpi-card.magenta { border-top-color: var(--fide-magenta); }
+.kpi-card.mint { border-left-color: var(--fide-mint); }
+.kpi-card.blue { border-left-color: var(--fide-blue); }
+.kpi-card.yellow { border-left-color: var(--fide-yellow); }
+.kpi-card.coral { border-left-color: var(--fide-coral); }
+.kpi-card.teal { border-left-color: var(--fide-teal); }
+.kpi-card.magenta { border-left-color: var(--fide-magenta); }
 
 /* Info tooltip (hover) */
 .kpi-info {
@@ -368,27 +362,30 @@ body {
 }
 .chart-card {
   background: var(--card);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-  transition: box-shadow 0.2s;
+  border-radius: 8px;
+  padding: 1.25rem 1.3rem 1rem;
+  border: 1px solid #E1DFDD;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
-.chart-card:hover { box-shadow: var(--shadow-lg); }
+.chart-card:hover { border-color: #C8C6C4; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 .chart-card h3 {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: var(--fide-teal-deeper);
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 2px solid var(--fide-mint-light);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #323130;
+  margin-bottom: 0.9rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #EDEBE9;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  letter-spacing: 0.1px;
+  text-transform: none;
 }
 .chart-card h3 .dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: var(--fide-mint);
+  width: 4px; height: 16px;
+  border-radius: 2px;
+  background: var(--fide-teal);
   display: inline-block;
 }
 .chart-card.full { grid-column: 1 / -1; }
@@ -1127,10 +1124,35 @@ const CALIF_COLORS = {'A': FIDE.teal, 'B': '#ecc94b', 'C': '#ed8936', 'D': FIDE.
 const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
 const MORA_COLORS = [FIDE.teal, FIDE.mint, '#ecc94b', '#ed8936', FIDE.coral, '#c53030', '#742a2a'];
 
-// ---- Chart.js global defaults (Fide style) ----
-Chart.defaults.font.family = "'Nunito', 'Segoe UI', system-ui, sans-serif";
-Chart.defaults.font.weight = 600;
-Chart.defaults.color = '#5a6a6e';
+// ---- Chart.js global defaults (Power BI-like professional style) ----
+Chart.defaults.font.family = "'Segoe UI', 'Nunito', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.font.weight = 500;
+Chart.defaults.color = '#605E5C';
+Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
+// Reduce default animation for snappier feel
+Chart.defaults.animation.duration = 450;
+Chart.defaults.animation.easing = 'easeOutQuart';
+// Cleaner tooltip (white card + subtle shadow, Power BI style)
+Chart.defaults.plugins.tooltip.backgroundColor = '#ffffff';
+Chart.defaults.plugins.tooltip.titleColor = '#201F1E';
+Chart.defaults.plugins.tooltip.bodyColor = '#323130';
+Chart.defaults.plugins.tooltip.borderColor = '#E1DFDD';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.cornerRadius = 4;
+Chart.defaults.plugins.tooltip.titleFont = { weight: 700, size: 12 };
+Chart.defaults.plugins.tooltip.bodyFont = { weight: 500, size: 11 };
+Chart.defaults.plugins.tooltip.boxPadding = 6;
+Chart.defaults.plugins.tooltip.displayColors = true;
+Chart.defaults.plugins.tooltip.usePointStyle = true;
+// Legend style
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.pointStyle = 'rectRounded';
+Chart.defaults.plugins.legend.labels.padding = 14;
+Chart.defaults.plugins.legend.labels.boxWidth = 10;
+Chart.defaults.plugins.legend.labels.boxHeight = 10;
+Chart.defaults.plugins.legend.labels.font = { weight: 600, size: 11 };
 
 function fmt(n) {
   if (n == null || isNaN(n)) return '-';
@@ -1222,7 +1244,7 @@ function updateCosecha() {
       },
       scales: {
         x: { stacked:true, grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } },
-        y: { stacked:true, beginAtZero:true, title:{ display:true, text:'# Créditos por cosecha', font:{ weight:700 } }, grid:{ color:'#eef5f4' } }
+        y: { stacked:true, beginAtZero:true, title:{ display:true, text:'# Créditos por cosecha', font:{ weight:700 } }, grid:{ color:'#F3F2F1' } }
       }
     },
     plugins: [ChartDataLabels]
@@ -1277,7 +1299,7 @@ function updateEvolucion() {
       interaction: { mode:'index', intersect:false },
       plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
       scales: {
-        y: { beginAtZero:true, position:'left', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#eef5f4' } },
+        y: { beginAtZero:true, position:'left', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#F3F2F1' } },
         y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Valor ($)', font:{ weight:700 } }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>fmtM(v) } },
         x: { grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } }
       }
@@ -1632,7 +1654,7 @@ function updateCharts() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:13 }, formatter:v=>fmt(v) } },
-      scales: { y:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, x:{ grid:{ display:false } } }
+      scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1648,7 +1670,7 @@ function updateCharts() {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:11 }, formatter:v=>v>0?fmt(v):'' } },
-      scales: { y:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, x:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
+      scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1670,7 +1692,7 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
-      scales: { y:{ beginAtZero:true, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#eef5f4' } }, x:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
+      scales: { y:{ beginAtZero:true, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1684,7 +1706,7 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
-      scales: { x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } }, y:{ stacked:true, beginAtZero:true, grid:{ color:'#eef5f4' } } }
+      scales: { x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } }, y:{ stacked:true, beginAtZero:true, grid:{ color:'#F3F2F1' } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1699,7 +1721,7 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800 }, formatter:v=>v>0?v:'' } },
-      scales: { y:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, x:{ grid:{ display:false } } }
+      scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1714,7 +1736,7 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800 }, formatter:v=>v>0?v:'' } },
-      scales: { y:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, x:{ grid:{ display:false }, title:{ display:true, text:'Días', font:{ weight:700 } } } }
+      scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, title:{ display:true, text:'Días', font:{ weight:700 } } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1736,7 +1758,7 @@ function updateCharts() {
       responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
       scales: {
-        y: { beginAtZero:true, position:'left', title:{ display:true, text:'Saldo ($)', font:{ weight:700 } }, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#eef5f4' } },
+        y: { beginAtZero:true, position:'left', title:{ display:true, text:'Saldo ($)', font:{ weight:700 } }, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } },
         y1: { beginAtZero:true, position:'right', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ drawOnChartArea:false } },
         x: { grid:{ display:false } }
       }
@@ -1758,7 +1780,7 @@ function updateCharts() {
     options: {
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'right', color:'#1a1a1a', font:{ size:11, weight:800 }, formatter:v=>fmtM(v) } },
-      scales: { x:{ beginAtZero:true, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#eef5f4' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:11 } } } }
+      scales: { x:{ beginAtZero:true, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:11 } } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1772,7 +1794,7 @@ function updateCharts() {
     options: {
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'right', color:'#1a1a1a', font:{ size:11, weight:800 } } },
-      scales: { x:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
+      scales: { x:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
     },
     plugins: [ChartDataLabels]
   });
@@ -1786,7 +1808,7 @@ function updateCharts() {
     options: {
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'right', color:'#1a1a1a', font:{ size:11, weight:800 } } },
-      scales: { x:{ beginAtZero:true, grid:{ color:'#eef5f4' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
+      scales: { x:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
     },
     plugins: [ChartDataLabels]
   });
