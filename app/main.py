@@ -19,24 +19,35 @@ _log = logging.getLogger("fide.startup")
 
 
 def _bootstrap_admin():
-    """Create the first superadmin from BOOTSTRAP_ADMIN_USER/PASSWORD env vars
-    if the users table is empty. No-op on subsequent startups."""
+    """Create or reset the superadmin from BOOTSTRAP_ADMIN_USER/PASSWORD env vars.
+
+    If the user exists, its password is updated and the role forced to superadmin.
+    Recommended: remove BOOTSTRAP_ADMIN_* from Railway after first successful login.
+    """
     admin_user = os.getenv("BOOTSTRAP_ADMIN_USER", "").strip()
     admin_pass = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
     if not admin_user or not admin_pass:
         return
     import bcrypt as _bcrypt
+    pwd_hash = _bcrypt.hashpw(admin_pass.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
     with get_db() as conn:
-        row = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
-        if row and row["cnt"] > 0:
-            return
-        pwd_hash = _bcrypt.hashpw(admin_pass.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
-        conn.execute(
-            "INSERT INTO users (username, password_hash, display_name, role) "
-            "VALUES (?, ?, ?, 'superadmin')",
-            (admin_user, pwd_hash, "Administrador")
-        )
-    _log.warning("Bootstrap admin '%s' creado. Elimina BOOTSTRAP_ADMIN_* de Railway.", admin_user)
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ?", (admin_user,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE users SET password_hash = ?, role = 'superadmin', is_active = 1 "
+                "WHERE id = ?",
+                (pwd_hash, existing["id"])
+            )
+            _log.warning("Bootstrap: contraseña de '%s' reseteada. Elimina BOOTSTRAP_ADMIN_* cuando funcione.", admin_user)
+        else:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, display_name, role) "
+                "VALUES (?, ?, ?, 'superadmin')",
+                (admin_user, pwd_hash, "Administrador")
+            )
+            _log.warning("Bootstrap admin '%s' creado. Elimina BOOTSTRAP_ADMIN_* cuando funcione.", admin_user)
 
 
 @app.on_event("startup")
