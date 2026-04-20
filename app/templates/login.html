@@ -161,6 +161,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify({
         username: document.getElementById('username').value,
         password: document.getElementById('password').value
@@ -173,10 +174,10 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       btn.textContent = 'Iniciar Sesion';
       return;
     }
-    // Store token and redirect
-    sessionStorage.setItem('fide_token', data.token);
-    sessionStorage.setItem('fide_user', data.name);
-    document.cookie = `fide_token=${data.token}; path=/; max-age=${60*60*24*30}; SameSite=Strict`;
+    // Cookie is already set server-side (HttpOnly, Secure, SameSite=Strict).
+    // We only keep display name + role for UI personalization.
+    sessionStorage.setItem('fide_user', data.name || '');
+    sessionStorage.setItem('fide_role', data.role || '');
     window.location.href = '/';
   } catch (e) {
     err.textContent = 'Error de conexion. Intenta de nuevo.';
@@ -184,11 +185,6 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     btn.textContent = 'Iniciar Sesion';
   }
 });
-
-// If already logged in, redirect
-if (sessionStorage.getItem('fide_token')) {
-  window.location.href = '/';
-}
 </script>
 </body>
 </html>

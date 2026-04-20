@@ -762,17 +762,16 @@ body {
 let RAW_DATA = [];
 let filteredData = [];
 
-// Auth check + data fetch
+// Auth check + data fetch (uses HttpOnly cookie; no token in JS)
+async function apiGet(url) {
+  return fetch(url, { credentials: 'same-origin' });
+}
 async function loadData() {
-  const token = sessionStorage.getItem('fide_token') || getCookie('fide_token');
-  if (!token) { window.location.href = '/login'; return; }
   try {
-    const res = await fetch('/api/credits', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
+    const res = await apiGet('/api/credits');
     if (res.status === 401) {
-      sessionStorage.removeItem('fide_token');
-      document.cookie = 'fide_token=; path=/; max-age=0';
+      sessionStorage.removeItem('fide_user');
+      sessionStorage.removeItem('fide_role');
       window.location.href = '/login';
       return;
     }
@@ -780,18 +779,14 @@ async function loadData() {
     filteredData = [...RAW_DATA];
     populateFilters();
     updateAll();
-    loadSyncStatus(token);
+    loadSyncStatus();
   } catch(e) {
     document.querySelector('.container').innerHTML = '<div style="text-align:center;padding:4rem;"><h2>Error de conexion</h2><p>No se pudo cargar los datos. <a href="/login">Reiniciar sesion</a></p></div>';
   }
 }
-function getCookie(name) {
-  const v = document.cookie.match('(^|;)\s*' + name + '\s*=\s*([^;]+)');
-  return v ? v.pop() : '';
-}
-async function loadSyncStatus(token) {
+async function loadSyncStatus() {
   try {
-    const res = await fetch('/api/sync/status', { headers: { 'Authorization': 'Bearer ' + token } });
+    const res = await apiGet('/api/sync/status');
     if (res.ok) {
       const s = await res.json();
       const el = document.getElementById('syncInfo');
@@ -1358,12 +1353,12 @@ updateCharts = function() { _origUpdateCharts(); registerChartClicks(); };
 
 // Load data from API (replaces static embedded data)
 loadData();
-function doLogout() {
-  const token = sessionStorage.getItem('fide_token') || getCookie('fide_token');
-  fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
-  sessionStorage.removeItem('fide_token');
+async function doLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  } catch (e) {}
   sessionStorage.removeItem('fide_user');
-  document.cookie = 'fide_token=; path=/; max-age=0';
+  sessionStorage.removeItem('fide_role');
   window.location.href = '/login';
 }
 // Show user name
