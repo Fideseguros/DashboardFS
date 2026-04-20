@@ -680,6 +680,21 @@ body {
   .kpi-sub { font-size: 0.6rem; }
   .filter-group { flex: 1 1 100%; }
 }
+
+/* Tooltip KPI: ajustar ancho/posición en móvil para no cortarse */
+@media (max-width: 768px) {
+  .kpi-info .kpi-tooltip {
+    width: min(220px, calc(100vw - 2rem));
+    font-size: 0.68rem;
+    padding: 0.5rem 0.65rem;
+  }
+  /* KPI de la columna derecha: anclar tooltip a la derecha (arrow arriba-derecha) */
+  .kpi-grid > .kpi-card:nth-child(even) .kpi-tooltip { right: 0; left: auto; }
+  .kpi-grid > .kpi-card:nth-child(even) .kpi-tooltip::before { right: 6px; left: auto; }
+  /* KPI de la columna izquierda: anclar tooltip a la izquierda (arrow arriba-izquierda) */
+  .kpi-grid > .kpi-card:nth-child(odd) .kpi-tooltip { left: -8px; right: auto; }
+  .kpi-grid > .kpi-card:nth-child(odd) .kpi-tooltip::before { left: 14px; right: auto; }
+}
 @media print {
   .filters, .pagination, .table-controls { display:none; }
   .chart-card, .kpi-card { break-inside:avoid; }
@@ -1431,9 +1446,25 @@ function updateCharts() {
     options: {
       responsive: true, maintainAspectRatio: false,
       cutout: '65%',
+      layout: { padding: 6 },
       plugins: {
-        legend: { position:'bottom', labels: { padding: 16, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: 700 } } },
-        datalabels: { color:'#fff', font:{ weight:800, size:15 }, formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return (v/t*100).toFixed(1)+'%'; } }
+        legend: { position:'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: 700 } } },
+        tooltip: { callbacks: { label: (ctx) => {
+          const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
+          return `${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/t*100).toFixed(1)}%)`;
+        }}},
+        datalabels: {
+          color: '#fff',
+          font: { weight: 800, size: 14 },
+          textStrokeColor: 'rgba(0,0,0,0.55)',
+          textStrokeWidth: 3,
+          formatter: (v, ctx) => {
+            const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct = v/t*100;
+            if (pct < 5) return '';
+            return pct.toFixed(1) + '%';
+          }
+        }
       }
     },
     plugins: [ChartDataLabels]
@@ -1449,9 +1480,25 @@ function updateCharts() {
     options: {
       responsive: true, maintainAspectRatio: false,
       cutout: '55%',
+      layout: { padding: 6 },
       plugins: {
-        legend: { position:'bottom', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11, weight: 700 } } },
-        datalabels: { color:'#fff', font:{ weight:800, size:12 }, formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return v+' ('+((v/t*100).toFixed(0))+'%)'; } }
+        legend: { position:'bottom', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11, weight: 700 }, boxWidth: 10 } },
+        tooltip: { callbacks: { label: (ctx) => {
+          const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
+          return `${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/t*100).toFixed(1)}%)`;
+        }}},
+        datalabels: {
+          color: '#fff',
+          font: { weight: 800, size: 12 },
+          textStrokeColor: 'rgba(0,0,0,0.55)',
+          textStrokeWidth: 3,
+          formatter: (v, ctx) => {
+            const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct = v/t*100;
+            if (pct < 5) return '';
+            return pct.toFixed(0) + '%';
+          }
+        }
       }
     },
     plugins: [ChartDataLabels]
