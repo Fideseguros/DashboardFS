@@ -73,38 +73,6 @@ def health():
     return {"status": "ok", "service": "fide-dashboard"}
 
 
-@app.get("/api/diag")
-def diag():
-    """Diagnóstico temporal — no expone secretos, solo booleanos/conteos."""
-    conn = get_connection()
-    try:
-        users_count = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
-        admin_row = conn.execute(
-            "SELECT username, role, is_active, last_login FROM users WHERE username = ?",
-            (os.getenv("BOOTSTRAP_ADMIN_USER", "admin"),)
-        ).fetchone()
-    finally:
-        conn.close()
-    return {
-        "env": {
-            "APP_ENV": os.getenv("APP_ENV", ""),
-            "FIELD_ENCRYPTION_KEY_set": bool(os.getenv("FIELD_ENCRYPTION_KEY")),
-            "BOOTSTRAP_ADMIN_USER_set": bool(os.getenv("BOOTSTRAP_ADMIN_USER")),
-            "BOOTSTRAP_ADMIN_PASSWORD_set": bool(os.getenv("BOOTSTRAP_ADMIN_PASSWORD")),
-            "BOOTSTRAP_ADMIN_USER_value_len": len(os.getenv("BOOTSTRAP_ADMIN_USER", "")),
-            "BOOTSTRAP_ADMIN_PASSWORD_value_len": len(os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")),
-            "COOKIE_SECURE": os.getenv("COOKIE_SECURE", "1"),
-        },
-        "db": {
-            "users_total": users_count,
-            "admin_exists": admin_row is not None,
-            "admin_role": admin_row["role"] if admin_row else None,
-            "admin_is_active": admin_row["is_active"] if admin_row else None,
-            "admin_last_login": admin_row["last_login"] if admin_row else None,
-        }
-    }
-
-
 @app.get("/login", response_class=HTMLResponse)
 def login_page():
     return (TEMPLATES_DIR / "login.html").read_text(encoding="utf-8")

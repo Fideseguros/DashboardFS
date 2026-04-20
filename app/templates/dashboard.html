@@ -548,7 +548,9 @@ body {
     <div><strong>Registros:</strong> <span id="totalRecords">-</span>
     <div style="margin-top:0.3rem;">
       <span id="userName" style="font-weight:700;"></span>
+      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;background:rgba(133,255,170,0.25);border:1px solid rgba(133,255,170,0.5);color:white;padding:0.2rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.75rem;font-family:inherit;font-weight:700;margin-left:0.5rem;">Subir Excel</button>
       <button onclick="doLogout()" style="background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.3);color:white;padding:0.2rem 0.6rem;border-radius:6px;cursor:pointer;font-size:0.75rem;font-family:inherit;font-weight:700;margin-left:0.5rem;">Salir</button>
+      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
     </div></div>
   </div>
 </div>
@@ -1361,9 +1363,42 @@ async function doLogout() {
   sessionStorage.removeItem('fide_role');
   window.location.href = '/login';
 }
-// Show user name
+// Show user name + role-based UI toggles
 const _u = sessionStorage.getItem('fide_user');
 if (_u) document.getElementById('userName').textContent = _u;
+const _role = sessionStorage.getItem('fide_role');
+if (_role === 'superadmin') {
+  const btn = document.getElementById('btnUpload');
+  if (btn) btn.style.display = 'inline-block';
+}
+
+async function uploadExcel(file) {
+  if (!file) return;
+  const btn = document.getElementById('btnUpload');
+  const originalText = btn.textContent;
+  btn.textContent = 'Subiendo...';
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/sync/upload-excel', {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
+    } else {
+      alert('Carga exitosa: ' + data.records + ' registros en ' + data.duration + 's');
+      location.reload();
+    }
+  } catch (e) {
+    alert('Error de conexion al subir el archivo');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    document.getElementById('fileExcel').value = '';
+  }
+}
 </script>
 </body>
 </html>
