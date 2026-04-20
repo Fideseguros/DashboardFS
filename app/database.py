@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     records_fetched INTEGER DEFAULT 0,
     records_inserted INTEGER DEFAULT 0,
     error_message TEXT,
-    source TEXT DEFAULT 'acano_api',
+    source TEXT DEFAULT 'manual_upload',
+    uploaded_by INTEGER,
     duration_seconds REAL
 );
 
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     display_name TEXT,
+    role TEXT NOT NULL DEFAULT 'viewer',
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
     last_login TEXT
@@ -69,10 +71,34 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
+    ip TEXT,
     created_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    username TEXT,
+    success INTEGER NOT NULL DEFAULT 0,
+    attempted_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip, attempted_at);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    username TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    ip TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action, created_at);
 """
 
 CREDIT_FIELDS = [
@@ -109,4 +135,19 @@ def init_db():
     os.makedirs(os.path.dirname(DATABASE_PATH) or ".", exist_ok=True)
     conn = sqlite3.connect(DATABASE_PATH)
     conn.executescript(SCHEMA_SQL)
+    _migrate_existing_schema(conn)
     conn.close()
+
+
+def _migrate_existing_schema(conn):
+    """Add new columns/tables to existing DBs without breaking."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "role" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'viewer'")
+    sess_cols = [r[1] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()]
+    if "ip" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN ip TEXT")
+    log_cols = [r[1] for r in conn.execute("PRAGMA table_info(sync_logs)").fetchall()]
+    if "uploaded_by" not in log_cols:
+        conn.execute("ALTER TABLE sync_logs ADD COLUMN uploaded_by INTEGER")
+    conn.commit()

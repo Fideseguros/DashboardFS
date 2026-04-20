@@ -3,10 +3,12 @@ import os
 APP_SECRET_KEY = os.getenv("APP_SECRET_KEY", "dev-secret-change-in-production")
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/fide.db")
 
-# ACANO
-ACANO_BASE_URL = os.getenv("ACANO_BASE_URL", "https://acano.fideseguros.com/api")
-ACANO_AUTH_TOKEN = os.getenv("ACANO_AUTH_TOKEN", "")
-ACANO_WSDL_URL = os.getenv("ACANO_WSDL_URL", "")
-ACANO_PRODUCTS_ENDPOINT = os.getenv("ACANO_PRODUCTS_ENDPOINT", "/consulta-productos")
+# Session
+SESSION_EXPIRY_HOURS = int(os.getenv("SESSION_EXPIRY_HOURS", "4"))
 
-SESSION_EXPIRY_DAYS = int(os.getenv("SESSION_EXPIRY_DAYS", "30"))
+# Rate limiting (failed logins per IP)
+LOGIN_MAX_ATTEMPTS = int(os.getenv("LOGIN_MAX_ATTEMPTS", "5"))
+LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
+
+# Cookie security — require HTTPS in production
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1") == "1"

@@ -1,26 +1,35 @@
 """Fide Seguros Dashboard - FastAPI Application."""
-from fastapi import FastAPI, Request, Depends
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
-from app.database import init_db
-from app.auth.middleware import require_auth
+from app.database import init_db, get_connection
 from app.routes import auth, credits, sync
 
-app = FastAPI(title="Fide Seguros Dashboard", version="1.0.0")
+app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
 
-# Include routers
 app.include_router(auth.router)
 app.include_router(credits.router)
 app.include_router(sync.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
-# Initialize DB on startup
+
 @app.on_event("startup")
 def startup():
     init_db()
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    # Strict-Transport-Security is only meaningful over HTTPS (Railway serves HTTPS by default).
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.get("/api/health")
@@ -35,12 +44,10 @@ def login_page():
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
-    # Check cookie-based auth for page load (not API)
     token = request.cookies.get("fide_token", "")
     if not token:
         return RedirectResponse(url="/login", status_code=302)
 
-    from app.database import get_connection
     conn = get_connection()
     try:
         session = conn.execute(

@@ -1,37 +1,7 @@
-"""
-ACANO field mapping and configuration.
-When ACANO renames fields or changes endpoints, edit ONLY this file.
-"""
+"""Excel column mapping for Cartera_Consolidado upload."""
 
-# Map ACANO API field names -> our internal schema field names.
-# Update this dict when ACANO changes its response structure.
-FIELD_MAP = {
-    "NumeroCuenta": "cuenta",
-    "NumeroSolicitud": "solicitud",
-    "Identificacion": "identificacion",
-    "NombreCliente": "cliente",
-    "EstadoCredito": "estado",
-    "LineaProducto": "linea",
-    "ValorCredito": "valor_credito",
-    "SaldoCapital": "saldo_capital",
-    "SaldoFavor": "saldo_favor",
-    "ValorCuota": "valor_cuota",
-    "FechaInicio": "fecha_inicio",
-    "FechaVencimiento": "fecha_vencimiento",
-    "FechaUltimoPago": "fecha_ult_pago",
-    "Calificacion": "calificacion",
-    "FechaDesembolso": "fecha_desembolso",
-    "TasaEfectiva": "tasa_efectiva",
-    "Plazo": "plazo",
-    "CuotasPactadas": "cuotas_pactadas",
-    "CuotasPagadas": "cuotas_pagadas",
-    "DiasMora": "dias_mora",
-    "MaximaMora": "maxima_mora",
-    "Ciudad": "ciudad",
-    "Aliado": "aliado",
-}
-
-# Excel column index -> our internal field name (for upload fallback)
+# Excel column index -> internal field name.
+# Matches the structure of "Cartera Total Mundosoft.xlsx" / sheet "Cartera_Consolidado".
 EXCEL_COL_MAP = {
     0: 'cuenta', 1: 'solicitud', 2: 'identificacion', 3: 'cliente',
     4: 'estado', 5: 'linea', 6: 'valor_credito', 7: 'saldo_capital',
