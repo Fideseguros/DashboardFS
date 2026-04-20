@@ -55,6 +55,10 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
 
         records = transform_excel_batch(rows)
 
+        # Skip rows with no identificacion/cliente/estado — usually empty trailing rows.
+        records = [r for r in records
+                   if r.get("identificacion") and r.get("cliente") and r.get("estado")]
+
         with get_db() as conn:
             _insert_credits(conn, records, sync_id)
             _cleanup_old_batches(conn, sync_id)
