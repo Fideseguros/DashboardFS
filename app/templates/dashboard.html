@@ -239,6 +239,59 @@ body {
 .kpi-card.yellow { border-top-color: var(--fide-yellow); }
 .kpi-card.coral { border-top-color: var(--fide-coral); }
 .kpi-card.teal { border-top-color: var(--fide-teal); }
+.kpi-card.magenta { border-top-color: var(--fide-magenta); }
+
+/* Info tooltip (hover) */
+.kpi-info {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.6rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--fide-gray);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  z-index: 2;
+  transition: background 0.15s, color 0.15s;
+}
+.kpi-info:hover { background: var(--fide-teal); color: white; }
+.kpi-info .kpi-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--fide-black);
+  color: white;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.45;
+  width: 240px;
+  text-transform: none;
+  letter-spacing: 0;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  pointer-events: none;
+  transition: opacity 0.15s, visibility 0.15s;
+  z-index: 10;
+}
+.kpi-info:hover .kpi-tooltip { visibility: visible; opacity: 1; }
+.kpi-info .kpi-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  right: 6px;
+  border-width: 0 5px 5px 5px;
+  border-style: solid;
+  border-color: transparent transparent var(--fide-black) transparent;
+}
 .kpi-icon {
   width: 36px; height: 36px;
   border-radius: 10px;
@@ -707,46 +760,67 @@ body {
   <!-- KPIs -->
   <div class="kpi-grid">
     <div class="kpi-card teal">
+      <div class="kpi-info">i<span class="kpi-tooltip">Cantidad total de cr&eacute;ditos registrados en el per&iacute;odo filtrado (activos + cancelados).</span></div>
       <div class="kpi-icon">&#128200;</div>
       <div class="kpi-label">Total Cr&eacute;ditos</div>
       <div class="kpi-value" id="kpiTotal">-</div>
       <div class="kpi-sub" id="kpiTotalSub"></div>
     </div>
     <div class="kpi-card mint">
+      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos actualmente vigentes. Representan la cartera activa de la entidad.</span></div>
       <div class="kpi-icon">&#9989;</div>
       <div class="kpi-label">Cr&eacute;ditos Activos</div>
       <div class="kpi-value" id="kpiActivos">-</div>
       <div class="kpi-sub" id="kpiActivosSub"></div>
     </div>
     <div class="kpi-card blue">
+      <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor original desembolsado de todos los cr&eacute;ditos (activos + cancelados). El sub muestra solo el valor de activos.</span></div>
       <div class="kpi-icon">&#128176;</div>
       <div class="kpi-label">Valor Total Cartera</div>
       <div class="kpi-value" id="kpiValor">-</div>
       <div class="kpi-sub" id="kpiValorSub"></div>
     </div>
     <div class="kpi-card teal">
+      <div class="kpi-info">i<span class="kpi-tooltip">Suma del saldo de capital pendiente en todos los cr&eacute;ditos. Es el dinero que a&uacute;n est&aacute; por recuperar.</span></div>
       <div class="kpi-icon">&#127974;</div>
       <div class="kpi-label">Saldo Capital</div>
       <div class="kpi-value" id="kpiSaldo">-</div>
       <div class="kpi-sub" id="kpiSaldoSub"></div>
     </div>
     <div class="kpi-card yellow">
+      <div class="kpi-info">i<span class="kpi-tooltip">Tasa efectiva promedio ponderada de los cr&eacute;ditos con tasa > 0. Refleja el rendimiento esperado de la cartera.</span></div>
       <div class="kpi-icon">&#128201;</div>
       <div class="kpi-label">Tasa Promedio</div>
       <div class="kpi-value" id="kpiTasa">-</div>
       <div class="kpi-sub" id="kpiTasaSub"></div>
     </div>
     <div class="kpi-card coral">
+      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con d&iacute;as de mora > 0. El sub muestra el saldo total en mora y su % sobre el saldo activo.</span></div>
       <div class="kpi-icon">&#9888;&#65039;</div>
       <div class="kpi-label">Cartera en Mora</div>
       <div class="kpi-value" id="kpiMora">-</div>
       <div class="kpi-sub" id="kpiMoraSub"></div>
     </div>
+    <div class="kpi-card coral">
+      <div class="kpi-info">i<span class="kpi-tooltip">&Iacute;ndice de Cartera Vencida: saldo en mora &gt; 30 d&iacute;as / saldo total activo. Es la principal m&eacute;trica de riesgo regulada por la Superfinanciera. Ideal &lt; 5%.</span></div>
+      <div class="kpi-icon">&#128681;</div>
+      <div class="kpi-label">ICV (Mora &gt; 30)</div>
+      <div class="kpi-value" id="kpiICV">-</div>
+      <div class="kpi-sub" id="kpiICVSub"></div>
+    </div>
     <div class="kpi-card blue">
+      <div class="kpi-info">i<span class="kpi-tooltip">Valor promedio por cr&eacute;dito. Muestra el tama&ntilde;o t&iacute;pico de las colocaciones. El sub muestra el ticket de la cartera activa.</span></div>
       <div class="kpi-icon">&#127919;</div>
       <div class="kpi-label">Ticket Promedio</div>
       <div class="kpi-value" id="kpiTicket">-</div>
       <div class="kpi-sub" id="kpiTicketSub"></div>
+    </div>
+    <div class="kpi-card magenta">
+      <div class="kpi-info">i<span class="kpi-tooltip">Cantidad y monto de cr&eacute;ditos desembolsados en el mes corriente. &Uacute;til para monitorear el ritmo de colocaci&oacute;n del comercial.</span></div>
+      <div class="kpi-icon">&#128640;</div>
+      <div class="kpi-label">Desembolsos del Mes</div>
+      <div class="kpi-value" id="kpiMesAct">-</div>
+      <div class="kpi-sub" id="kpiMesActSub"></div>
     </div>
   </div>
 
@@ -823,6 +897,21 @@ body {
       <div class="chart-card full">
         <h3><span class="dot"></span> Saldo en Mora por Rango</h3>
         <div class="chart-container tall"><canvas id="chartMoraSaldo"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <h3 style="margin:0;">
+            <span class="dot"></span> An&aacute;lisis de Cosecha (Vintage)
+            <span style="display:inline-block;margin-left:0.4rem;font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;">Desempe&ntilde;o por mes de desembolso</span>
+          </h3>
+          <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;">
+            <label style="color:#5a6a6e;font-weight:600;">A&ntilde;o:</label>
+            <select id="fCosechaYear" onchange="updateCosecha()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;min-width:110px;">
+              <option value="">Todos</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-container tall"><canvas id="chartCosecha"></canvas></div>
       </div>
     </div>
   </div>
@@ -964,6 +1053,87 @@ function fmtM(n) {
   return '$' + fmt(n);
 }
 function fmtCurrency(n) { return n == null || isNaN(n) ? '-' : '$' + fmt(n); }
+
+function populateCosechaYears() {
+  const sel = document.getElementById('fCosechaYear');
+  if (!sel || !filteredData) return;
+  const years = new Set();
+  filteredData.forEach(r => { if (r.fecha_desembolso) years.add(r.fecha_desembolso.substring(0,4)); });
+  const current = sel.value;
+  const opts = ['<option value="">Todos</option>']
+    .concat([...years].sort((a,b)=>b.localeCompare(a)).map(y => `<option value="${y}">${y}</option>`));
+  sel.innerHTML = opts.join('');
+  sel.value = current;
+}
+
+function updateCosecha() {
+  if (!filteredData) return;
+  destroyChart('chartCosecha');
+  const yearSel = document.getElementById('fCosechaYear');
+  const yearFilter = yearSel ? yearSel.value : '';
+
+  // Agrupar por mes de desembolso; contar estados: cancelado / mora+30 / mora sano / sin_mora_activo
+  const buckets = {};
+  filteredData.forEach(r => {
+    if (!r.fecha_desembolso) return;
+    const m = r.fecha_desembolso.substring(0,7);
+    if (yearFilter && !m.startsWith(yearFilter)) return;
+    if (!buckets[m]) buckets[m] = { sano:0, mora1_30:0, mora30plus:0, cancelado:0 };
+    if (r.estado === 'CANCELADO') {
+      buckets[m].cancelado++;
+    } else {
+      const dm = parseInt(r.dias_mora) || 0;
+      if (dm > 30) buckets[m].mora30plus++;
+      else if (dm > 0) buckets[m].mora1_30++;
+      else buckets[m].sano++;
+    }
+  });
+
+  let months = Object.keys(buckets).sort();
+  // Si no hay filtro de año, mostrar últimos 18 meses para no saturar
+  if (!yearFilter && months.length > 18) months = months.slice(-18);
+
+  const ctx = document.getElementById('chartCosecha');
+  if (!ctx) return;
+  charts.chartCosecha = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { label:'Activos al día', data:months.map(m=>buckets[m].sano), backgroundColor:FIDE.teal+'cc', stack:'s', borderRadius:3 },
+        { label:'Mora 1-30', data:months.map(m=>buckets[m].mora1_30), backgroundColor:'#ecc94b'+'cc', stack:'s', borderRadius:3 },
+        { label:'Mora +30', data:months.map(m=>buckets[m].mora30plus), backgroundColor:FIDE.coral+'cc', stack:'s', borderRadius:3 },
+        { label:'Cancelados', data:months.map(m=>buckets[m].cancelado), backgroundColor:FIDE.gray+'cc', stack:'s', borderRadius:3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700, size:11 } } },
+        datalabels: { display:false },
+        tooltip: {
+          callbacks: {
+            footer: (items) => {
+              const idx = items[0].dataIndex;
+              const m = months[idx];
+              const b = buckets[m];
+              const total = b.sano + b.mora1_30 + b.mora30plus + b.cancelado;
+              if (!total) return '';
+              const moraPct = ((b.mora30plus) / total * 100).toFixed(1);
+              return `Total: ${total} · Mora+30: ${moraPct}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked:true, grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } },
+        y: { stacked:true, beginAtZero:true, title:{ display:true, text:'# Créditos por cosecha', font:{ weight:700 } }, grid:{ color:'#eef5f4' } }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
 
 function populateEvoYears() {
   const sel = document.getElementById('fEvoYear');
@@ -1207,6 +1377,43 @@ function updateKPIs() {
   document.getElementById('kpiTicketSub').textContent = valsAct.length
     ? `Activos: ${fmtM(ticketAct)}` : `Sobre ${fmt(vals.length)} créditos`;
 
+  // ICV = saldo en mora > 30 días / saldo total activo
+  const saldoMora30 = act
+    .filter(r => (parseInt(r.dias_mora)||0) > 30)
+    .reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
+  const icv = tSal > 0 ? (saldoMora30 / tSal) * 100 : 0;
+  const icvEl = document.getElementById('kpiICV');
+  icvEl.textContent = icv.toFixed(2) + '%';
+  // Color cue: < 5% verde, 5-8% amarillo, > 8% rojo
+  let icvColor = '#00a79d';
+  if (icv > 8) icvColor = '#d94444';
+  else if (icv > 5) icvColor = '#b5990a';
+  icvEl.style.color = icvColor;
+  document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(saldoMora30)}`;
+
+  // Desembolsos del Mes Actual (basados en fecha_desembolso del mes corriente)
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const currentMonthKey = `${yyyy}-${mm}`;
+  const mesActCredits = d.filter(r => r.fecha_desembolso && r.fecha_desembolso.startsWith(currentMonthKey));
+  const mesActValor = mesActCredits.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
+  // Mes anterior para comparación MoM
+  const prevDate = new Date(yyyy, now.getMonth() - 1, 1);
+  const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
+  const prevMesCredits = d.filter(r => r.fecha_desembolso && r.fecha_desembolso.startsWith(prevKey));
+  const prevMesValor = prevMesCredits.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
+  document.getElementById('kpiMesAct').textContent = fmt(mesActCredits.length);
+  let momText = `Monto: ${fmtM(mesActValor)}`;
+  if (prevMesValor > 0 && mesActValor > 0) {
+    const momPct = ((mesActValor - prevMesValor) / prevMesValor) * 100;
+    const arrow = momPct >= 0 ? '▲' : '▼';
+    momText += ` · ${arrow} ${Math.abs(momPct).toFixed(1)}% vs mes anterior`;
+  } else if (mesActCredits.length === 0) {
+    momText = 'Sin desembolsos en el mes';
+  }
+  document.getElementById('kpiMesActSub').textContent = momText;
+
   document.getElementById('totalRecords').textContent = fmt(d.length);
 }
 
@@ -1372,6 +1579,10 @@ function updateCharts() {
     },
     plugins: [ChartDataLabels]
   });
+
+  // Cosecha/Vintage
+  populateCosechaYears();
+  updateCosecha();
 
   // -- Tab Aliados --
   destroyChart('chartAliados');
