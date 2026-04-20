@@ -40,7 +40,6 @@ def _row_masked(row: dict) -> dict:
     cliente = decrypt(row.get("cliente"))
     out = dict(row)
     out["identificacion"] = mask_identificacion(ident)
-    out["identificacion_full"] = None  # only revealed on demand
     out["cliente"] = mask_cliente(cliente)
     return out
 
@@ -60,28 +59,6 @@ def get_credits(
         return [_row_masked(dict(r)) for r in rows]
     finally:
         conn.close()
-
-
-@router.get("/{credit_id}/reveal")
-def reveal_credit(credit_id: int, request: Request,
-                  user=Depends(require_auth)):
-    """Return full (decrypted) identificacion + cliente for one record. Audited."""
-    conn = get_connection()
-    try:
-        row = conn.execute("SELECT id, identificacion, cliente FROM credits WHERE id = ?",
-                           (credit_id,)).fetchone()
-    finally:
-        conn.close()
-    if not row:
-        return {}
-    ip = get_client_ip(request)
-    log_audit(user["user_id"], user["username"], "credit_reveal",
-              f"credit_id={credit_id}", ip)
-    return {
-        "id": row["id"],
-        "identificacion": decrypt(row["identificacion"]),
-        "cliente": decrypt(row["cliente"]),
-    }
 
 
 @router.get("/summary")
@@ -148,3 +125,25 @@ def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=fide_cartera_export.csv"}
     )
+
+
+@router.get("/{credit_id}/reveal")
+def reveal_credit(credit_id: int, request: Request,
+                  user=Depends(require_superadmin)):
+    """Return full (decrypted) identificacion + cliente for one record. Superadmin only, audited."""
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT id, identificacion, cliente FROM credits WHERE id = ?",
+                           (credit_id,)).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return {}
+    ip = get_client_ip(request)
+    log_audit(user["user_id"], user["username"], "credit_reveal",
+              f"credit_id={credit_id}", ip)
+    return {
+        "id": row["id"],
+        "identificacion": decrypt(row["identificacion"]),
+        "cliente": decrypt(row["cliente"]),
+    }

@@ -1,4 +1,5 @@
 """Sync management routes — Excel upload only (superadmin)."""
+import logging
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
 from app.database import get_connection
 from app.auth.middleware import require_auth, require_superadmin
@@ -7,6 +8,7 @@ from app.audit import log_audit, get_client_ip
 router = APIRouter(prefix="/api/sync", tags=["sync"])
 
 MAX_UPLOAD_MB = 25
+_log = logging.getLogger("fide.sync")
 
 
 @router.get("/status")
@@ -43,16 +45,18 @@ async def upload_excel(request: Request,
         raise HTTPException(status_code=413,
                             detail=f"Archivo excede {MAX_UPLOAD_MB} MB")
 
-    ip = get_client_ip(request)
+    ip = get_client_ip(request) or "unknown"
     from app.sync.job import sync_from_excel
     try:
         result = sync_from_excel(content, uploaded_by=user["user_id"])
         log_audit(user["user_id"], user["username"], "excel_upload",
                   f"file={file.filename} records={result.get('records', 0)}", ip)
-        # Discard the in-memory buffer explicitly
         del content
         return result
     except Exception as e:
+        # Log full detail internally; return a generic message to the client.
+        _log.exception("Excel upload failed")
         log_audit(user["user_id"], user["username"], "excel_upload_failed",
-                  f"file={file.filename} error={str(e)[:200]}", ip)
-        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+                  f"file={file.filename} error={type(e).__name__}: {str(e)[:200]}", ip)
+        raise HTTPException(status_code=500,
+                            detail="No se pudo importar el archivo. Revise el formato e intente nuevamente.")
