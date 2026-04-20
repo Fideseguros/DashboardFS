@@ -367,6 +367,7 @@ body {
   border: 1px solid #E1DFDD;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 0; /* permite que el contenido con overflow no empuje al grid */
 }
 .chart-card:hover { border-color: #C8C6C4; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 .chart-card h3 {
@@ -671,11 +672,31 @@ body {
   .tab-bar::-webkit-scrollbar { display: none; }
   .tab { padding: 0.6rem 1rem; font-size: 0.78rem; white-space: nowrap; }
 
-  /* Tabla: permitir scroll horizontal solo dentro del wrapper, ocultar columnas menos críticas */
-  .table-wrapper { max-height: 400px; }
+  /* Tabla: scroll horizontal dentro del wrapper, contenido no desborda la tarjeta */
+  .charts-grid { min-width: 0; }
+  .charts-grid > * { min-width: 0; max-width: 100%; }
+  .table-wrapper {
+    max-height: 400px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
   .data-table { font-size: 0.72rem; }
   .data-table th, .data-table td { padding: 0.45rem 0.5rem; }
   .data-table th.hide-mobile, .data-table td.hide-mobile { display: none; }
+  .data-table.compact th { font-size: 0.62rem; padding: 0.4rem 0.45rem; }
+  .data-table.compact td { font-size: 0.66rem; padding: 0.35rem 0.45rem; }
+  .data-table.compact td.rank { width: 26px; }
+  .mora-pill { padding: 1px 5px; font-size: 0.6rem; }
+  /* Ocultar columnas menos críticas en las tablas agregadas */
+  #tblTopClientes th:nth-child(3), #tblTopClientes td:nth-child(3),   /* Identificación */
+  #tblTopClientes th:nth-child(5), #tblTopClientes td:nth-child(5)    /* Valor Total */
+    { display: none; }
+  #tblAliados th:nth-child(4), #tblAliados td:nth-child(4),           /* Activos */
+  #tblAliados th:nth-child(5), #tblAliados td:nth-child(5)            /* Valor Total */
+    { display: none; }
+  #tblCiudades th:nth-child(4), #tblCiudades td:nth-child(4)          /* Valor Total */
+    { display: none; }
 }
 @media (max-width: 480px) {
   /* Mantener 2 KPIs por línea siempre (nunca apilar en 1 columna) */
