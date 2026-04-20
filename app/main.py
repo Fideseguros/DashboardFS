@@ -3,7 +3,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pathlib import Path
 
-from app.database import init_db, get_connection
+import os
+import logging
+from app.database import init_db, get_connection, get_db
 from app.routes import auth, credits, sync
 
 app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
@@ -13,11 +15,34 @@ app.include_router(credits.router)
 app.include_router(sync.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+_log = logging.getLogger("fide.startup")
+
+
+def _bootstrap_admin():
+    """Create the first superadmin from BOOTSTRAP_ADMIN_USER/PASSWORD env vars
+    if the users table is empty. No-op on subsequent startups."""
+    admin_user = os.getenv("BOOTSTRAP_ADMIN_USER", "").strip()
+    admin_pass = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+    if not admin_user or not admin_pass:
+        return
+    import bcrypt as _bcrypt
+    with get_db() as conn:
+        row = conn.execute("SELECT COUNT(*) as cnt FROM users").fetchone()
+        if row and row["cnt"] > 0:
+            return
+        pwd_hash = _bcrypt.hashpw(admin_pass.encode("utf-8"), _bcrypt.gensalt()).decode("utf-8")
+        conn.execute(
+            "INSERT INTO users (username, password_hash, display_name, role) "
+            "VALUES (?, ?, ?, 'superadmin')",
+            (admin_user, pwd_hash, "Administrador")
+        )
+    _log.warning("Bootstrap admin '%s' creado. Elimina BOOTSTRAP_ADMIN_* de Railway.", admin_user)
 
 
 @app.on_event("startup")
 def startup():
     init_db()
+    _bootstrap_admin()
 
 
 @app.middleware("http")
