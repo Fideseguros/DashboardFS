@@ -825,8 +825,12 @@ function fmt(n) {
 }
 function fmtM(n) {
   if (n == null || isNaN(n)) return '-';
-  if (Math.abs(n) >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
-  if (Math.abs(n) >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (Math.abs(n) >= 1e6) {
+    const m = n / 1e6;
+    // For >= 1000M show with thousands separator and no decimals (e.g. $3.200 M).
+    if (Math.abs(m) >= 1000) return '$' + new Intl.NumberFormat('es-CO').format(Math.round(m)) + ' M';
+    return '$' + m.toFixed(1) + ' M';
+  }
   return '$' + fmt(n);
 }
 function fmtCurrency(n) { return n == null || isNaN(n) ? '-' : '$' + fmt(n); }
