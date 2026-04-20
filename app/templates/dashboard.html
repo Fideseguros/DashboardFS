@@ -514,13 +514,81 @@ body {
 .chart-card canvas { cursor: pointer; }
 
 /* Responsive */
+/* =================== RESPONSIVE (tablet) =================== */
+@media (max-width: 1024px) {
+  .container { padding: 1.2rem 1rem; }
+  .header { padding: 1.2rem 1.5rem; }
+  .filters { padding: 0.8rem 1rem; gap: 0.6rem; }
+  .filter-group select, .filter-group input { min-width: 120px; font-size: 0.78rem; }
+  .charts-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+}
+/* =================== RESPONSIVE (mobile) =================== */
 @media (max-width: 768px) {
-  .charts-grid { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
-  .header { padding: 1.2rem; }
-  .container { padding: 1rem; }
-  .filters { padding: 0.8rem 1rem; }
-  .tab-bar { width: 100%; overflow-x: auto; }
+  body { font-size: 14px; }
+  html, body { overflow-x: hidden; }
+  .header {
+    padding: 0.9rem 0.9rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .header-left { gap: 0.8rem; }
+  .fide-logo { height: 34px; }
+  .header-title { padding-left: 0.8rem; }
+  .header-title h1 { font-size: 0.95rem; }
+  .header-title .subtitle { font-size: 0.7rem; }
+  .header-right {
+    width: 100%;
+    text-align: left;
+    font-size: 0.72rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 1rem;
+    align-items: center;
+  }
+  .header-right > div { margin: 0 !important; }
+
+  .filters {
+    padding: 0.7rem 0.8rem;
+    gap: 0.5rem;
+    overflow-x: hidden;
+  }
+  .filter-group { flex: 1 1 45%; min-width: 0; }
+  .filter-group label { font-size: 0.62rem; }
+  .filter-group select, .filter-group input {
+    min-width: 0;
+    width: 100%;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.78rem;
+  }
+  .filters > div[style] { flex: 1 1 100% !important; justify-content: flex-end; }
+
+  .container { padding: 0.8rem 0.7rem; max-width: 100%; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
+  .kpi-card { padding: 0.9rem 0.8rem; }
+  .kpi-value { font-size: 1.35rem; }
+  .kpi-label { font-size: 0.68rem; }
+  .kpi-sub { font-size: 0.68rem; }
+
+  .charts-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+  .chart-card { padding: 0.9rem; }
+  .chart-card h3 { font-size: 0.85rem; }
+  .chart-container { height: 240px !important; }
+  .chart-container.tall { height: 280px !important; }
+
+  .tab-bar { width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab { padding: 0.6rem 1rem; font-size: 0.78rem; white-space: nowrap; }
+
+  /* Tabla: permitir scroll horizontal solo dentro del wrapper, ocultar columnas menos críticas */
+  .table-wrapper { max-height: 400px; }
+  .data-table { font-size: 0.72rem; }
+  .data-table th, .data-table td { padding: 0.45rem 0.5rem; }
+  .data-table th.hide-mobile, .data-table td.hide-mobile { display: none; }
+}
+@media (max-width: 480px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .filter-group { flex: 1 1 100%; }
 }
 @media print {
   .filters, .pagination, .table-controls { display:none; }
