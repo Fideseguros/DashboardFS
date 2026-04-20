@@ -474,6 +474,16 @@ body {
 .data-table tr:nth-child(even) td { background: #f8fcfb; }
 .data-table tr:hover td { background: var(--fide-mint-light); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
+.data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
+.data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
+.mora-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
 
 /* Badges */
 .badge {
@@ -726,6 +736,25 @@ body {
 
 <div class="filters">
   <div class="filter-group">
+    <label>Per&iacute;odo (Fecha Desembolso)</label>
+    <select id="fPeriodo">
+      <option value="all">Todo el hist&oacute;rico</option>
+      <option value="year">Este a&ntilde;o</option>
+      <option value="last12m">&Uacute;ltimos 12 meses</option>
+      <option value="last6m">&Uacute;ltimos 6 meses</option>
+      <option value="last3m">&Uacute;ltimos 3 meses</option>
+      <option value="thismonth">Este mes</option>
+      <option value="custom">Rango personalizado</option>
+    </select>
+  </div>
+  <div class="filter-group" id="periodoCustom" style="display:none;">
+    <label>Desde &mdash; Hasta</label>
+    <div style="display:flex;gap:0.3rem;align-items:center;">
+      <input type="date" id="fFrom" style="padding:0.45rem 0.6rem;border:2px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:0.82rem;">
+      <input type="date" id="fTo" style="padding:0.45rem 0.6rem;border:2px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:0.82rem;">
+    </div>
+  </div>
+  <div class="filter-group">
     <label>Estado</label>
     <select id="fEstado"><option value="">Todos</option><option value="ACTIVO">Activo</option><option value="CANCELADO">Cancelado</option></select>
   </div>
@@ -927,6 +956,24 @@ body {
         </div>
         <div class="chart-container tall"><canvas id="chartCosecha"></canvas></div>
       </div>
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
+        <div class="table-wrapper" style="max-height:460px;">
+          <table class="data-table compact" id="tblTopClientes">
+            <thead><tr>
+              <th>#</th>
+              <th>Cliente</th>
+              <th>Identificaci&oacute;n</th>
+              <th>#&nbsp;Cr&eacute;ditos</th>
+              <th class="num">Valor Total</th>
+              <th class="num">Saldo Capital</th>
+              <th class="num">D&iacute;as Mora M&aacute;x</th>
+              <th class="num">Saldo en Mora</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -944,6 +991,39 @@ body {
       <div class="chart-card">
         <h3><span class="dot"></span> Top 15 Ciudades</h3>
         <div class="chart-container tall"><canvas id="chartCiudades"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Detalle de Aliados</h3>
+        <div class="table-wrapper" style="max-height:460px;">
+          <table class="data-table compact" id="tblAliados">
+            <thead><tr>
+              <th>#</th>
+              <th>Aliado</th>
+              <th>#&nbsp;Cr&eacute;ditos</th>
+              <th class="num">Activos</th>
+              <th class="num">Valor Total</th>
+              <th class="num">Saldo Capital</th>
+              <th class="num">% Mora</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Detalle de Ciudades</h3>
+        <div class="table-wrapper" style="max-height:460px;">
+          <table class="data-table compact" id="tblCiudades">
+            <thead><tr>
+              <th>#</th>
+              <th>Ciudad</th>
+              <th>#&nbsp;Cr&eacute;ditos</th>
+              <th class="num">Valor Total</th>
+              <th class="num">Saldo Capital</th>
+              <th class="num">% Mora</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -1315,6 +1395,28 @@ function populateFilters() {
   add('fLinea','linea'); add('fAliado','aliado'); add('fCiudad','ciudad');
 }
 
+function _periodoRange() {
+  // Returns { from, to } (inclusive) in YYYY-MM-DD or null to skip
+  const preset = document.getElementById('fPeriodo')?.value || 'all';
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const toISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  if (preset === 'all') return null;
+  if (preset === 'custom') {
+    const from = document.getElementById('fFrom')?.value || '';
+    const to = document.getElementById('fTo')?.value || '';
+    return (from || to) ? { from, to } : null;
+  }
+  if (preset === 'year') return { from: `${today.getFullYear()}-01-01`, to: toISO(today) };
+  if (preset === 'thismonth') return { from: `${today.getFullYear()}-${pad(today.getMonth()+1)}-01`, to: toISO(today) };
+  const months = { last12m: 12, last6m: 6, last3m: 3 }[preset] || 0;
+  if (months > 0) {
+    const from = new Date(today); from.setMonth(from.getMonth() - months);
+    return { from: toISO(from), to: toISO(today) };
+  }
+  return null;
+}
+
 function applyFilters() {
   const f = {
     estado: document.getElementById('fEstado').value,
@@ -1324,7 +1426,20 @@ function applyFilters() {
     ciudad: document.getElementById('fCiudad').value,
     mora: document.getElementById('fMora').value
   };
+  // Toggle visibility of custom range inputs
+  const isCustom = document.getElementById('fPeriodo')?.value === 'custom';
+  const custEl = document.getElementById('periodoCustom');
+  if (custEl) custEl.style.display = isCustom ? '' : 'none';
+  const periodo = _periodoRange();
+
   filteredData = RAW_DATA.filter(r => {
+    // Date filter (fecha_desembolso)
+    if (periodo) {
+      const fd = r.fecha_desembolso || '';
+      if (!fd) return false;
+      if (periodo.from && fd < periodo.from) return false;
+      if (periodo.to && fd > periodo.to) return false;
+    }
     // Dropdown filters
     if (f.estado && r.estado !== f.estado) return false;
     if (f.linea && r.linea !== f.linea) return false;
@@ -1351,6 +1466,9 @@ function applyFilters() {
 
 function resetFilters() {
   ['fEstado','fLinea','fCalif','fAliado','fCiudad','fMora'].forEach(id => document.getElementById(id).value = '');
+  const per = document.getElementById('fPeriodo'); if (per) per.value = 'all';
+  const f1 = document.getElementById('fFrom'); if (f1) f1.value = '';
+  const f2 = document.getElementById('fTo'); if (f2) f2.value = '';
   document.getElementById('tableSearch').value = '';
   Object.keys(chartFilters).forEach(k => delete chartFilters[k]);
   renderChartFilterBar();
@@ -1800,8 +1918,124 @@ document.querySelectorAll('.data-table th').forEach(th=>{
 });
 
 // ---- INIT ----
-function updateAll() { updateKPIs(); updateCharts(); updateTable(); }
+function updateAll() { updateKPIs(); updateCharts(); updateTable(); updateAggTables(); }
+
+// ---- Tablas agregadas (Top Clientes / Aliados / Ciudades) ----
+function _moraColor(pct) {
+  if (pct < 5) return { bg: '#dbffe6', fg: '#008f87' };
+  if (pct < 10) return { bg: '#fff6c9', fg: '#8a7200' };
+  return { bg: '#ffe8e8', fg: '#d94444' };
+}
+
+function updateAggTables() {
+  const d = filteredData || [];
+
+  // Top Clientes (agrupado por identificacion + cliente)
+  const byCli = {};
+  d.forEach(r => {
+    const key = (r.identificacion || '') + '|' + (r.cliente || '');
+    if (!byCli[key]) byCli[key] = {
+      cliente: r.cliente || '-', ident: r.identificacion || '-',
+      count: 0, valor: 0, saldo: 0, moraMax: 0, saldoMora: 0
+    };
+    const g = byCli[key];
+    g.count++;
+    g.valor += parseFloat(r.valor_credito) || 0;
+    g.saldo += parseFloat(r.saldo_capital) || 0;
+    const dm = parseInt(r.dias_mora) || 0;
+    if (dm > g.moraMax) g.moraMax = dm;
+    if (dm > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+  });
+  const topCli = Object.values(byCli).sort((a, b) => b.saldo - a.saldo).slice(0, 20);
+  const tbCli = document.querySelector('#tblTopClientes tbody');
+  if (tbCli) {
+    tbCli.innerHTML = topCli.map((c, i) => `
+      <tr>
+        <td class="rank">${i + 1}</td>
+        <td>${c.cliente}</td>
+        <td>${c.ident}</td>
+        <td class="num">${fmt(c.count)}</td>
+        <td class="num">${fmtCurrency(c.valor)}</td>
+        <td class="num">${fmtCurrency(c.saldo)}</td>
+        <td class="num" style="color:${c.moraMax > 0 ? '#d94444' : '#00a79d'};font-weight:800;">${fmt(c.moraMax)}</td>
+        <td class="num">${c.saldoMora > 0 ? fmtCurrency(c.saldoMora) : '-'}</td>
+      </tr>
+    `).join('');
+    if (!topCli.length) tbCli.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos para los filtros aplicados</td></tr>';
+  }
+
+  // Top Aliados
+  const byAliado = {};
+  d.forEach(r => {
+    const k = r.aliado || 'N/A';
+    if (!byAliado[k]) byAliado[k] = { name: k, count: 0, activos: 0, valor: 0, saldo: 0, saldoMora: 0, saldoActSum: 0 };
+    const g = byAliado[k];
+    g.count++;
+    g.valor += parseFloat(r.valor_credito) || 0;
+    g.saldo += parseFloat(r.saldo_capital) || 0;
+    if (r.estado === 'ACTIVO') {
+      g.activos++;
+      g.saldoActSum += parseFloat(r.saldo_capital) || 0;
+      if ((parseInt(r.dias_mora) || 0) > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+    }
+  });
+  const topAli = Object.values(byAliado).sort((a, b) => b.valor - a.valor).slice(0, 20);
+  const tbAli = document.querySelector('#tblAliados tbody');
+  if (tbAli) {
+    tbAli.innerHTML = topAli.map((g, i) => {
+      const moraPct = g.saldoActSum > 0 ? (g.saldoMora / g.saldoActSum) * 100 : 0;
+      const c = _moraColor(moraPct);
+      return `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td>${g.name}</td>
+          <td class="num">${fmt(g.count)}</td>
+          <td class="num">${fmt(g.activos)}</td>
+          <td class="num">${fmtCurrency(g.valor)}</td>
+          <td class="num">${fmtCurrency(g.saldo)}</td>
+          <td class="num"><span class="mora-pill" style="background:${c.bg};color:${c.fg};">${moraPct.toFixed(1)}%</span></td>
+        </tr>
+      `;
+    }).join('');
+    if (!topAli.length) tbAli.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos</td></tr>';
+  }
+
+  // Top Ciudades
+  const byCiu = {};
+  d.forEach(r => {
+    const k = r.ciudad || 'N/A';
+    if (!byCiu[k]) byCiu[k] = { name: k, count: 0, valor: 0, saldo: 0, saldoMora: 0, saldoActSum: 0 };
+    const g = byCiu[k];
+    g.count++;
+    g.valor += parseFloat(r.valor_credito) || 0;
+    g.saldo += parseFloat(r.saldo_capital) || 0;
+    if (r.estado === 'ACTIVO') {
+      g.saldoActSum += parseFloat(r.saldo_capital) || 0;
+      if ((parseInt(r.dias_mora) || 0) > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+    }
+  });
+  const topCiu = Object.values(byCiu).sort((a, b) => b.valor - a.valor).slice(0, 20);
+  const tbCiu = document.querySelector('#tblCiudades tbody');
+  if (tbCiu) {
+    tbCiu.innerHTML = topCiu.map((g, i) => {
+      const moraPct = g.saldoActSum > 0 ? (g.saldoMora / g.saldoActSum) * 100 : 0;
+      const c = _moraColor(moraPct);
+      return `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td>${g.name}</td>
+          <td class="num">${fmt(g.count)}</td>
+          <td class="num">${fmtCurrency(g.valor)}</td>
+          <td class="num">${fmtCurrency(g.saldo)}</td>
+          <td class="num"><span class="mora-pill" style="background:${c.bg};color:${c.fg};">${moraPct.toFixed(1)}%</span></td>
+        </tr>
+      `;
+    }).join('');
+    if (!topCiu.length) tbCiu.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos</td></tr>';
+  }
+}
 document.querySelectorAll('.filters select').forEach(sel=>sel.addEventListener('change', applyFilters));
+document.querySelectorAll('.filters input[type="date"]').forEach(inp=>inp.addEventListener('change', applyFilters));
 document.getElementById('tableSearch').addEventListener('input',()=>{ currentPage=1; updateTable(); });
 
 // Register chart click handlers for cross-filtering
