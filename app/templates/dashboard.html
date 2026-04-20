@@ -670,7 +670,21 @@ body {
         <div class="chart-container"><canvas id="chartMora"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Evoluci&oacute;n de Desembolsos por Mes</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Evoluci&oacute;n de Desembolsos por Mes</h3>
+          <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;">
+            <label style="color:#5a6a6e;font-weight:600;">Per&iacute;odo:</label>
+            <select id="fEvoRange" onchange="updateEvolucion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
+              <option value="12">&Uacute;ltimos 12 meses</option>
+              <option value="24">&Uacute;ltimos 24 meses</option>
+              <option value="all">Todo el hist&oacute;rico</option>
+            </select>
+            <label style="color:#5a6a6e;font-weight:600;">A&ntilde;o:</label>
+            <select id="fEvoYear" onchange="updateEvolucion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;min-width:90px;">
+              <option value="">Todos</option>
+            </select>
+          </div>
+        </div>
         <div class="chart-container tall"><canvas id="chartEvolucion"></canvas></div>
       </div>
     </div>
@@ -834,6 +848,63 @@ function fmtM(n) {
   return '$' + fmt(n);
 }
 function fmtCurrency(n) { return n == null || isNaN(n) ? '-' : '$' + fmt(n); }
+
+function populateEvoYears() {
+  const sel = document.getElementById('fEvoYear');
+  if (!sel || !filteredData) return;
+  const years = new Set();
+  filteredData.forEach(r => { if (r.fecha_desembolso) years.add(r.fecha_desembolso.substring(0,4)); });
+  const current = sel.value;
+  const opts = ['<option value="">Todos</option>']
+    .concat([...years].sort((a,b)=>b.localeCompare(a)).map(y => `<option value="${y}">${y}</option>`));
+  sel.innerHTML = opts.join('');
+  sel.value = current;
+}
+
+function updateEvolucion() {
+  if (!filteredData) return;
+  destroyChart('chartEvolucion');
+  const rangeSel = document.getElementById('fEvoRange');
+  const yearSel = document.getElementById('fEvoYear');
+  const range = rangeSel ? rangeSel.value : '12';
+  const yearFilter = yearSel ? yearSel.value : '';
+  const monthMap={}, monthValMap={};
+  filteredData.forEach(r => {
+    if (!r.fecha_desembolso) return;
+    const m = r.fecha_desembolso.substring(0,7);
+    if (yearFilter && !m.startsWith(yearFilter)) return;
+    monthMap[m]=(monthMap[m]||0)+1;
+    monthValMap[m]=(monthValMap[m]||0)+(parseFloat(r.valor_credito)||0);
+  });
+  let months = Object.keys(monthMap).sort();
+  if (!yearFilter && range !== 'all') {
+    const n = parseInt(range);
+    months = months.slice(-n);
+  }
+  const ctx = document.getElementById('chartEvolucion');
+  if (!ctx) return;
+  charts.chartEvolucion = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { label:'# Créditos', data:months.map(m=>monthMap[m]||0), backgroundColor:FIDE.teal+'bb', borderRadius:5, yAxisID:'y' },
+        { label:'Valor ($)', data:months.map(m=>monthValMap[m]||0), type:'line', borderColor:FIDE.blue, backgroundColor:FIDE.blue+'15', borderWidth:2.5, pointRadius:3, pointBackgroundColor:FIDE.blue, fill:true, yAxisID:'y1', tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
+      scales: {
+        y: { beginAtZero:true, position:'left', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#eef5f4' } },
+        y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Valor ($)', font:{ weight:700 } }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>fmtM(v) } },
+        x: { grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
 function pct(a, b) { return !b ? '0%' : (a/b*100).toFixed(1) + '%'; }
 function getMoraRange(d) {
   d = parseInt(d) || 0;
@@ -1084,32 +1155,9 @@ function updateCharts() {
     plugins: [ChartDataLabels]
   });
 
-  // Evolución
-  destroyChart('chartEvolucion');
-  const monthMap={}, monthValMap={};
-  d.forEach(r => { if(r.fecha_desembolso){ const m=r.fecha_desembolso.substring(0,7); monthMap[m]=(monthMap[m]||0)+1; monthValMap[m]=(monthValMap[m]||0)+(parseFloat(r.valor_credito)||0); } });
-  const months = Object.keys(monthMap).sort();
-  charts.chartEvolucion = new Chart(document.getElementById('chartEvolucion'), {
-    type: 'bar',
-    data: {
-      labels: months,
-      datasets: [
-        { label:'# Créditos', data:months.map(m=>monthMap[m]), backgroundColor:FIDE.teal+'bb', borderRadius:5, yAxisID:'y' },
-        { label:'Valor ($)', data:months.map(m=>monthValMap[m]), type:'line', borderColor:FIDE.blue, backgroundColor:FIDE.blue+'15', borderWidth:2.5, pointRadius:3, pointBackgroundColor:FIDE.blue, fill:true, yAxisID:'y1', tension: 0.3 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode:'index', intersect:false },
-      plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
-      scales: {
-        y: { beginAtZero:true, position:'left', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#eef5f4' } },
-        y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Valor ($)', font:{ weight:700 } }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>fmtM(v) } },
-        x: { grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } }
-      }
-    },
-    plugins: [ChartDataLabels]
-  });
+  // Evolución (respeta filtros de año y rango)
+  populateEvoYears();
+  updateEvolucion();
 
   // -- Tab Cartera --
   destroyChart('chartSaldoLinea');
