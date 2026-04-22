@@ -31,7 +31,7 @@
   /* --- Semántico (solo para estados) --- */
   --semantic-positive: #0f7b6c;  /* verde oscuro corporativo */
   --semantic-warning:  #c29200;  /* ámbar */
-  --semantic-negative: #a4262c;  /* rojo corporativo */
+  --semantic-negative: #b8680f;  /* naranja oscuro (sin rojo) */
   --semantic-info:     #0062a3;  /* azul apoyo */
 
   /* Legacy aliases (mantienen compatibilidad con código existente) */
@@ -298,7 +298,7 @@ body {
 }
 .kpi-card.blue .kpi-icon { background: #e0f0ff; color: var(--fide-blue); }
 .kpi-card.yellow .kpi-icon { background: #fffde0; color: #b5990a; }
-.kpi-card.coral .kpi-icon { background: #ffe8e8; color: var(--fide-coral); }
+.kpi-card.coral .kpi-icon { background: #fcf0dd; color: var(--fide-coral); }
 .kpi-label {
   font-size: 0.72rem;
   font-weight: 800;
@@ -314,7 +314,7 @@ body {
   line-height: 1.1;
 }
 .kpi-card.blue .kpi-value { color: var(--fide-blue); }
-.kpi-card.coral .kpi-value { color: #d94444; }
+.kpi-card.coral .kpi-value { color: #b8680f; }
 .kpi-card.yellow .kpi-value { color: #8a7200; }
 .kpi-sub {
   font-size: 0.75rem;
@@ -1133,7 +1133,7 @@ let currentPage = 1;
 const PAGE_SIZE = 50;
 let charts = {};
 
-// ---- FIDE Brand Chart Palette (corporativa, desaturada) ----
+// ---- FIDE Brand Chart Palette (corporativa, sin rojo) ----
 const FIDE = {
   teal: '#00a79d',        // primary
   tealDark: '#007a73',    // emphasis
@@ -1141,15 +1141,14 @@ const FIDE = {
   tealTint: '#a8d8d4',    // soft variant for secondary bars/lines
   mint: '#85ffaa',        // reserved accent (uso mínimo)
   blue: '#0062a3',        // semantic info
-  yellow: '#c29200',      // semantic warning (ámbar corporativo)
-  coral: '#a4262c',       // semantic negative (rojo corporativo)
+  yellow: '#c29200',      // warning (ámbar corporativo)
+  coral: '#b8680f',       // "negative" redesignado como naranja oscuro (sin rojo)
   magenta: '#742f5f',     // accent oscuro desaturado
   gray: '#A19F9D',        // neutro
   grayLight: '#D2D0CE',
   black: '#201F1E'
 };
-// Secuencia sobria basada en el teal corporativo + un apoyo neutral/azul.
-// 8 tonos son suficientes para la mayoría de gráficas multiserie.
+// Secuencia sobria: teals + neutros + azul apoyo + ámbar/naranja. Sin rojo.
 const CHART_COLORS = [
   '#00a79d', // teal primary
   '#007a73', // teal dark
@@ -1157,16 +1156,16 @@ const CHART_COLORS = [
   '#A19F9D', // neutro
   '#005a55', // teal deep
   '#2b8c85', // intermedio
-  '#c29200', // warning (solo cuando aplica)
-  '#a4262c', // negative (solo cuando aplica)
+  '#c29200', // ámbar (warning)
+  '#b8680f', // naranja oscuro (severidad)
 ];
-// Calificación: escala tipo semáforo corporativo (verde → ámbar → rojo)
+// Calificación: escala semáforo corporativo verde → ámbar → marrón/charcoal. Sin rojo.
 const CALIF_COLORS = {
-  'A': '#0f7b6c', 'B': '#5aa199', 'C': '#c29200', 'D': '#c46a1e', 'E': '#a4262c'
+  'A': '#0f7b6c', 'B': '#5aa199', 'C': '#c29200', 'D': '#b8680f', 'E': '#3e3e3e'
 };
 const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
-// Gradiente ascendente: de verde corporativo a rojo (gravedad)
-const MORA_COLORS = ['#0f7b6c', '#5aa199', '#c29200', '#c46a1e', '#a4262c', '#7f1d1d', '#4a0e0e'];
+// Gradiente ascendente de gravedad sin rojo: verde → amarillo → ámbar → naranja → marrón → charcoal
+const MORA_COLORS = ['#0f7b6c', '#7a9f6e', '#c29200', '#b8680f', '#8a4810', '#4a2b0c', '#1c1917'];
 
 // ---- Chart.js global defaults (Power BI-like professional style) ----
 Chart.defaults.font.family = "'Segoe UI', 'Nunito', system-ui, sans-serif";
@@ -1584,7 +1583,7 @@ function updateKPIs() {
   icvEl.textContent = icv.toFixed(2) + '%';
   // Color cue: < 5% verde, 5-8% amarillo, > 8% rojo
   let icvColor = '#00a79d';
-  if (icv > 8) icvColor = '#d94444';
+  if (icv > 8) icvColor = '#b8680f';
   else if (icv > 5) icvColor = '#b5990a';
   icvEl.style.color = icvColor;
   document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(saldoMora30)}`;
@@ -1890,7 +1889,7 @@ function updateTable() {
       <td class="num">${fmtCurrency(r.valor_credito)}</td>
       <td class="num">${fmtCurrency(r.saldo_capital)}</td>
       <td><span class="badge badge-${(r.calificacion||'').trim().toLowerCase()}">${(r.calificacion||'-').trim()}</span></td>
-      <td class="num" style="color:${(parseInt(r.dias_mora)||0)>0?'#d94444':'#00a79d'}; font-weight:700">${fmt(r.dias_mora)}</td>
+      <td class="num" style="color:${(parseInt(r.dias_mora)||0)>0?'#b8680f':'#0f7b6c'}; font-weight:700">${fmt(r.dias_mora)}</td>
       <td class="num">${r.tasa_efectiva ? r.tasa_efectiva+'%':'-'}</td>
       <td>${r.fecha_desembolso||'-'}</td>
       <td>${r.fecha_vencimiento||'-'}</td>
@@ -1990,7 +1989,7 @@ function updateAll() { updateKPIs(); updateCharts(); updateTable(); updateAggTab
 function _moraColor(pct) {
   if (pct < 5) return { bg: '#dbffe6', fg: '#008f87' };
   if (pct < 10) return { bg: '#fff6c9', fg: '#8a7200' };
-  return { bg: '#ffe8e8', fg: '#d94444' };
+  return { bg: '#fcf0dd', fg: '#b8680f' };
 }
 
 function updateAggTables() {
@@ -2023,7 +2022,7 @@ function updateAggTables() {
         <td class="num">${fmt(c.count)}</td>
         <td class="num">${fmtCurrency(c.valor)}</td>
         <td class="num">${fmtCurrency(c.saldo)}</td>
-        <td class="num" style="color:${c.moraMax > 0 ? '#d94444' : '#00a79d'};font-weight:800;">${fmt(c.moraMax)}</td>
+        <td class="num" style="color:${c.moraMax > 0 ? '#b8680f' : '#0f7b6c'};font-weight:800;">${fmt(c.moraMax)}</td>
         <td class="num">${c.saldoMora > 0 ? fmtCurrency(c.saldoMora) : '-'}</td>
       </tr>
     `).join('');
