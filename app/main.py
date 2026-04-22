@@ -7,13 +7,14 @@ from pathlib import Path
 import os
 import logging
 from app.database import init_db, get_connection, get_db
-from app.routes import auth, credits, sync
+from app.routes import auth, credits, sync, users
 
 app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
 
 app.include_router(auth.router)
 app.include_router(credits.router)
 app.include_router(sync.router)
+app.include_router(users.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
