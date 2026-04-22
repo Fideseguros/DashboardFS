@@ -861,7 +861,7 @@ body {
   </div>
   <div style="display:flex;gap:0.5rem;align-items:flex-end;padding-top:0.5rem;">
     <button class="btn btn-reset" onclick="resetFilters()">Limpiar</button>
-    <button class="btn btn-export" onclick="exportCSV()">Exportar CSV</button>
+    <button class="btn btn-export" id="btnExport" onclick="exportCSV()">Exportar CSV</button>
   </div>
 </div>
 
@@ -2119,6 +2119,11 @@ function goPage(p) { currentPage=p; updateTable(); }
 // ---- EXPORT CSV ----
 async function exportCSV() {
   const role = sessionStorage.getItem('fide_role') || '';
+  // Rol "consulta": solo lectura, sin exportación.
+  if (role === 'consulta') {
+    alert('Tu rol es de consulta (solo lectura). No tienes permisos para exportar.');
+    return;
+  }
   // Superadmin: hit backend to get decrypted PII. Viewer: export masked client-side.
   if (role === 'superadmin') {
     try {
@@ -2340,10 +2345,15 @@ async function doLogout() {
 // Show user name + role-based UI toggles
 const _u = sessionStorage.getItem('fide_user');
 if (_u) document.getElementById('userName').textContent = _u;
-const _role = sessionStorage.getItem('fide_role');
+const _role = sessionStorage.getItem('fide_role') || '';
 if (_role === 'superadmin') {
   const btn = document.getElementById('btnUpload');
   if (btn) btn.style.display = 'inline-block';
+}
+// "consulta" role: solo lectura — ocultar cualquier acción de exportación
+if (_role === 'consulta') {
+  const exp = document.getElementById('btnExport');
+  if (exp) exp.style.display = 'none';
 }
 
 async function uploadExcel(file) {

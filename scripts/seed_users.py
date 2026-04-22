@@ -2,6 +2,12 @@
 
 Usage (locally or on Railway):
     python -m scripts.seed_users
+
+Roles disponibles:
+    - superadmin : todos los permisos (subir Excel, exportar CSV completo,
+                   ver PII descifrada, revisar todo).
+    - viewer     : ver dashboard (PII enmascarada) + exportar CSV enmascarado.
+    - consulta   : solo consulta en pantalla. Sin export, sin subir, sin reveal.
 """
 import os
 import sys
@@ -17,8 +23,9 @@ def hash_password(password: str) -> str:
 
 USERS = [
     {"username": "admin", "password": "FideSeguros2026!", "display_name": "Administrador", "role": "superadmin"},
-    # Example viewer accounts:
-    # {"username": "consulta", "password": "temporal123", "display_name": "Consulta", "role": "viewer"},
+    # Ejemplos (descomentar / ajustar según necesidad):
+    # {"username": "operador", "password": "temp456",  "display_name": "Operador",  "role": "viewer"},
+    # {"username": "consulta", "password": "temp789",  "display_name": "Consulta",  "role": "consulta"},
 ]
 
 
