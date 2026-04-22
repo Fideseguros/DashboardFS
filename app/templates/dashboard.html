@@ -399,6 +399,48 @@ body {
   display: inline-block;
 }
 .chart-card.full { grid-column: 1 / -1; }
+.evo-mom-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+.evo-mom-card {
+  background: var(--neutral-50);
+  border: 1px solid var(--neutral-100);
+  border-left: 3px solid var(--fide-teal);
+  border-radius: 6px;
+  padding: 0.55rem 0.8rem;
+}
+.evo-mom-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--neutral-500);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 0.15rem;
+}
+.evo-mom-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--neutral-900);
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.evo-mom-value .arrow { font-size: 0.85rem; }
+.evo-mom-value.up    { color: var(--semantic-positive); }
+.evo-mom-value.down  { color: var(--semantic-negative); }
+.evo-mom-value.flat  { color: var(--neutral-500); }
+.evo-mom-sub {
+  font-size: 0.7rem;
+  color: var(--neutral-500);
+  margin-top: 0.1rem;
+}
+@media (max-width: 480px) {
+  .evo-mom-row { grid-template-columns: 1fr; }
+  .evo-mom-value { font-size: 0.95rem; }
+}
 .chart-container { position: relative; height: 300px; }
 .chart-container.tall { height: 380px; }
 
@@ -928,9 +970,10 @@ body {
         <div class="chart-container"><canvas id="chartMora"></canvas></div>
       </div>
       <div class="chart-card full">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
-          <h3 style="margin:0;"><span class="dot"></span> Evoluci&oacute;n de Desembolsos por Mes</h3>
-          <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 id="evoTitle" style="margin:0;"><span class="dot"></span> Evoluci&oacute;n de Desembolsos por Mes</h3>
+          <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;" id="evoControls">
+            <button id="evoBackBtn" onclick="evoBack()" style="display:none;background:var(--fide-teal-tint);border:1px solid var(--fide-teal);color:var(--fide-teal-dark);padding:0.3rem 0.7rem;border-radius:6px;font-family:inherit;font-weight:700;cursor:pointer;font-size:0.75rem;">&larr; Volver a meses</button>
             <label style="color:#5a6a6e;font-weight:600;">Per&iacute;odo:</label>
             <select id="fEvoRange" onchange="updateEvolucion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
               <option value="12">&Uacute;ltimos 12 meses</option>
@@ -941,6 +984,18 @@ body {
             <select id="fEvoYear" onchange="updateEvolucion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;min-width:90px;">
               <option value="">Todos</option>
             </select>
+          </div>
+        </div>
+        <div class="evo-mom-row">
+          <div class="evo-mom-card">
+            <div class="evo-mom-label">Variaci&oacute;n # Cr&eacute;ditos (mes vs anterior)</div>
+            <div class="evo-mom-value" id="evoMomCount">&mdash;</div>
+            <div class="evo-mom-sub" id="evoMomCountSub">&mdash;</div>
+          </div>
+          <div class="evo-mom-card">
+            <div class="evo-mom-label">Variaci&oacute;n Valor Desembolsado</div>
+            <div class="evo-mom-value" id="evoMomValor">&mdash;</div>
+            <div class="evo-mom-sub" id="evoMomValorSub">&mdash;</div>
           </div>
         </div>
         <div class="chart-container tall"><canvas id="chartEvolucion"></canvas></div>
@@ -1317,9 +1372,133 @@ function populateEvoYears() {
   sel.value = current;
 }
 
+// Drill-down state. null = vista mensual; 'YYYY-MM' = vista diaria de ese mes.
+let evoDrillMonth = null;
+
+function _updateEvoMomCards(monthMap, monthValMap, months) {
+  // Muestra MoM entre los dos últimos meses con datos en el rango visible.
+  const el = (id) => document.getElementById(id);
+  const setVar = (valEl, subEl, curr, prev, formatter) => {
+    if (prev <= 0 && curr <= 0) {
+      valEl.textContent = '—'; valEl.className = 'evo-mom-value flat';
+      subEl.textContent = 'Sin datos suficientes'; return;
+    }
+    const delta = curr - prev;
+    const pctVal = prev > 0 ? (delta / prev) * 100 : (curr > 0 ? 100 : 0);
+    const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '▬');
+    const cls = delta > 0 ? 'up' : (delta < 0 ? 'down' : 'flat');
+    valEl.className = `evo-mom-value ${cls}`;
+    valEl.innerHTML = `<span class="arrow">${arrow}</span> ${Math.abs(pctVal).toFixed(1)}%`;
+    subEl.textContent = `${formatter(curr)} vs ${formatter(prev)} (anterior)`;
+  };
+  if (months.length < 2) {
+    setVar(el('evoMomCount'), el('evoMomCountSub'), 0, 0, fmt);
+    setVar(el('evoMomValor'), el('evoMomValorSub'), 0, 0, fmtM);
+    return;
+  }
+  const last = months[months.length - 1];
+  const prev = months[months.length - 2];
+  setVar(el('evoMomCount'), el('evoMomCountSub'), monthMap[last] || 0, monthMap[prev] || 0, fmt);
+  setVar(el('evoMomValor'), el('evoMomValorSub'), monthValMap[last] || 0, monthValMap[prev] || 0, fmtM);
+}
+
+function _updateEvoDayMomCards(dayMap, dayValMap, days) {
+  // Día a día: comparación último día vs anterior con datos
+  const el = (id) => document.getElementById(id);
+  const nonEmpty = days.filter(d => (dayMap[d] || 0) > 0);
+  if (nonEmpty.length < 2) {
+    el('evoMomCount').textContent = '—'; el('evoMomCount').className = 'evo-mom-value flat';
+    el('evoMomCountSub').textContent = 'Sin datos suficientes';
+    el('evoMomValor').textContent = '—'; el('evoMomValor').className = 'evo-mom-value flat';
+    el('evoMomValorSub').textContent = 'Sin datos suficientes';
+    return;
+  }
+  const last = nonEmpty[nonEmpty.length - 1];
+  const prev = nonEmpty[nonEmpty.length - 2];
+  const deltaC = (dayMap[last] || 0) - (dayMap[prev] || 0);
+  const deltaV = (dayValMap[last] || 0) - (dayValMap[prev] || 0);
+  const pctC = dayMap[prev] > 0 ? (deltaC / dayMap[prev]) * 100 : 0;
+  const pctV = dayValMap[prev] > 0 ? (deltaV / dayValMap[prev]) * 100 : 0;
+  const arrow = (n) => n > 0 ? '▲' : (n < 0 ? '▼' : '▬');
+  const cls   = (n) => n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
+  el('evoMomCount').className = `evo-mom-value ${cls(deltaC)}`;
+  el('evoMomCount').innerHTML = `<span class="arrow">${arrow(deltaC)}</span> ${Math.abs(pctC).toFixed(1)}%`;
+  el('evoMomCountSub').textContent = `${fmt(dayMap[last])} vs ${fmt(dayMap[prev])} (día anterior)`;
+  el('evoMomValor').className = `evo-mom-value ${cls(deltaV)}`;
+  el('evoMomValor').innerHTML = `<span class="arrow">${arrow(deltaV)}</span> ${Math.abs(pctV).toFixed(1)}%`;
+  el('evoMomValorSub').textContent = `${fmtM(dayValMap[last])} vs ${fmtM(dayValMap[prev])} (día anterior)`;
+}
+
+function evoBack() {
+  evoDrillMonth = null;
+  document.getElementById('evoBackBtn').style.display = 'none';
+  updateEvolucion();
+}
+
 function updateEvolucion() {
   if (!filteredData) return;
   destroyChart('chartEvolucion');
+
+  const titleEl = document.getElementById('evoTitle');
+  const backBtn = document.getElementById('evoBackBtn');
+  const ctx = document.getElementById('chartEvolucion');
+  if (!ctx) return;
+
+  // ---- MODO DAILY (drill-down) ----
+  if (evoDrillMonth) {
+    if (backBtn) backBtn.style.display = '';
+    const [yyyy, mm] = evoDrillMonth.split('-');
+    const monthName = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(mm)-1];
+    titleEl.innerHTML = `<span class="dot"></span> Desembolsos d&iacute;a a d&iacute;a &mdash; ${monthName} ${yyyy}`;
+
+    // Construir lista de días del mes
+    const daysInMonth = new Date(parseInt(yyyy), parseInt(mm), 0).getDate();
+    const pad = n => String(n).padStart(2, '0');
+    const days = Array.from({length: daysInMonth}, (_, i) => `${yyyy}-${mm}-${pad(i+1)}`);
+    const dayMap = {}, dayValMap = {};
+    days.forEach(d => { dayMap[d] = 0; dayValMap[d] = 0; });
+    filteredData.forEach(r => {
+      if (!r.fecha_desembolso || !r.fecha_desembolso.startsWith(evoDrillMonth)) return;
+      const d = r.fecha_desembolso.substring(0, 10);
+      if (dayMap[d] === undefined) return;
+      dayMap[d]++;
+      dayValMap[d] += (parseFloat(r.valor_credito) || 0);
+    });
+
+    _updateEvoDayMomCards(dayMap, dayValMap, days);
+
+    charts.chartEvolucion = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: days.map(d => d.substring(8, 10)), // solo DD
+        datasets: [
+          { label:'# Créditos', data:days.map(d=>dayMap[d]||0), backgroundColor:FIDE.teal+'cc', borderRadius:3, yAxisID:'y' },
+          { label:'Valor ($)', data:days.map(d=>dayValMap[d]||0), type:'line', borderColor:FIDE.blue, backgroundColor:FIDE.blue+'15', borderWidth:2, pointRadius:2, pointBackgroundColor:FIDE.blue, fill:true, yAxisID:'y1', tension: 0.25 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect:false },
+        plugins: {
+          legend: { position:'top' },
+          datalabels: { display:false },
+          tooltip: { callbacks: { title: (items) => `${monthName} ${items[0].label}, ${yyyy}` } }
+        },
+        scales: {
+          y:  { beginAtZero:true, position:'left',  title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#F3F2F1' } },
+          y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Valor ($)', font:{ weight:700 } }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>fmtM(v) } },
+          x:  { grid:{ display:false }, ticks:{ font:{ size:10 } } }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+    return;
+  }
+
+  // ---- MODO MONTHLY (vista por defecto) ----
+  if (backBtn) backBtn.style.display = 'none';
+  titleEl.innerHTML = `<span class="dot"></span> Evoluci&oacute;n de Desembolsos por Mes`;
+
   const rangeSel = document.getElementById('fEvoRange');
   const yearSel = document.getElementById('fEvoYear');
   const range = rangeSel ? rangeSel.value : '12';
@@ -1337,8 +1516,9 @@ function updateEvolucion() {
     const n = parseInt(range);
     months = months.slice(-n);
   }
-  const ctx = document.getElementById('chartEvolucion');
-  if (!ctx) return;
+
+  _updateEvoMomCards(monthMap, monthValMap, months);
+
   charts.chartEvolucion = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -1351,7 +1531,20 @@ function updateEvolucion() {
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode:'index', intersect:false },
-      plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
+      onClick: (evt, items, chart) => {
+        if (!items || !items.length) return;
+        const idx = items[0].index;
+        const monthKey = months[idx];
+        if (monthKey) {
+          evoDrillMonth = monthKey;
+          updateEvolucion();
+        }
+      },
+      plugins: {
+        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        datalabels:{ display:false },
+        tooltip: { callbacks: { footer: () => 'Haz clic para ver detalle diario' } }
+      },
       scales: {
         y: { beginAtZero:true, position:'left', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ color:'#F3F2F1' } },
         y1: { beginAtZero:true, position:'right', title:{ display:true, text:'Valor ($)', font:{ weight:700 } }, grid:{ drawOnChartArea:false }, ticks:{ callback:v=>fmtM(v) } },
@@ -2120,7 +2313,7 @@ function registerChartClicks() {
   addChartClick('chartLinea', 'linea');
   addChartClick('chartCalif', 'calificacion');
   addChartClick('chartMora', 'mora');
-  addChartClick('chartEvolucion', 'mes_desembolso');
+  // chartEvolucion uses its own onClick handler for drill-down (see updateEvolucion)
   addChartClick('chartSaldoLinea', 'linea');
   addChartClick('chartCalifLinea', 'linea');
   // chartTasas and chartPlazos don't have a meaningful cross-filter dimension;
