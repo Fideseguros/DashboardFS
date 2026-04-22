@@ -10,30 +10,48 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 :root {
-  /* Fide Brand Colors */
-  --fide-teal: #00a79d;
-  --fide-teal-dark: #008f87;
-  --fide-teal-deeper: #007a73;
-  --fide-mint: #85ffaa;
+  /* --- FIDE Brand (sólido) --- */
+  --fide-teal: #00a79d;        /* primary */
+  --fide-teal-dark: #007a73;   /* emphasis / hover */
+  --fide-teal-deeper: #005a55; /* text on light */
+  --fide-teal-tint: #e6f6f5;   /* background tint */
+  --fide-mint: #85ffaa;        /* reserved: accent cálido, uso mínimo */
   --fide-mint-light: #dbffe6;
-  --fide-mint-bg: #edfff3;
-  --fide-blue: #0089ef;
-  --fide-yellow: #fffb5c;
-  --fide-coral: #ff5c5c;
-  --fide-magenta: #c31b92;
-  --fide-gray: #e6e7e8;
-  --fide-black: #1a1a1a;
+
+  /* --- Paleta corporativa neutral (Power BI-like) --- */
+  --neutral-900: #201F1E;      /* títulos */
+  --neutral-700: #323130;      /* texto principal */
+  --neutral-500: #605E5C;      /* secundario */
+  --neutral-300: #A19F9D;      /* terciario / labels */
+  --neutral-200: #D2D0CE;      /* bordes activos */
+  --neutral-100: #EDEBE9;      /* bordes / separadores */
+  --neutral-50:  #F3F2F1;      /* grid / fondos sutiles */
+  --neutral-bg:  #FAF9F8;      /* fondo general */
+
+  /* --- Semántico (solo para estados) --- */
+  --semantic-positive: #0f7b6c;  /* verde oscuro corporativo */
+  --semantic-warning:  #c29200;  /* ámbar */
+  --semantic-negative: #a4262c;  /* rojo corporativo */
+  --semantic-info:     #0062a3;  /* azul apoyo */
+
+  /* Legacy aliases (mantienen compatibilidad con código existente) */
+  --fide-blue: var(--semantic-info);
+  --fide-yellow: var(--semantic-warning);
+  --fide-coral: var(--semantic-negative);
+  --fide-magenta: #742f5f;   /* magenta desaturado */
+  --fide-gray: var(--neutral-200);
+  --fide-black: var(--neutral-900);
 
   /* Semantic tokens */
-  --bg: #f4faf8;
+  --bg: var(--neutral-bg);
   --card: #ffffff;
-  --text: #1a1a1a;
-  --text-secondary: #5a6a6e;
-  --border: #d4e8e5;
-  --shadow: 0 2px 8px rgba(0,167,157,0.08), 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-lg: 0 12px 24px rgba(0,167,157,0.12), 0 4px 8px rgba(0,0,0,0.06);
-  --radius: 14px;
-  --radius-sm: 8px;
+  --text: var(--neutral-700);
+  --text-secondary: var(--neutral-500);
+  --border: var(--neutral-100);
+  --shadow: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.07);
+  --radius: 8px;
+  --radius-sm: 6px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
@@ -45,9 +63,9 @@ body {
 
 /* =================== HEADER =================== */
 .header {
-  background: linear-gradient(135deg, var(--fide-teal) 0%, var(--fide-teal-dark) 50%, var(--fide-teal-deeper) 100%);
+  background: linear-gradient(90deg, var(--fide-teal-deeper) 0%, var(--fide-teal-dark) 100%);
   color: white;
-  padding: 1.8rem 2.5rem;
+  padding: 1.4rem 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -56,26 +74,7 @@ body {
   position: relative;
   overflow: hidden;
 }
-.header::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -10%;
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, rgba(133,255,170,0.15) 0%, transparent 70%);
-  border-radius: 50%;
-}
-.header::after {
-  content: '';
-  position: absolute;
-  bottom: -60%;
-  left: 20%;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(133,255,170,0.1) 0%, transparent 70%);
-  border-radius: 50%;
-}
+.header::before, .header::after { content: none; }
 .header-left {
   display: flex;
   align-items: center;
@@ -538,8 +537,10 @@ body {
   font-weight: 600;
 }
 .footer .fide-footer-logo {
-  height: 32px;
-  margin-bottom: 0.5rem;
+  height: 38px;
+  width: auto;
+  margin-bottom: 0.6rem;
+  opacity: 0.85;
 }
 .footer a { color: var(--fide-teal); text-decoration: none; }
 
@@ -1080,9 +1081,7 @@ body {
 </div>
 
 <div class="footer">
-  <svg viewBox="0 0 120 36" xmlns="http://www.w3.org/2000/svg" class="fide-footer-logo" style="display:block;margin:0 auto 0.5rem;">
-    <text x="0" y="30" font-family="Nunito, sans-serif" font-size="34" font-weight="800" font-style="italic" fill="#00a79d" letter-spacing="-1.5">fide.</text>
-  </svg>
+  <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-footer-logo" style="display:block;margin:0 auto 0.5rem;">
   Dashboard Operaci&oacute;n Comercial
 </div>
 
@@ -1134,16 +1133,40 @@ let currentPage = 1;
 const PAGE_SIZE = 50;
 let charts = {};
 
-// ---- Fide Brand Chart Palette ----
+// ---- FIDE Brand Chart Palette (corporativa, desaturada) ----
 const FIDE = {
-  teal: '#00a79d', tealDark: '#008f87', mint: '#85ffaa', mintLight: '#dbffe6',
-  blue: '#0089ef', yellow: '#fffb5c', coral: '#ff5c5c', magenta: '#c31b92',
-  gray: '#e6e7e8', black: '#1a1a1a'
+  teal: '#00a79d',        // primary
+  tealDark: '#007a73',    // emphasis
+  tealDeep: '#005a55',    // deep accent
+  tealTint: '#a8d8d4',    // soft variant for secondary bars/lines
+  mint: '#85ffaa',        // reserved accent (uso mínimo)
+  blue: '#0062a3',        // semantic info
+  yellow: '#c29200',      // semantic warning (ámbar corporativo)
+  coral: '#a4262c',       // semantic negative (rojo corporativo)
+  magenta: '#742f5f',     // accent oscuro desaturado
+  gray: '#A19F9D',        // neutro
+  grayLight: '#D2D0CE',
+  black: '#201F1E'
 };
-const CHART_COLORS = [FIDE.teal, FIDE.blue, FIDE.mint, FIDE.coral, FIDE.yellow, FIDE.magenta, '#38b2ac', '#667eea', '#f6ad55', '#76e4f7', '#b794f4', '#68d391', '#fbb6ce', '#d69e2e', '#fc8181'];
-const CALIF_COLORS = {'A': FIDE.teal, 'B': '#ecc94b', 'C': '#ed8936', 'D': FIDE.coral, 'E': FIDE.magenta};
+// Secuencia sobria basada en el teal corporativo + un apoyo neutral/azul.
+// 8 tonos son suficientes para la mayoría de gráficas multiserie.
+const CHART_COLORS = [
+  '#00a79d', // teal primary
+  '#007a73', // teal dark
+  '#0062a3', // apoyo azul corporativo
+  '#A19F9D', // neutro
+  '#005a55', // teal deep
+  '#2b8c85', // intermedio
+  '#c29200', // warning (solo cuando aplica)
+  '#a4262c', // negative (solo cuando aplica)
+];
+// Calificación: escala tipo semáforo corporativo (verde → ámbar → rojo)
+const CALIF_COLORS = {
+  'A': '#0f7b6c', 'B': '#5aa199', 'C': '#c29200', 'D': '#c46a1e', 'E': '#a4262c'
+};
 const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
-const MORA_COLORS = [FIDE.teal, FIDE.mint, '#ecc94b', '#ed8936', FIDE.coral, '#c53030', '#742a2a'];
+// Gradiente ascendente: de verde corporativo a rojo (gravedad)
+const MORA_COLORS = ['#0f7b6c', '#5aa199', '#c29200', '#c46a1e', '#a4262c', '#7f1d1d', '#4a0e0e'];
 
 // ---- Chart.js global defaults (Power BI-like professional style) ----
 Chart.defaults.font.family = "'Segoe UI', 'Nunito', system-ui, sans-serif";
