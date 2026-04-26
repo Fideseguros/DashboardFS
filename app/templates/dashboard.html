@@ -1069,6 +1069,9 @@ body {
     <div class="tab" data-tab="cartera">An&aacute;lisis de Cartera</div>
     <div class="tab" data-tab="aliados">Aliados &amp; Geograf&iacute;a</div>
     <div class="tab" data-tab="detalle">Detalle Cr&eacute;ditos</div>
+    <div class="tab" data-tab="recaudo">Recaudo</div>
+    <div class="tab" data-tab="solicitudes">Solicitudes</div>
+    <div class="tab admin-only" data-tab="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
     <div class="tab admin-only" data-tab="usuarios" style="display:none;">Usuarios</div>
   </div>
   <div class="cross-filter-hint">
@@ -1267,6 +1270,221 @@ body {
         </table>
       </div>
       <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Recaudo -->
+  <div class="tab-content" id="tab-recaudo">
+    <div class="kpi-grid">
+      <div class="kpi-card teal">
+        <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero total de pagos cargados desde el archivo de recaudo.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></div>
+        <div class="kpi-label">Total Pagos</div>
+        <div class="kpi-value" id="rcTotal">-</div>
+        <div class="kpi-sub" id="rcTotalSub"></div>
+      </div>
+      <div class="kpi-card mint">
+        <div class="kpi-info">i<span class="kpi-tooltip">Suma de la columna Total: capital + intereses + IVA + gastos. Es el ingreso bruto del per&iacute;odo.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
+        <div class="kpi-label">Recaudo Total</div>
+        <div class="kpi-value" id="rcRecaudo">-</div>
+        <div class="kpi-sub" id="rcRecaudoSub"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-info">i<span class="kpi-tooltip">Capital recuperado: porci&oacute;n del pago que reduce el saldo del cr&eacute;dito.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
+        <div class="kpi-label">Capital Recuperado</div>
+        <div class="kpi-value" id="rcCapital">-</div>
+        <div class="kpi-sub" id="rcCapitalSub"></div>
+      </div>
+      <div class="kpi-card yellow">
+        <div class="kpi-info">i<span class="kpi-tooltip">Intereses corrientes cobrados.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M19 5L5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg></div>
+        <div class="kpi-label">Inter&eacute;s Corriente</div>
+        <div class="kpi-value" id="rcIntCorr">-</div>
+        <div class="kpi-sub" id="rcIntCorrSub"></div>
+      </div>
+      <div class="kpi-card coral">
+        <div class="kpi-info">i<span class="kpi-tooltip">Intereses de mora cobrados (pagos que llegaron tarde).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
+        <div class="kpi-label">Inter&eacute;s de Mora</div>
+        <div class="kpi-value" id="rcIntMora">-</div>
+        <div class="kpi-sub" id="rcIntMoraSub"></div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3><span class="dot"></span> Recaudo por Canal</h3>
+        <div class="chart-container"><canvas id="chartRcCanal"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="dot"></span> Top 10 Aliados por Recaudo</h3>
+        <div class="chart-container"><canvas id="chartRcAliado"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Evoluci&oacute;n Mensual de Recaudo</h3>
+        <div class="chart-container tall"><canvas id="chartRcMensual"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel Recaudo</button>
+            <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
+          </div>
+        </div>
+        <div class="table-wrapper" style="max-height:480px;">
+          <table class="data-table compact" id="tblRecaudo">
+            <thead><tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Cuenta</th>
+              <th>Aliado</th>
+              <th>Tipo</th>
+              <th class="num">Capital</th>
+              <th class="num">Inter&eacute;s</th>
+              <th class="num">Mora</th>
+              <th class="num">Total</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Solicitudes -->
+  <div class="tab-content" id="tab-solicitudes">
+    <div class="kpi-grid">
+      <div class="kpi-card teal">
+        <div class="kpi-info">i<span class="kpi-tooltip">Total de solicitudes registradas en el archivo cargado.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></svg></div>
+        <div class="kpi-label">Total Solicitudes</div>
+        <div class="kpi-value" id="slTotal">-</div>
+        <div class="kpi-sub" id="slTotalSub"></div>
+      </div>
+      <div class="kpi-card mint">
+        <div class="kpi-info">i<span class="kpi-tooltip">Solicitudes que terminaron en DESEMBOLSADA.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
+        <div class="kpi-label">Desembolsadas</div>
+        <div class="kpi-value" id="slDesem">-</div>
+        <div class="kpi-sub" id="slDesemSub"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-info">i<span class="kpi-tooltip">Solicitudes en alg&uacute;n paso del flujo (no desembolsadas, no rechazadas).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <div class="kpi-label">En Pipeline</div>
+        <div class="kpi-value" id="slPipeline">-</div>
+        <div class="kpi-sub" id="slPipelineSub"></div>
+      </div>
+      <div class="kpi-card yellow">
+        <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor de todas las solicitudes en pipeline (potencial desembolsable).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="kpi-label">Valor Pipeline</div>
+        <div class="kpi-value" id="slValorPip">-</div>
+        <div class="kpi-sub" id="slValorPipSub"></div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3><span class="dot"></span> Estados de Solicitudes</h3>
+        <div class="chart-container"><canvas id="chartSlEstado"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="dot"></span> Solicitudes por L&iacute;nea</h3>
+        <div class="chart-container"><canvas id="chartSlLinea"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
+          <div>
+            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel Solicitudes</button>
+            <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
+          </div>
+        </div>
+        <div class="table-wrapper" style="max-height:480px;">
+          <table class="data-table compact" id="tblSolicitudes">
+            <thead><tr>
+              <th>Solicitud</th>
+              <th>Solicitante</th>
+              <th>L&iacute;nea</th>
+              <th class="num">Valor</th>
+              <th>Estado</th>
+              <th>Paso</th>
+              <th>Oficina</th>
+              <th>Fecha</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Cobro Jurídico (solo superadmin) -->
+  <div class="tab-content" id="tab-juridico">
+    <div class="kpi-grid">
+      <div class="kpi-card teal">
+        <div class="kpi-info">i<span class="kpi-tooltip">Total de procesos judiciales activos cargados en el sistema.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-4z"/></svg></div>
+        <div class="kpi-label">Procesos Activos</div>
+        <div class="kpi-value" id="jrTotal">-</div>
+        <div class="kpi-sub" id="jrTotalSub"></div>
+      </div>
+      <div class="kpi-card mint">
+        <div class="kpi-info">i<span class="kpi-tooltip">Procesos con probabilidad PROBABLE (alta posibilidad de recuperaci&oacute;n).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
+        <div class="kpi-label">Probables</div>
+        <div class="kpi-value" id="jrProb">-</div>
+        <div class="kpi-sub" id="jrProbSub"></div>
+      </div>
+      <div class="kpi-card coral">
+        <div class="kpi-info">i<span class="kpi-tooltip">Procesos con probabilidad REMOTA (baja posibilidad de recuperaci&oacute;n).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
+        <div class="kpi-label">Remotas</div>
+        <div class="kpi-value" id="jrRem">-</div>
+        <div class="kpi-sub" id="jrRemSub"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-info">i<span class="kpi-tooltip">Procesos con alguna medida cautelar constituida (embargo, gravamen, etc.).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 7h18M5 7v13h14V7M9 11v5M15 11v5"/></svg></div>
+        <div class="kpi-label">Con Medida Cautelar</div>
+        <div class="kpi-value" id="jrMed">-</div>
+        <div class="kpi-sub" id="jrMedSub"></div>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <h3><span class="dot"></span> Distribuci&oacute;n por Probabilidad</h3>
+        <div class="chart-container"><canvas id="chartJrProb"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3><span class="dot"></span> Top Juzgados</h3>
+        <div class="chart-container"><canvas id="chartJrJuzgado"></canvas></div>
+      </div>
+      <div class="chart-card full">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Procesos Judiciales</h3>
+          <div>
+            <button class="btn btn-export admin-only" id="btnUploadJuridico" style="display:none;" onclick="document.getElementById('fileJuridico').click()">Subir Informe Conexi&oacute;n</button>
+            <input type="file" id="fileJuridico" accept=".xlsx" style="display:none;" onchange="uploadExtra('juridico', this.files[0])">
+          </div>
+        </div>
+        <div class="table-wrapper" style="max-height:520px;">
+          <table class="data-table compact" id="tblJuridico">
+            <thead><tr>
+              <th>ID</th>
+              <th>Nombre</th>
+              <th>Probabilidad</th>
+              <th>Naturaleza</th>
+              <th>Avance</th>
+              <th>Medida Cautelar</th>
+              <th>Juzgado</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2369,10 +2587,248 @@ document.querySelectorAll('.tab').forEach(tab=>{
     tab.classList.add('active');
     document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
     setTimeout(()=>Object.values(charts).forEach(c=>c.resize()),50);
-    // Carga bajo demanda de la lista de usuarios cuando se abre el tab
+    // Carga bajo demanda según el tab
     if (tab.dataset.tab === 'usuarios') loadUsers();
+    if (tab.dataset.tab === 'recaudo') loadRecaudo();
+    if (tab.dataset.tab === 'solicitudes') loadSolicitudes();
+    if (tab.dataset.tab === 'juridico') loadJuridico();
   });
 });
+
+// ============================================================
+//          MÓDULOS EXTRAS: Recaudo, Solicitudes, Jurídico
+// ============================================================
+async function uploadExtra(modulo, file) {
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const res = await fetch(`/api/${modulo}/upload`, {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
+      return;
+    }
+    alert(`Carga exitosa: ${data.records} registros`);
+    if (modulo === 'recaudo') loadRecaudo();
+    else if (modulo === 'solicitudes') loadSolicitudes();
+    else if (modulo === 'juridico') loadJuridico();
+  } catch(e) {
+    alert('Error de conexión al subir el archivo');
+  }
+}
+
+// ---------- RECAUDO ----------
+let _rcCharts = {};
+async function loadRecaudo() {
+  try {
+    const [s, l] = await Promise.all([
+      fetch('/api/recaudo/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/recaudo', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+    ]);
+    document.getElementById('rcTotal').textContent = fmt(s.total || 0);
+    document.getElementById('rcTotalSub').textContent = 'Pagos registrados';
+    document.getElementById('rcRecaudo').textContent = fmtM(s.recaudo_total || 0);
+    document.getElementById('rcRecaudoSub').textContent = 'Total cobrado';
+    document.getElementById('rcCapital').textContent = fmtM(s.capital_total || 0);
+    document.getElementById('rcCapitalSub').textContent = pct(s.capital_total, s.recaudo_total) + ' del recaudo';
+    document.getElementById('rcIntCorr').textContent = fmtM(s.interes_corr || 0);
+    document.getElementById('rcIntCorrSub').textContent = pct(s.interes_corr, s.recaudo_total) + ' del recaudo';
+    document.getElementById('rcIntMora').textContent = fmtM(s.interes_mora || 0);
+    document.getElementById('rcIntMoraSub').textContent = pct(s.interes_mora, s.recaudo_total) + ' del recaudo';
+
+    // Chart canal
+    Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); });
+    _rcCharts.canal = new Chart(document.getElementById('chartRcCanal'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Efectivo', 'Cheque', 'Tarjeta', 'Interno'],
+        datasets: [{
+          data: [s.efectivo||0, s.cheque||0, s.tarjeta||0, s.interno||0],
+          backgroundColor: [FIDE.teal, FIDE.tealDark, FIDE.blue, FIDE.gray],
+          borderWidth: 3, borderColor: '#fff'
+        }]
+      },
+      options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
+        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:11 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
+          formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t&&v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } }
+      },
+      plugins: [ChartDataLabels]
+    });
+
+    // Top aliados
+    const aliMap = {};
+    l.forEach(p => { const k = p.aliado || 'N/A'; aliMap[k] = (aliMap[k]||0) + (p.total||0); });
+    const topAli = Object.entries(aliMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    _rcCharts.aliado = new Chart(document.getElementById('chartRcAliado'), {
+      type: 'bar',
+      data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
+        scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } }
+    });
+
+    // Evolución mensual
+    const monMap = {};
+    l.forEach(p => {
+      if (!p.fecha_movimiento) return;
+      const m = p.fecha_movimiento.substring(0,7);
+      monMap[m] = (monMap[m]||0) + (p.total||0);
+    });
+    const mons = Object.keys(monMap).sort();
+    _rcCharts.mensual = new Chart(document.getElementById('chartRcMensual'), {
+      type:'bar',
+      data:{ labels: mons, datasets:[{ label:'Recaudo', data: mons.map(m=>monMap[m]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
+        scales:{ y:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } } } }
+    });
+
+    // Tabla
+    const tb = document.querySelector('#tblRecaudo tbody');
+    tb.innerHTML = l.slice(0, 200).map(p => `
+      <tr>
+        <td>${p.fecha_movimiento || '-'}</td>
+        <td>${p.cliente || '-'}</td>
+        <td>${p.cuenta || '-'}</td>
+        <td>${p.aliado || '-'}</td>
+        <td>${p.tipo_mvto || '-'}</td>
+        <td class="num">${fmtCurrency(p.capital)}</td>
+        <td class="num">${fmtCurrency(p.interes_corriente)}</td>
+        <td class="num">${fmtCurrency(p.interes_mora)}</td>
+        <td class="num"><strong>${fmtCurrency(p.total)}</strong></td>
+      </tr>
+    `).join('');
+    if (!l.length) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de recaudo para comenzar.</td></tr>';
+  } catch(e) {
+    console.error('loadRecaudo', e);
+  }
+}
+
+// ---------- SOLICITUDES ----------
+let _slCharts = {};
+async function loadSolicitudes() {
+  try {
+    const [s, l] = await Promise.all([
+      fetch('/api/solicitudes/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/solicitudes', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+    ]);
+    document.getElementById('slTotal').textContent = fmt(s.total || 0);
+    document.getElementById('slTotalSub').textContent = `Valor total: ${fmtM(s.valor_total||0)}`;
+    document.getElementById('slDesem').textContent = fmt(s.desembolsadas || 0);
+    document.getElementById('slDesemSub').textContent = pct(s.desembolsadas, s.total) + ' · ' + fmtM(s.valor_desembolsado||0);
+    document.getElementById('slPipeline').textContent = fmt(s.pipeline || 0);
+    document.getElementById('slPipelineSub').textContent = pct(s.pipeline, s.total) + ' del total';
+    document.getElementById('slValorPip').textContent = fmtM(s.valor_pipeline || 0);
+    document.getElementById('slValorPipSub').textContent = 'Potencial por desembolsar';
+
+    Object.keys(_slCharts).forEach(k => { _slCharts[k]?.destroy?.(); });
+
+    // Estados
+    const estMap = {};
+    l.forEach(x => { const k = x.estado || 'N/A'; estMap[k] = (estMap[k]||0) + 1; });
+    const estLabels = Object.keys(estMap);
+    _slCharts.estado = new Chart(document.getElementById('chartSlEstado'), {
+      type:'doughnut',
+      data:{ labels: estLabels, datasets:[{ data: estLabels.map(k=>estMap[k]), backgroundColor: CHART_COLORS, borderWidth:3, borderColor:'#fff' }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
+        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:11 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
+          formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } } },
+      plugins: [ChartDataLabels]
+    });
+
+    // Líneas
+    const lnMap = {};
+    l.forEach(x => { const k = x.linea || 'N/A'; lnMap[k] = (lnMap[k]||0) + 1; });
+    const lnLabels = Object.keys(lnMap).sort();
+    _slCharts.linea = new Chart(document.getElementById('chartSlLinea'), {
+      type:'bar',
+      data:{ labels: lnLabels, datasets:[{ label:'Solicitudes', data: lnLabels.map(k=>lnMap[k]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
+        scales:{ x:{ grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } }
+    });
+
+    // Tabla
+    const tb = document.querySelector('#tblSolicitudes tbody');
+    tb.innerHTML = l.slice(0, 200).map(x => `
+      <tr>
+        <td><strong>${x.solicitud || '-'}</strong></td>
+        <td>${x.solicitante || '-'}</td>
+        <td>${x.linea || '-'}</td>
+        <td class="num">${fmtCurrency(x.valor)}</td>
+        <td>${x.estado || '-'}</td>
+        <td>${x.paso_ruta || '-'}</td>
+        <td>${x.oficina || '-'}</td>
+        <td>${x.fecha_solicitud || '-'}</td>
+      </tr>
+    `).join('');
+    if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de solicitudes.</td></tr>';
+  } catch(e) { console.error('loadSolicitudes', e); }
+}
+
+// ---------- JURÍDICO (solo superadmin) ----------
+let _jrCharts = {};
+async function loadJuridico() {
+  try {
+    const [s, l] = await Promise.all([
+      fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+    ]);
+    document.getElementById('jrTotal').textContent = fmt(s.total || 0);
+    document.getElementById('jrTotalSub').textContent = `${s.juzgados || 0} juzgados involucrados`;
+    document.getElementById('jrProb').textContent = fmt(s.probables || 0);
+    document.getElementById('jrProbSub').textContent = pct(s.probables, s.total) + ' del total';
+    document.getElementById('jrRem').textContent = fmt(s.remotas || 0);
+    document.getElementById('jrRemSub').textContent = pct(s.remotas, s.total) + ' del total';
+    document.getElementById('jrMed').textContent = fmt(s.con_medida || 0);
+    document.getElementById('jrMedSub').textContent = pct(s.con_medida, s.total) + ' del total';
+
+    Object.keys(_jrCharts).forEach(k => { _jrCharts[k]?.destroy?.(); });
+
+    _jrCharts.prob = new Chart(document.getElementById('chartJrProb'), {
+      type:'doughnut',
+      data:{ labels:['Probable','Remota','Otro'], datasets:[{
+        data:[s.probables||0, s.remotas||0, (s.total||0)-(s.probables||0)-(s.remotas||0)],
+        backgroundColor:[FIDE.teal, FIDE.coral, FIDE.gray], borderWidth:3, borderColor:'#fff' }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
+          formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t&&v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } } },
+      plugins: [ChartDataLabels]
+    });
+
+    const juzMap = {};
+    l.forEach(x => { const k = x.juzgado || 'N/A'; juzMap[k] = (juzMap[k]||0) + 1; });
+    const topJuz = Object.entries(juzMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+    _jrCharts.juzgado = new Chart(document.getElementById('chartJrJuzgado'), {
+      type:'bar',
+      data:{ labels: topJuz.map(j=>j[0].length>40?j[0].substring(0,40)+'…':j[0]), datasets:[{ label:'Procesos', data: topJuz.map(j=>j[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
+        scales:{ x:{ grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } } }
+    });
+
+    const tb = document.querySelector('#tblJuridico tbody');
+    tb.innerHTML = l.slice(0, 200).map(x => {
+      const probColor = (x.probabilidad||'').toLowerCase().includes('probab')
+        ? 'background:var(--fide-teal-tint);color:var(--fide-teal-dark)'
+        : 'background:#fcf0dd;color:#b8680f';
+      return `
+        <tr>
+          <td>${x.identificacion || '-'}</td>
+          <td>${x.nombre || '-'}</td>
+          <td><span class="role-pill" style="${probColor};">${x.probabilidad || '-'}</span></td>
+          <td title="${(x.naturaleza_litigio||'').replace(/"/g,'&quot;')}">${(x.naturaleza_litigio||'-').substring(0,40)}…</td>
+          <td title="${(x.avance||'').replace(/"/g,'&quot;')}">${(x.avance||'-').substring(0,40)}…</td>
+          <td title="${(x.medida_cautelar||'').replace(/"/g,'&quot;')}">${(x.medida_cautelar||'-').substring(0,30)}…</td>
+          <td>${x.juzgado || '-'}</td>
+        </tr>
+      `;
+    }).join('');
+    if (!l.length) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
+  } catch(e) { console.error('loadJuridico', e); }
+}
 
 // ============================================================
 //                 GESTIÓN DE USUARIOS (superadmin)
@@ -2681,8 +3137,8 @@ const _role = sessionStorage.getItem('fide_role') || '';
 if (_role === 'superadmin') {
   const btn = document.getElementById('btnUpload');
   if (btn) btn.style.display = 'inline-block';
-  // Revelar tab "Usuarios" para superadmin
-  document.querySelectorAll('.tab.admin-only').forEach(el => el.style.display = '');
+  // Revelar tabs admin-only y botones de upload para superadmin
+  document.querySelectorAll('.tab.admin-only, .btn.admin-only').forEach(el => el.style.display = '');
 }
 // "consulta" role: solo lectura — ocultar cualquier acción de exportación
 if (_role === 'consulta') {

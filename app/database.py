@@ -99,6 +99,88 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action, created_at);
+
+-- ============== Módulo Recaudo (Pagos / Ingresos) ==============
+CREATE TABLE IF NOT EXISTS pagos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidad TEXT,
+    linea_credito TEXT,
+    fecha_movimiento TEXT,
+    fecha_documento TEXT,
+    identificacion TEXT,         -- cifrado
+    cliente TEXT,                -- cifrado
+    cuenta TEXT,
+    solicitud TEXT,
+    aliado TEXT,
+    tipo_mvto TEXT,
+    tipo_documento TEXT,
+    documento TEXT,
+    usuario TEXT,
+    capital REAL DEFAULT 0,
+    interes_corriente REAL DEFAULT 0,
+    interes_mora REAL DEFAULT 0,
+    iva REAL DEFAULT 0,
+    saldo_favor REAL DEFAULT 0,
+    gastos_pj REAL DEFAULT 0,
+    cargos_admin REAL DEFAULT 0,
+    total REAL DEFAULT 0,
+    total_cheque REAL DEFAULT 0,
+    total_efectivo REAL DEFAULT 0,
+    total_tarjeta REAL DEFAULT 0,
+    total_interno REAL DEFAULT 0,
+    autorizacion TEXT,
+    observaciones TEXT,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pagos_fecha ON pagos(fecha_movimiento);
+CREATE INDEX IF NOT EXISTS idx_pagos_aliado ON pagos(aliado);
+CREATE INDEX IF NOT EXISTS idx_pagos_sync ON pagos(sync_batch_id);
+
+-- ============== Módulo Solicitudes (Pipeline) ==============
+CREATE TABLE IF NOT EXISTS solicitudes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    solicitud_origen TEXT,
+    solicitud TEXT,
+    hoja_ruta TEXT,
+    linea TEXT,
+    identificacion TEXT,         -- cifrado
+    solicitante TEXT,            -- cifrado
+    tipo_moneda TEXT,
+    valor REAL DEFAULT 0,
+    paso_ruta TEXT,
+    responsable TEXT,
+    estado TEXT,
+    subestado TEXT,
+    empresa TEXT,
+    oficina TEXT,
+    fecha_solicitud TEXT,
+    periodo_convocatoria TEXT,
+    auxilio TEXT,
+    usuario TEXT,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes(estado);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_fecha ON solicitudes(fecha_solicitud);
+CREATE INDEX IF NOT EXISTS idx_solicitudes_sync ON solicitudes(sync_batch_id);
+
+-- ============== Módulo Cobro Jurídico (Procesos) ==============
+CREATE TABLE IF NOT EXISTS procesos_juridicos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    identificacion TEXT,         -- cifrado
+    nombre TEXT,                 -- cifrado
+    naturaleza_litigio TEXT,
+    avance TEXT,
+    respuesta_compania TEXT,
+    probabilidad TEXT,
+    medida_cautelar TEXT,
+    juzgado TEXT,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_juridico_prob ON procesos_juridicos(probabilidad);
+CREATE INDEX IF NOT EXISTS idx_juridico_sync ON procesos_juridicos(sync_batch_id);
 """
 
 CREDIT_FIELDS = [
