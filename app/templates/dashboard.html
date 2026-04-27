@@ -723,8 +723,12 @@ body {
 /* Active chart filter banner */
 .chart-filters-bar {
   display: none;
-  background: linear-gradient(135deg, var(--fide-mint-light), #e8fdf0);
-  border: 2px solid var(--fide-mint);
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  background: linear-gradient(90deg, var(--fide-teal-tint), #e8fdf0);
+  border: 1px solid var(--fide-teal);
+  border-left: 4px solid var(--fide-teal);
   border-radius: var(--radius);
   padding: 0.6rem 1.2rem;
   margin-bottom: 1.2rem;
@@ -732,6 +736,7 @@ body {
   gap: 0.5rem;
   flex-wrap: wrap;
   animation: slideDown 0.25s ease;
+  box-shadow: 0 2px 8px rgba(0,167,157,0.15);
 }
 .chart-filters-bar.active { display: flex; }
 @keyframes slideDown {
@@ -1313,13 +1318,9 @@ body {
 
     <div class="chart-card full" style="margin-bottom:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.6rem;">
-        <h3 style="margin:0;"><span class="dot"></span> Proyecci&oacute;n de Pagos</h3>
-        <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;">
-          <label style="color:#5a6a6e;font-weight:600;">Vista:</label>
-          <select id="prGroupBy" onchange="renderProyeccion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
-            <option value="month">Mensual</option>
-            <option value="day">Diaria</option>
-          </select>
+        <h3 id="prTitle" style="margin:0;"><span class="dot"></span> Proyecci&oacute;n de Pagos por Mes</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;" id="prControls">
+          <button id="prBackBtn" onclick="prBack()" style="display:none;background:var(--fide-teal-tint);border:1px solid var(--fide-teal);color:var(--fide-teal-dark);padding:0.3rem 0.7rem;border-radius:6px;font-family:inherit;font-weight:700;cursor:pointer;font-size:0.75rem;">&larr; Volver a meses</button>
           <label style="color:#5a6a6e;font-weight:600;">Per&iacute;odo:</label>
           <select id="prPeriod" onchange="renderProyeccion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
             <option value="3m">Pr&oacute;ximos 3 meses</option>
@@ -2400,16 +2401,29 @@ function updateCharts() {
     plugins: [ChartDataLabels]
   });
 
-  // Calificación
+  // Calificación (con feedback visual de filtro activo)
   destroyChart('chartCalif');
   const califMap = {};
   ['A','B','C','D','E'].forEach(c => { califMap[c] = d.filter(r => (r.calificacion||'').trim()===c).length; });
+  const califActive = chartFilters['calificacion'];
+  const califColors = Object.keys(califMap).map(c => {
+    const base = CALIF_COLORS[c];
+    if (!califActive) return base;
+    return c === califActive ? base : base + '33'; // segmento seleccionado vs atenuados
+  });
+  const califBorders = Object.keys(califMap).map(c => {
+    return califActive && c === califActive ? CALIF_COLORS[c] : 'transparent';
+  });
   charts.chartCalif = new Chart(document.getElementById('chartCalif'), {
     type: 'bar',
-    data: { labels: Object.keys(califMap), datasets: [{ label:'# Créditos', data:Object.values(califMap), backgroundColor:Object.keys(califMap).map(c=>CALIF_COLORS[c]), borderRadius:8, borderSkipped:false }] },
+    data: { labels: Object.keys(califMap), datasets: [{ label:'# Créditos', data:Object.values(califMap), backgroundColor: califColors, borderColor: califBorders, borderWidth: 3, borderRadius:8, borderSkipped:false }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:13 }, formatter:v=>fmt(v) } },
+      plugins: {
+        legend:{ display:false },
+        datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:13 }, formatter:v=>fmt(v) },
+        tooltip: { callbacks: { footer: () => califActive ? 'Clic para quitar filtro' : 'Clic para filtrar' } }
+      },
       scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false } } }
     },
     plugins: [ChartDataLabels]
@@ -2456,12 +2470,24 @@ function updateCharts() {
   destroyChart('chartCalifLinea');
   const cLineas=[...new Set(d.map(r=>r.linea).filter(Boolean))].sort();
   const cKeys=['A','B','C','D','E'];
+  const califFilterCL = chartFilters['calificacion'];
   charts.chartCalifLinea = new Chart(document.getElementById('chartCalifLinea'), {
     type:'bar',
-    data: { labels:cLineas, datasets:cKeys.map(c=>({ label:c, data:cLineas.map(l=>d.filter(r=>r.linea===l&&(r.calificacion||'').trim()===c).length), backgroundColor:CALIF_COLORS[c], borderRadius:2 })) },
+    data: { labels:cLineas, datasets:cKeys.map(c=>({
+      label:c,
+      data:cLineas.map(l=>d.filter(r=>r.linea===l&&(r.calificacion||'').trim()===c).length),
+      backgroundColor: califFilterCL && c !== califFilterCL ? CALIF_COLORS[c] + '22' : CALIF_COLORS[c],
+      borderColor: califFilterCL === c ? '#000' : 'transparent',
+      borderWidth: califFilterCL === c ? 1.5 : 0,
+      borderRadius:2
+    })) },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
+      plugins: {
+        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        datalabels:{ display:false },
+        tooltip: { callbacks: { footer: () => califFilterCL ? 'Clic para quitar filtro' : 'Clic en un color para filtrar por calificación' } }
+      },
       scales: { x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } }, y:{ stacked:true, beginAtZero:true, grid:{ color:'#F3F2F1' } } }
     },
     plugins: [ChartDataLabels]
@@ -2992,6 +3018,13 @@ async function loadJuridico() {
 //                  PROYECCIÓN DE PAGOS
 // ============================================================
 let _prChart = null;
+let _prDrillMonth = null; // null = vista mensual; 'YYYY-MM' = vista diaria
+
+function prBack() {
+  _prDrillMonth = null;
+  document.getElementById('prBackBtn').style.display = 'none';
+  renderProyeccion();
+}
 
 function _buildProyeccionData() {
   // Toma cartera filtrada y proyecta cuotas pendientes a partir de fecha_vencimiento
@@ -3024,28 +3057,37 @@ function _buildProyeccionData() {
 }
 
 function renderProyeccion() {
-  const groupBy = document.getElementById('prGroupBy')?.value || 'month';
   const period = document.getElementById('prPeriod')?.value || '12m';
-
   const proyData = _buildProyeccionData();
+  const titleEl = document.getElementById('prTitle');
+  const backBtn = document.getElementById('prBackBtn');
+  const ctx = document.getElementById('chartProyeccion');
+  if (!ctx) return;
 
-  // Define ventana
+  const pad = n => String(n).padStart(2, '0');
+
+  // Determinar ventana base (solo aplica en vista mensual)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let endDate = null;
-  if (period !== 'all') {
+  if (!_prDrillMonth && period !== 'all') {
     const months = parseInt(period);
     endDate = new Date(today);
     endDate.setMonth(endDate.getMonth() + months);
   }
 
-  // Filtrar por ventana (mantener mora vencida + futuras)
-  const inWindow = proyData.filter(r => {
-    if (endDate && r._venc_date > endDate) return false;
-    return true;
-  });
+  // Datos para el período visible
+  let inWindow;
+  if (_prDrillMonth) {
+    inWindow = proyData.filter(r => {
+      const ymd = `${r._venc_date.getFullYear()}-${pad(r._venc_date.getMonth()+1)}`;
+      return ymd === _prDrillMonth;
+    });
+  } else {
+    inWindow = proyData.filter(r => !endDate || r._venc_date <= endDate);
+  }
 
-  // KPIs
+  // KPIs (recalculados sobre el período/mes visible)
   const total = inWindow.length;
   const valor = inWindow.reduce((s, r) => s + r._valor_cuota_num, 0);
   const mora = inWindow.filter(r => r._en_mora);
@@ -3054,7 +3096,7 @@ function renderProyeccion() {
   const valAlDia = alDia.reduce((s, r) => s + r._valor_cuota_num, 0);
 
   document.getElementById('prTotal').textContent = fmt(total);
-  document.getElementById('prTotalSub').textContent = `${groupBy === 'day' ? 'Vista diaria' : 'Vista mensual'}`;
+  document.getElementById('prTotalSub').textContent = _prDrillMonth ? 'Vista diaria' : 'Vista mensual';
   document.getElementById('prValor').textContent = fmtM(valor);
   document.getElementById('prValorSub').textContent = `Promedio cuota: ${fmtM(total > 0 ? valor / total : 0)}`;
   document.getElementById('prMora').textContent = fmt(mora.length);
@@ -3062,51 +3104,102 @@ function renderProyeccion() {
   document.getElementById('prAlDia').textContent = fmt(alDia.length);
   document.getElementById('prAlDiaSub').textContent = `Valor: ${fmtM(valAlDia)}`;
 
-  // Construir series por bucket (mes o día)
-  const pad = n => String(n).padStart(2, '0');
-  const bucketKey = (d) => groupBy === 'day'
-    ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
-    : `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
-
-  const dataMap = {}; // key -> { alDia, mora }
-  inWindow.forEach(r => {
-    const k = bucketKey(r._venc_date);
-    if (!dataMap[k]) dataMap[k] = { alDia: 0, mora: 0 };
-    if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
-    else dataMap[k].alDia += r._valor_cuota_num;
-  });
-  const keys = Object.keys(dataMap).sort();
-
-  // Chart
   if (_prChart) { _prChart.destroy(); _prChart = null; }
-  const ctx = document.getElementById('chartProyeccion');
-  if (!ctx) return;
-  _prChart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: keys,
-      datasets: [
-        { label: 'Al día', data: keys.map(k => dataMap[k].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 3 },
-        { label: 'En mora (> 30 días)', data: keys.map(k => dataMap[k].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 3 },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top' },
-        datalabels: { display: false },
-        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}` } }
-      },
-      scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
-        y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
-      }
-    }
-  });
 
-  // Tabla detallada
-  const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 200);
+  // ---------- VISTA DIARIA (drill-down) ----------
+  if (_prDrillMonth) {
+    if (backBtn) backBtn.style.display = '';
+    const [yyyy, mm] = _prDrillMonth.split('-');
+    const monthName = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][parseInt(mm)-1];
+    titleEl.innerHTML = `<span class="dot"></span> Proyecci&oacute;n d&iacute;a a d&iacute;a &mdash; ${monthName} ${yyyy}`;
+
+    const daysInMonth = new Date(parseInt(yyyy), parseInt(mm), 0).getDate();
+    const days = Array.from({length: daysInMonth}, (_, i) => `${yyyy}-${mm}-${pad(i+1)}`);
+    const dataMap = {};
+    days.forEach(d => { dataMap[d] = { alDia: 0, mora: 0 }; });
+    inWindow.forEach(r => {
+      const k = `${r._venc_date.getFullYear()}-${pad(r._venc_date.getMonth()+1)}-${pad(r._venc_date.getDate())}`;
+      if (!dataMap[k]) return;
+      if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
+      else dataMap[k].alDia += r._valor_cuota_num;
+    });
+
+    _prChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: days.map(d => d.substring(8,10)),
+        datasets: [
+          { label: 'Al día', data: days.map(d => dataMap[d].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 2 },
+          { label: 'En mora (> 30 días)', data: days.map(d => dataMap[d].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 2 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top' },
+          datalabels: { display: false },
+          tooltip: { callbacks: {
+            title: items => `${monthName} ${items[0].label}, ${yyyy}`,
+            label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}`
+          } }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+        }
+      }
+    });
+  } else {
+    // ---------- VISTA MENSUAL (default) ----------
+    if (backBtn) backBtn.style.display = 'none';
+    titleEl.innerHTML = `<span class="dot"></span> Proyecci&oacute;n de Pagos por Mes <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(clic en una barra para ver detalle diario)</span>`;
+
+    const dataMap = {};
+    inWindow.forEach(r => {
+      const k = `${r._venc_date.getFullYear()}-${pad(r._venc_date.getMonth()+1)}`;
+      if (!dataMap[k]) dataMap[k] = { alDia: 0, mora: 0 };
+      if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
+      else dataMap[k].alDia += r._valor_cuota_num;
+    });
+    const keys = Object.keys(dataMap).sort();
+
+    _prChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: keys,
+        datasets: [
+          { label: 'Al día', data: keys.map(k => dataMap[k].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 3 },
+          { label: 'En mora (> 30 días)', data: keys.map(k => dataMap[k].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        onClick: (evt, items, chart) => {
+          if (!items || !items.length) return;
+          const idx = items[0].index;
+          const monthKey = keys[idx];
+          if (monthKey) { _prDrillMonth = monthKey; renderProyeccion(); }
+        },
+        plugins: {
+          legend: { position: 'top' },
+          datalabels: { display: false },
+          tooltip: { callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}`,
+            footer: () => 'Clic para ver detalle diario'
+          } }
+        },
+        scales: {
+          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+          y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+        }
+      }
+    });
+  }
+
+  // Tabla detallada (siempre)
+  const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 300);
   const tb = document.querySelector('#tblProyeccion tbody');
   if (tb) {
     tb.innerHTML = sorted.map(r => {
