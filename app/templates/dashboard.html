@@ -2425,17 +2425,25 @@ function updateCharts() {
     plugins: [ChartDataLabels]
   });
 
-  // Mora
+  // Mora — cuando hay filtro activo, mostrar solo el bucket seleccionado
   destroyChart('chartMora');
   const moraMap = {};
   MORA_ORDER.forEach(m => moraMap[m]=0);
   d.forEach(r => { const mr=getMoraRange(r.dias_mora); moraMap[mr]=(moraMap[mr]||0)+1; });
+  const moraActive = chartFilters['mora'];
+  const moraLabels = moraActive ? [moraActive] : MORA_ORDER;
+  const moraColorMap = {};
+  MORA_ORDER.forEach((m, i) => moraColorMap[m] = MORA_COLORS[i]);
   charts.chartMora = new Chart(document.getElementById('chartMora'), {
     type: 'bar',
-    data: { labels:MORA_ORDER, datasets:[{ label:'# Créditos', data:MORA_ORDER.map(m=>moraMap[m]||0), backgroundColor:MORA_COLORS, borderRadius:8, borderSkipped:false }] },
+    data: { labels: moraLabels, datasets:[{ label:'# Créditos', data: moraLabels.map(m=>moraMap[m]||0), backgroundColor: moraLabels.map(m=>moraColorMap[m]), borderRadius:8, borderSkipped:false }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:11 }, formatter:v=>v>0?fmt(v):'' } },
+      plugins: {
+        legend:{ display:false },
+        datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:11 }, formatter:v=>v>0?fmt(v):'' },
+        tooltip: { callbacks: { footer: () => moraActive ? 'Clic para quitar filtro' : 'Clic en un bucket para filtrar' } }
+      },
       scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
     },
     plugins: [ChartDataLabels]
@@ -2523,18 +2531,26 @@ function updateCharts() {
   const mSaldo={}, mCount={};
   MORA_ORDER.forEach(m=>{ mSaldo[m]=0; mCount[m]=0; });
   d.forEach(r=>{ const mr=getMoraRange(r.dias_mora); mSaldo[mr]=(mSaldo[mr]||0)+(parseFloat(r.saldo_capital)||0); mCount[mr]=(mCount[mr]||0)+1; });
+  const moraSaldoActive = chartFilters['mora'];
+  const moraSaldoLabels = moraSaldoActive ? [moraSaldoActive] : MORA_ORDER;
+  const moraSaldoColorMap = {};
+  MORA_ORDER.forEach((m, i) => moraSaldoColorMap[m] = MORA_COLORS[i]);
   charts.chartMoraSaldo = new Chart(document.getElementById('chartMoraSaldo'), {
     type:'bar',
     data: {
-      labels:MORA_ORDER,
+      labels: moraSaldoLabels,
       datasets:[
-        { label:'Saldo Capital', data:MORA_ORDER.map(m=>mSaldo[m]), backgroundColor:MORA_COLORS.map(c=>c+'cc'), borderRadius:8, yAxisID:'y' },
-        { label:'# Créditos', data:MORA_ORDER.map(m=>mCount[m]), type:'line', borderColor:FIDE.blue, borderWidth:2.5, pointRadius:5, pointBackgroundColor:FIDE.blue, yAxisID:'y1' }
+        { label:'Saldo Capital', data: moraSaldoLabels.map(m=>mSaldo[m]||0), backgroundColor: moraSaldoLabels.map(m=>moraSaldoColorMap[m]+'cc'), borderRadius:8, yAxisID:'y' },
+        { label:'# Créditos', data: moraSaldoLabels.map(m=>mCount[m]||0), type:'line', borderColor:FIDE.blue, borderWidth:2.5, pointRadius:5, pointBackgroundColor:FIDE.blue, yAxisID:'y1' }
       ]
     },
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins: { legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } }, datalabels:{ display:false } },
+      plugins: {
+        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        datalabels:{ display:false },
+        tooltip: { callbacks: { footer: () => moraSaldoActive ? 'Clic para quitar filtro' : 'Clic para filtrar por rango de mora' } }
+      },
       scales: {
         y: { beginAtZero:true, position:'left', title:{ display:true, text:'Saldo ($)', font:{ weight:700 } }, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } },
         y1: { beginAtZero:true, position:'right', title:{ display:true, text:'# Créditos', font:{ weight:700 } }, grid:{ drawOnChartArea:false } },
