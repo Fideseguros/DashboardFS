@@ -2401,28 +2401,24 @@ function updateCharts() {
     plugins: [ChartDataLabels]
   });
 
-  // Calificación (con feedback visual de filtro activo)
+  // Calificación: cuando hay filtro activo, mostrar SOLO la letra seleccionada.
   destroyChart('chartCalif');
+  const califActive = chartFilters['calificacion'];
+  // Para tener el conteo correcto de la categoría seleccionada uso filteredData (d ya está filtrado).
   const califMap = {};
   ['A','B','C','D','E'].forEach(c => { califMap[c] = d.filter(r => (r.calificacion||'').trim()===c).length; });
-  const califActive = chartFilters['calificacion'];
-  const califColors = Object.keys(califMap).map(c => {
-    const base = CALIF_COLORS[c];
-    if (!califActive) return base;
-    return c === califActive ? base : base + '33'; // segmento seleccionado vs atenuados
-  });
-  const califBorders = Object.keys(califMap).map(c => {
-    return califActive && c === califActive ? CALIF_COLORS[c] : 'transparent';
-  });
+  const califLabels = califActive ? [califActive] : Object.keys(califMap);
+  const califData = califLabels.map(c => califMap[c] || 0);
+  const califColors = califLabels.map(c => CALIF_COLORS[c] || FIDE.gray);
   charts.chartCalif = new Chart(document.getElementById('chartCalif'), {
     type: 'bar',
-    data: { labels: Object.keys(califMap), datasets: [{ label:'# Créditos', data:Object.values(califMap), backgroundColor: califColors, borderColor: califBorders, borderWidth: 3, borderRadius:8, borderSkipped:false }] },
+    data: { labels: califLabels, datasets: [{ label:'# Créditos', data: califData, backgroundColor: califColors, borderRadius:8, borderSkipped:false }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend:{ display:false },
         datalabels:{ anchor:'end', align:'top', color:'#1a1a1a', font:{ weight:800, size:13 }, formatter:v=>fmt(v) },
-        tooltip: { callbacks: { footer: () => califActive ? 'Clic para quitar filtro' : 'Clic para filtrar' } }
+        tooltip: { callbacks: { footer: () => califActive ? 'Clic en la barra para quitar filtro' : 'Clic en una letra para filtrar' } }
       },
       scales: { y:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false } } }
     },
@@ -2469,16 +2465,16 @@ function updateCharts() {
 
   destroyChart('chartCalifLinea');
   const cLineas=[...new Set(d.map(r=>r.linea).filter(Boolean))].sort();
-  const cKeys=['A','B','C','D','E'];
+  const allCKeys=['A','B','C','D','E'];
   const califFilterCL = chartFilters['calificacion'];
+  // Si hay filtro activo, mostrar SOLO esa categoría como dataset.
+  const cKeys = califFilterCL ? [califFilterCL] : allCKeys;
   charts.chartCalifLinea = new Chart(document.getElementById('chartCalifLinea'), {
     type:'bar',
     data: { labels:cLineas, datasets:cKeys.map(c=>({
       label:c,
       data:cLineas.map(l=>d.filter(r=>r.linea===l&&(r.calificacion||'').trim()===c).length),
-      backgroundColor: califFilterCL && c !== califFilterCL ? CALIF_COLORS[c] + '22' : CALIF_COLORS[c],
-      borderColor: califFilterCL === c ? '#000' : 'transparent',
-      borderWidth: califFilterCL === c ? 1.5 : 0,
+      backgroundColor: CALIF_COLORS[c],
       borderRadius:2
     })) },
     options: {
@@ -2486,7 +2482,7 @@ function updateCharts() {
       plugins: {
         legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
         datalabels:{ display:false },
-        tooltip: { callbacks: { footer: () => califFilterCL ? 'Clic para quitar filtro' : 'Clic en un color para filtrar por calificación' } }
+        tooltip: { callbacks: { footer: () => califFilterCL ? 'Clic en una barra para quitar filtro' : 'Clic en un color para filtrar por calificación' } }
       },
       scales: { x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } }, y:{ stacked:true, beginAtZero:true, grid:{ color:'#F3F2F1' } } }
     },
