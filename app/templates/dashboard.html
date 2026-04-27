@@ -1034,7 +1034,7 @@ body {
       <div class="kpi-sub" id="kpiTasaSub"></div>
     </div>
     <div class="kpi-card coral">
-      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con d&iacute;as de mora > 0. El sub muestra el saldo total en mora y su % sobre el saldo activo.</span></div>
+      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de mora (la pol&iacute;tica Fideseguros considera 1-30 d&iacute;as como al d&iacute;a). El sub muestra el saldo total en mora y su % sobre el saldo activo.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
       <div class="kpi-label">Cartera en Mora</div>
       <div class="kpi-value" id="kpiMora">-</div>
@@ -1069,6 +1069,7 @@ body {
     <div class="tab" data-tab="cartera">An&aacute;lisis de Cartera</div>
     <div class="tab" data-tab="aliados">Aliados &amp; Geograf&iacute;a</div>
     <div class="tab" data-tab="detalle">Detalle Cr&eacute;ditos</div>
+    <div class="tab" data-tab="proyeccion">Proyecci&oacute;n Pagos</div>
     <div class="tab" data-tab="recaudo">Recaudo</div>
     <div class="tab" data-tab="solicitudes">Solicitudes</div>
     <div class="tab admin-only" data-tab="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
@@ -1206,6 +1207,10 @@ body {
         <div class="chart-container tall"><canvas id="chartCiudades"></canvas></div>
       </div>
       <div class="chart-card full">
+        <h3><span class="dot"></span> Saldo en Mora por Intermediario <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(mora &gt; 30 d&iacute;as)</span></h3>
+        <div class="chart-container tall"><canvas id="chartMoraIntermediario"></canvas></div>
+      </div>
+      <div class="chart-card full">
         <h3><span class="dot"></span> Detalle de Aliados</h3>
         <div class="table-wrapper" style="max-height:460px;">
           <table class="data-table compact" id="tblAliados">
@@ -1270,6 +1275,81 @@ body {
         </table>
       </div>
       <div class="pagination" id="pagination"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Proyección de Pagos -->
+  <div class="tab-content" id="tab-proyeccion">
+    <div class="kpi-grid">
+      <div class="kpi-card teal">
+        <div class="kpi-info">i<span class="kpi-tooltip">Cantidad de cuotas activas a&uacute;n por cobrar (no pagadas y dentro del per&iacute;odo de proyecci&oacute;n).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
+        <div class="kpi-label">Cuotas Por Cobrar</div>
+        <div class="kpi-value" id="prTotal">-</div>
+        <div class="kpi-sub" id="prTotalSub"></div>
+      </div>
+      <div class="kpi-card mint">
+        <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor cuota a recibir en el per&iacute;odo. Excluye cuotas ya pagadas (fecha &uacute;ltimo pago &gt;= vencimiento).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
+        <div class="kpi-label">Valor Proyectado</div>
+        <div class="kpi-value" id="prValor">-</div>
+        <div class="kpi-sub" id="prValorSub"></div>
+      </div>
+      <div class="kpi-card coral">
+        <div class="kpi-info">i<span class="kpi-tooltip">Cuotas en mora: vencimiento ya pasado y mora &gt; 30 d&iacute;as. Su pago est&aacute; vencido.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
+        <div class="kpi-label">Cuotas En Mora</div>
+        <div class="kpi-value" id="prMora">-</div>
+        <div class="kpi-sub" id="prMoraSub"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-info">i<span class="kpi-tooltip">Cuotas pr&oacute;ximas a vencer (al d&iacute;a, dentro del per&iacute;odo).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+        <div class="kpi-label">Cuotas Al D&iacute;a</div>
+        <div class="kpi-value" id="prAlDia">-</div>
+        <div class="kpi-sub" id="prAlDiaSub"></div>
+      </div>
+    </div>
+
+    <div class="chart-card full" style="margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.6rem;">
+        <h3 style="margin:0;"><span class="dot"></span> Proyecci&oacute;n de Pagos</h3>
+        <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.82rem;">
+          <label style="color:#5a6a6e;font-weight:600;">Vista:</label>
+          <select id="prGroupBy" onchange="renderProyeccion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
+            <option value="month">Mensual</option>
+            <option value="day">Diaria</option>
+          </select>
+          <label style="color:#5a6a6e;font-weight:600;">Per&iacute;odo:</label>
+          <select id="prPeriod" onchange="renderProyeccion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
+            <option value="3m">Pr&oacute;ximos 3 meses</option>
+            <option value="6m">Pr&oacute;ximos 6 meses</option>
+            <option value="12m" selected>Pr&oacute;ximos 12 meses</option>
+            <option value="24m">Pr&oacute;ximos 24 meses</option>
+            <option value="all">Todo</option>
+          </select>
+        </div>
+      </div>
+      <div class="chart-container tall"><canvas id="chartProyeccion"></canvas></div>
+    </div>
+
+    <div class="chart-card full">
+      <h3><span class="dot"></span> Detalle de Cuotas Proyectadas <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(ordenadas por vencimiento)</span></h3>
+      <div class="table-wrapper" style="max-height:480px;">
+        <table class="data-table compact" id="tblProyeccion">
+          <thead><tr>
+            <th>Vencimiento</th>
+            <th>Estado</th>
+            <th>Cliente</th>
+            <th>L&iacute;nea</th>
+            <th>Aliado</th>
+            <th class="num">Valor Cuota</th>
+            <th class="num">Saldo Capital</th>
+            <th class="num">D&iacute;as Mora</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -1452,6 +1532,20 @@ body {
         <div class="kpi-value" id="jrMed">-</div>
         <div class="kpi-sub" id="jrMedSub"></div>
       </div>
+      <div class="kpi-card magenta">
+        <div class="kpi-info">i<span class="kpi-tooltip">Procesos cuya identificaci&oacute;n coincide con un cliente en la cartera consolidada. Permite analizar saldo y exposici&oacute;n.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <div class="kpi-label">Cruzados con Cartera</div>
+        <div class="kpi-value" id="jrCruce">-</div>
+        <div class="kpi-sub" id="jrCruceSub"></div>
+      </div>
+      <div class="kpi-card coral">
+        <div class="kpi-info">i<span class="kpi-tooltip">Suma del saldo de capital de los clientes con proceso jur&iacute;dico que est&aacute;n en cartera. Mide la exposici&oacute;n financiera total.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
+        <div class="kpi-label">Saldo Expuesto</div>
+        <div class="kpi-value" id="jrSaldo">-</div>
+        <div class="kpi-sub" id="jrSaldoSub"></div>
+      </div>
     </div>
     <div class="charts-grid">
       <div class="chart-card">
@@ -1476,10 +1570,11 @@ body {
               <th>ID</th>
               <th>Nombre</th>
               <th>Probabilidad</th>
-              <th>Naturaleza</th>
-              <th>Avance</th>
-              <th>Medida Cautelar</th>
+              <th>Cartera</th>
+              <th class="num">Saldo</th>
+              <th class="num">Mora (d&iacute;as)</th>
               <th>Juzgado</th>
+              <th>Medida Cautelar</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -2058,7 +2153,10 @@ function addChartClick(chartId, dimension, labelExtractor) {
     const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, false);
     if (points.length === 0) return;
     const idx = points[0].index;
-    const label = labelExtractor ? labelExtractor(chart, idx) : chart.data.labels[idx];
+    const dsIdx = points[0].datasetIndex;
+    const label = labelExtractor
+      ? labelExtractor(chart, idx, dsIdx)
+      : chart.data.labels[idx];
     if (label) toggleChartFilter(dimension, label);
   });
 }
@@ -2162,7 +2260,8 @@ function updateKPIs() {
   const tSal = d.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
   const tasas = d.map(r => parseFloat(r.tasa_efectiva)).filter(t => !isNaN(t) && t>0);
   const tProm = tasas.length ? tasas.reduce((a,b)=>a+b,0)/tasas.length : 0;
-  const enMora = act.filter(r => (parseInt(r.dias_mora)||0)>0);
+  // Política Fideseguros: mora real = más de 30 días vencidos
+  const enMora = act.filter(r => (parseInt(r.dias_mora)||0) > 30);
   const sMora = enMora.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
 
   document.getElementById('kpiTotal').textContent = fmt(d.length);
@@ -2177,7 +2276,7 @@ function updateKPIs() {
   document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
   document.getElementById('kpiTasaSub').textContent = `Rango: ${tasas.length?Math.min(...tasas).toFixed(1):0}% - ${tasas.length?Math.max(...tasas).toFixed(1):0}%`;
   document.getElementById('kpiMora').textContent = fmt(enMora.length);
-  document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSal)})`;
+  document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSal)}) · mora > 30 días`;
 
   // Ticket promedio = valor crédito promedio (todos los filtrados con valor > 0)
   const vals = d.map(r => parseFloat(r.valor_credito)).filter(v => !isNaN(v) && v>0);
@@ -2469,6 +2568,48 @@ function updateCharts() {
     },
     plugins: [ChartDataLabels]
   });
+
+  // Saldo en Mora por Intermediario (mora > 30 días)
+  destroyChart('chartMoraIntermediario');
+  const moraIntMap = {};
+  d.forEach(r => {
+    if (r.estado !== 'ACTIVO') return;
+    if ((parseInt(r.dias_mora) || 0) <= 30) return;
+    const k = r.aliado || 'Sin intermediario';
+    moraIntMap[k] = (moraIntMap[k] || 0) + (parseFloat(r.saldo_capital) || 0);
+  });
+  const topMI = Object.entries(moraIntMap).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  charts.chartMoraIntermediario = new Chart(document.getElementById('chartMoraIntermediario'), {
+    type: 'bar',
+    data: {
+      labels: topMI.map(m => m[0]),
+      datasets: [{
+        label: 'Saldo en Mora',
+        data: topMI.map(m => m[1]),
+        backgroundColor: '#b8680f' + 'cc',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end', align: 'right',
+          color: '#323130', font: { size: 10, weight: 700 },
+          formatter: v => fmtM(v)
+        },
+        tooltip: { callbacks: { label: ctx => `Saldo en mora: ${fmtCurrency(ctx.raw)}` } }
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } },
+        y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
 }
 
 // ---- TABLE ----
@@ -2592,6 +2733,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
     if (tab.dataset.tab === 'recaudo') loadRecaudo();
     if (tab.dataset.tab === 'solicitudes') loadSolicitudes();
     if (tab.dataset.tab === 'juridico') loadJuridico();
+    if (tab.dataset.tab === 'proyeccion') renderProyeccion();
   });
 });
 
@@ -2772,9 +2914,10 @@ async function loadSolicitudes() {
 let _jrCharts = {};
 async function loadJuridico() {
   try {
-    const [s, l] = await Promise.all([
+    const [s, l, cs] = await Promise.all([
       fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/juridico/cartera-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {})
     ]);
     document.getElementById('jrTotal').textContent = fmt(s.total || 0);
     document.getElementById('jrTotalSub').textContent = `${s.juzgados || 0} juzgados involucrados`;
@@ -2784,6 +2927,13 @@ async function loadJuridico() {
     document.getElementById('jrRemSub').textContent = pct(s.remotas, s.total) + ' del total';
     document.getElementById('jrMed').textContent = fmt(s.con_medida || 0);
     document.getElementById('jrMedSub').textContent = pct(s.con_medida, s.total) + ' del total';
+
+    // KPIs cruce con cartera
+    const matched = cs.matched || 0;
+    document.getElementById('jrCruce').textContent = fmt(matched);
+    document.getElementById('jrCruceSub').textContent = pct(matched, s.total || cs.total) + ' del total';
+    document.getElementById('jrSaldo').textContent = fmtM(cs.saldo_total_cartera || 0);
+    document.getElementById('jrSaldoSub').textContent = `En mora: ${fmtM(cs.saldo_en_mora || 0)}`;
 
     Object.keys(_jrCharts).forEach(k => { _jrCharts[k]?.destroy?.(); });
 
@@ -2810,24 +2960,173 @@ async function loadJuridico() {
     });
 
     const tb = document.querySelector('#tblJuridico tbody');
-    tb.innerHTML = l.slice(0, 200).map(x => {
+    tb.innerHTML = l.slice(0, 300).map(x => {
       const probColor = (x.probabilidad||'').toLowerCase().includes('probab')
         ? 'background:var(--fide-teal-tint);color:var(--fide-teal-dark)'
         : 'background:#fcf0dd;color:#b8680f';
+      const carteraPill = x.cartera_match
+        ? `<span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);" title="${x.cartera_creditos_total} créditos · estado ${x.cartera_estado||'?'} · líneas: ${x.cartera_lineas||'-'}">SÍ (${x.cartera_creditos_total})</span>`
+        : '<span class="role-pill" style="background:var(--neutral-50);color:var(--neutral-500);">No</span>';
+      const saldo = x.cartera_match ? fmtCurrency(x.cartera_saldo_capital) : '-';
+      const dm = x.cartera_match ? (x.cartera_dias_mora_max || 0) : null;
+      const moraCell = dm === null ? '-' :
+        `<span style="color:${dm > 30 ? '#b8680f' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</span>`;
       return `
         <tr>
           <td>${x.identificacion || '-'}</td>
-          <td>${x.nombre || '-'}</td>
+          <td title="${(x.nombre||'').replace(/"/g,'&quot;')}">${x.nombre || '-'}</td>
           <td><span class="role-pill" style="${probColor};">${x.probabilidad || '-'}</span></td>
-          <td title="${(x.naturaleza_litigio||'').replace(/"/g,'&quot;')}">${(x.naturaleza_litigio||'-').substring(0,40)}…</td>
-          <td title="${(x.avance||'').replace(/"/g,'&quot;')}">${(x.avance||'-').substring(0,40)}…</td>
+          <td>${carteraPill}</td>
+          <td class="num">${saldo}</td>
+          <td class="num">${moraCell}</td>
+          <td title="${(x.juzgado||'').replace(/"/g,'&quot;')}">${(x.juzgado||'-').substring(0,30)}…</td>
           <td title="${(x.medida_cautelar||'').replace(/"/g,'&quot;')}">${(x.medida_cautelar||'-').substring(0,30)}…</td>
-          <td>${x.juzgado || '-'}</td>
         </tr>
       `;
     }).join('');
-    if (!l.length) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
+    if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
   } catch(e) { console.error('loadJuridico', e); }
+}
+
+// ============================================================
+//                  PROYECCIÓN DE PAGOS
+// ============================================================
+let _prChart = null;
+
+function _buildProyeccionData() {
+  // Toma cartera filtrada y proyecta cuotas pendientes a partir de fecha_vencimiento
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const out = [];
+  (filteredData || []).forEach(r => {
+    if (r.estado !== 'ACTIVO') return;
+    if (!r.fecha_vencimiento) return;
+    const valor = parseFloat(r.valor_cuota) || 0;
+    if (valor <= 0) return;
+    const venc = new Date(r.fecha_vencimiento + 'T12:00:00');
+    if (isNaN(venc.getTime())) return;
+
+    // Si pagó después o el día del vencimiento → no cuenta (ya pagada)
+    if (r.fecha_ult_pago) {
+      const pago = new Date(r.fecha_ult_pago + 'T12:00:00');
+      if (!isNaN(pago.getTime()) && pago >= venc) return;
+    }
+    const dm = parseInt(r.dias_mora) || 0;
+    const enMora = dm > 30; // Política Fideseguros
+    out.push({
+      ...r,
+      _valor_cuota_num: valor,
+      _venc_date: venc,
+      _en_mora: enMora,
+    });
+  });
+  return out;
+}
+
+function renderProyeccion() {
+  const groupBy = document.getElementById('prGroupBy')?.value || 'month';
+  const period = document.getElementById('prPeriod')?.value || '12m';
+
+  const proyData = _buildProyeccionData();
+
+  // Define ventana
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let endDate = null;
+  if (period !== 'all') {
+    const months = parseInt(period);
+    endDate = new Date(today);
+    endDate.setMonth(endDate.getMonth() + months);
+  }
+
+  // Filtrar por ventana (mantener mora vencida + futuras)
+  const inWindow = proyData.filter(r => {
+    if (endDate && r._venc_date > endDate) return false;
+    return true;
+  });
+
+  // KPIs
+  const total = inWindow.length;
+  const valor = inWindow.reduce((s, r) => s + r._valor_cuota_num, 0);
+  const mora = inWindow.filter(r => r._en_mora);
+  const valMora = mora.reduce((s, r) => s + r._valor_cuota_num, 0);
+  const alDia = inWindow.filter(r => !r._en_mora);
+  const valAlDia = alDia.reduce((s, r) => s + r._valor_cuota_num, 0);
+
+  document.getElementById('prTotal').textContent = fmt(total);
+  document.getElementById('prTotalSub').textContent = `${groupBy === 'day' ? 'Vista diaria' : 'Vista mensual'}`;
+  document.getElementById('prValor').textContent = fmtM(valor);
+  document.getElementById('prValorSub').textContent = `Promedio cuota: ${fmtM(total > 0 ? valor / total : 0)}`;
+  document.getElementById('prMora').textContent = fmt(mora.length);
+  document.getElementById('prMoraSub').textContent = `Valor: ${fmtM(valMora)}`;
+  document.getElementById('prAlDia').textContent = fmt(alDia.length);
+  document.getElementById('prAlDiaSub').textContent = `Valor: ${fmtM(valAlDia)}`;
+
+  // Construir series por bucket (mes o día)
+  const pad = n => String(n).padStart(2, '0');
+  const bucketKey = (d) => groupBy === 'day'
+    ? `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`
+    : `${d.getFullYear()}-${pad(d.getMonth()+1)}`;
+
+  const dataMap = {}; // key -> { alDia, mora }
+  inWindow.forEach(r => {
+    const k = bucketKey(r._venc_date);
+    if (!dataMap[k]) dataMap[k] = { alDia: 0, mora: 0 };
+    if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
+    else dataMap[k].alDia += r._valor_cuota_num;
+  });
+  const keys = Object.keys(dataMap).sort();
+
+  // Chart
+  if (_prChart) { _prChart.destroy(); _prChart = null; }
+  const ctx = document.getElementById('chartProyeccion');
+  if (!ctx) return;
+  _prChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: keys,
+      datasets: [
+        { label: 'Al día', data: keys.map(k => dataMap[k].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 3 },
+        { label: 'En mora (> 30 días)', data: keys.map(k => dataMap[k].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top' },
+        datalabels: { display: false },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}` } }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+        y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+      }
+    }
+  });
+
+  // Tabla detallada
+  const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 200);
+  const tb = document.querySelector('#tblProyeccion tbody');
+  if (tb) {
+    tb.innerHTML = sorted.map(r => {
+      const estadoPill = r._en_mora
+        ? '<span class="role-pill" style="background:#fcf0dd;color:#b8680f;">EN MORA</span>'
+        : '<span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);">AL DÍA</span>';
+      const dm = parseInt(r.dias_mora) || 0;
+      return `<tr>
+        <td>${r.fecha_vencimiento || '-'}</td>
+        <td>${estadoPill}</td>
+        <td>${r.cliente || '-'}</td>
+        <td>${r.linea || '-'}</td>
+        <td>${r.aliado || '-'}</td>
+        <td class="num">${fmtCurrency(r._valor_cuota_num)}</td>
+        <td class="num">${fmtCurrency(r.saldo_capital)}</td>
+        <td class="num" style="color:${dm > 30 ? '#b8680f' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</td>
+      </tr>`;
+    }).join('');
+    if (!sorted.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin cuotas proyectadas en el período</td></tr>';
+  }
 }
 
 // ============================================================
@@ -3108,13 +3407,17 @@ function registerChartClicks() {
   addChartClick('chartMora', 'mora');
   // chartEvolucion uses its own onClick handler for drill-down (see updateEvolucion)
   addChartClick('chartSaldoLinea', 'linea');
-  addChartClick('chartCalifLinea', 'linea');
+  // Calificación por Línea: al hacer clic, filtra por la CALIFICACIÓN (color del segmento),
+  // mostrando solo las barras de esa categoría sin removerla del gráfico.
+  addChartClick('chartCalifLinea', 'calificacion',
+    (chart, idx, dsIdx) => chart.data.datasets[dsIdx]?.label);
   // chartTasas and chartPlazos don't have a meaningful cross-filter dimension;
   // clicking them used to set a bogus calificacion filter. Disabled on purpose.
   addChartClick('chartMoraSaldo', 'mora');
   addChartClick('chartAliados', 'aliado');
   addChartClick('chartAliadosCount', 'aliado');
   addChartClick('chartCiudades', 'ciudad');
+  addChartClick('chartMoraIntermediario', 'aliado');
 }
 // Re-register clicks after charts are rebuilt
 const _origUpdateCharts = updateCharts;

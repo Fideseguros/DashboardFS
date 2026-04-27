@@ -459,21 +459,110 @@ async def jur_upload(request: Request, user=Depends(require_superadmin), file: U
 
 @juridico.get("")
 def jur_list(user=Depends(require_superadmin)):
-    """Listado completo. Por contener PII de cobro → solo superadmin."""
+    """Listado completo, cruzado con cartera por identificación.
+
+    Para cada proceso: agrega resumen del crédito (estado, saldo, días mora,
+    valor crédito, fechas) si el cliente existe en la cartera.
+
+    Por contener PII de cobro → solo superadmin.
+    """
     conn = get_connection()
     try:
         rows = conn.execute(
             "SELECT * FROM procesos_juridicos WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='juridico_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
         ).fetchall()
+        if not rows:
+            return []
+
+        # Construir índice de cartera por identificación (decrypt una sola vez).
+        # Solo el último batch exitoso de cartera.
+        credit_rows = conn.execute("""
+            SELECT identificacion, cliente, estado, linea, valor_credito, saldo_capital,
+                   dias_mora, calificacion, fecha_desembolso, fecha_vencimiento, aliado
+            FROM credits
+            WHERE sync_batch_id = (
+                SELECT id FROM sync_logs
+                WHERE source='manual_upload' AND status='success'
+                ORDER BY id DESC LIMIT 1
+            )
+        """).fetchall()
+
+        cartera_idx = {}
+        for c in credit_rows:
+            ident = decrypt(c["identificacion"])
+            if not ident:
+                continue
+            # Un cliente puede tener varios créditos: agregamos saldo, máx mora.
+            agg = cartera_idx.setdefault(ident, {
+                "creditos_total": 0,
+                "creditos_activos": 0,
+                "saldo_capital_total": 0.0,
+                "valor_credito_total": 0.0,
+                "max_dias_mora": 0,
+                "estado_principal": None,
+                "lineas": set(),
+                "calificaciones": set(),
+                "aliado_principal": None,
+            })
+            agg["creditos_total"] += 1
+            if c["estado"] == "ACTIVO":
+                agg["creditos_activos"] += 1
+            agg["saldo_capital_total"] += float(c["saldo_capital"] or 0)
+            agg["valor_credito_total"] += float(c["valor_credito"] or 0)
+            dm = int(c["dias_mora"] or 0)
+            if dm > agg["max_dias_mora"]:
+                agg["max_dias_mora"] = dm
+            if c["linea"]:
+                agg["lineas"].add(c["linea"])
+            if c["calificacion"]:
+                agg["calificaciones"].add((c["calificacion"] or "").strip())
+            # estado/aliado del crédito con mayor saldo
+            if not agg["estado_principal"] or (c["estado"] == "ACTIVO" and agg["estado_principal"] != "ACTIVO"):
+                agg["estado_principal"] = c["estado"]
+                agg["aliado_principal"] = c["aliado"]
+
         out = []
         for r in rows:
             d = dict(r)
             d['identificacion'] = decrypt(d.get('identificacion'))
             d['nombre'] = decrypt(d.get('nombre'))
+            # Cruce
+            cartera = cartera_idx.get(str(d['identificacion']) if d['identificacion'] else None)
+            if cartera:
+                d['cartera_creditos_total'] = cartera['creditos_total']
+                d['cartera_creditos_activos'] = cartera['creditos_activos']
+                d['cartera_saldo_capital'] = cartera['saldo_capital_total']
+                d['cartera_valor_credito'] = cartera['valor_credito_total']
+                d['cartera_dias_mora_max'] = cartera['max_dias_mora']
+                d['cartera_estado'] = cartera['estado_principal']
+                d['cartera_lineas'] = ', '.join(sorted(cartera['lineas']))
+                d['cartera_calificaciones'] = ', '.join(sorted(c for c in cartera['calificaciones'] if c))
+                d['cartera_aliado'] = cartera['aliado_principal']
+                d['cartera_match'] = True
+            else:
+                d['cartera_match'] = False
             out.append(d)
         return out
     finally:
         conn.close()
+
+
+@juridico.get("/cartera-summary")
+def jur_cartera_summary(user=Depends(require_superadmin)):
+    """Resumen del cruce procesos jurídicos vs cartera."""
+    rows = jur_list(user)
+    if not rows:
+        return {"total": 0, "matched": 0, "saldo_total_cartera": 0, "saldo_en_mora": 0}
+    matched = [r for r in rows if r.get('cartera_match')]
+    return {
+        "total": len(rows),
+        "matched": len(matched),
+        "saldo_total_cartera": sum(r.get('cartera_saldo_capital') or 0 for r in matched),
+        "saldo_en_mora": sum(
+            r.get('cartera_saldo_capital') or 0 for r in matched
+            if (r.get('cartera_dias_mora_max') or 0) > 30
+        ),
+    }
 
 
 @juridico.get("/summary")
