@@ -2084,6 +2084,13 @@ function sumBy(arr, gk, sk) {
 
 // ---- CHART CROSS-FILTERING ----
 const chartFilters = {};
+// Helper: hace que el clic en la leyenda funcione como cross-filter
+// (en lugar del comportamiento default de Chart.js que oculta la categoría)
+function legendFilter(dimension) {
+  return (evt, legendItem) => {
+    if (legendItem && legendItem.text) toggleChartFilter(dimension, legendItem.text);
+  };
+}
 // Supported filter dimensions from chart clicks
 const FILTER_LABELS = {
   estado: 'Estado', linea: 'Línea', calificacion: 'Calificación',
@@ -2345,7 +2352,7 @@ function updateCharts() {
       cutout: '65%',
       layout: { padding: 6 },
       plugins: {
-        legend: { position:'bottom', labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: 700 } } },
+        legend: { position:'bottom', onClick: legendFilter('estado'), labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: 700 } } },
         tooltip: { callbacks: { label: (ctx) => {
           const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
           return `${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/t*100).toFixed(1)}%)`;
@@ -2379,7 +2386,7 @@ function updateCharts() {
       cutout: '55%',
       layout: { padding: 6 },
       plugins: {
-        legend: { position:'bottom', labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11, weight: 700 }, boxWidth: 10 } },
+        legend: { position:'bottom', onClick: legendFilter('linea'), labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11, weight: 700 }, boxWidth: 10 } },
         tooltip: { callbacks: { label: (ctx) => {
           const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
           return `${ctx.label}: ${fmt(ctx.raw)} (${(ctx.raw/t*100).toFixed(1)}%)`;
@@ -2488,9 +2495,9 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: {
-        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        legend:{ position:'top', onClick: legendFilter('calificacion'), labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
         datalabels:{ display:false },
-        tooltip: { callbacks: { footer: () => califFilterCL ? 'Clic en una barra para quitar filtro' : 'Clic en un color para filtrar por calificación' } }
+        tooltip: { callbacks: { footer: () => califFilterCL ? 'Clic en una barra/leyenda para quitar filtro' : 'Clic en un color (barra o leyenda) para filtrar' } }
       },
       scales: { x:{ stacked:true, grid:{ display:false }, ticks:{ font:{ size:10 } } }, y:{ stacked:true, beginAtZero:true, grid:{ color:'#F3F2F1' } } }
     },
@@ -2547,7 +2554,7 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: {
-        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        legend:{ position:'top', onClick: legendFilter('mora'), labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
         datalabels:{ display:false },
         tooltip: { callbacks: { footer: () => moraSaldoActive ? 'Clic para quitar filtro' : 'Clic para filtrar por rango de mora' } }
       },
