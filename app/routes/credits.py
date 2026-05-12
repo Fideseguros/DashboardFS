@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/credits", tags=["credits"])
 def _build_query(estado=None, linea=None, calificacion=None, aliado=None,
                  ciudad=None, mora_min=None, mora_max=None):
     conditions = [
-        "sync_batch_id = (SELECT id FROM sync_logs WHERE status='success' ORDER BY id DESC LIMIT 1)"
+        "sync_batch_id = (SELECT id FROM sync_logs WHERE status='success' AND source='manual_upload' ORDER BY id DESC LIMIT 1)"
     ]
     params = []
     if estado:
@@ -65,7 +65,7 @@ def get_credits(
 def get_summary(_user=Depends(require_auth)):
     conn = get_connection()
     try:
-        batch = "sync_batch_id = (SELECT id FROM sync_logs WHERE status='success' ORDER BY id DESC LIMIT 1)"
+        batch = "sync_batch_id = (SELECT id FROM sync_logs WHERE status='success' AND source='manual_upload' ORDER BY id DESC LIMIT 1)"
         row = conn.execute(f"""
             SELECT COUNT(*) as total,
                 SUM(CASE WHEN estado='ACTIVO' THEN 1 ELSE 0 END) as activos,
