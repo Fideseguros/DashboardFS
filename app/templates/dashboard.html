@@ -1409,8 +1409,10 @@ body {
       <div class="chart-card full">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
-          <div style="display:flex;gap:0.5rem;align-items:center;">
-            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel Recaudo</button>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-reset admin-only" id="btnUploadRecaudoLegacy" style="display:none;" onclick="document.getElementById('fileRecaudoLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
+            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel Nuevo</button>
+            <input type="file" id="fileRecaudoLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('recaudo', this.files[0])">
             <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
           </div>
         </div>
@@ -1426,6 +1428,25 @@ body {
               <th class="num">Inter&eacute;s</th>
               <th class="num">Mora</th>
               <th class="num">Total</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Hist&oacute;rico de Pagos por Pr&eacute;stamo <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(plataforma anterior, agrupado por Id Pr&eacute;stamo)</span></h3>
+        <div class="table-wrapper" style="max-height:480px;">
+          <table class="data-table compact" id="tblRecaudoLegacy">
+            <thead><tr>
+              <th>Id Pr&eacute;stamo</th>
+              <th>Cliente</th>
+              <th class="num"># Pagos</th>
+              <th class="num">Valor Total</th>
+              <th class="num">IVA</th>
+              <th class="num">Mora</th>
+              <th>Primer Pago</th>
+              <th>&Uacute;ltimo Pago</th>
+              <th>Cancelado</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -1478,8 +1499,10 @@ body {
       <div class="chart-card full">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
-          <div>
-            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel Solicitudes</button>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-reset admin-only" id="btnUploadSolicLegacy" style="display:none;" onclick="document.getElementById('fileSolicLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
+            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel Nuevo</button>
+            <input type="file" id="fileSolicLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('solicitudes', this.files[0])">
             <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
           </div>
         </div>
@@ -2806,24 +2829,57 @@ async function uploadExtra(modulo, file) {
   }
 }
 
+async function uploadLegacy(modulo, file) {
+  if (!file) return;
+  if (!confirm(`Vas a cargar el archivo HISTÓRICO de la plataforma anterior para "${modulo}". Esto reemplazará el histórico previo. ¿Continuar?`)) {
+    document.getElementById(modulo === 'recaudo' ? 'fileRecaudoLegacy' : 'fileSolicLegacy').value = '';
+    return;
+  }
+  const fd = new FormData(); fd.append('file', file);
+  try {
+    const res = await fetch(`/api/${modulo}/upload-legacy`, {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
+      return;
+    }
+    const msg = modulo === 'recaudo'
+      ? `Histórico cargado: ${data.prestamos} préstamos (de ${data.filas_origen} pagos)`
+      : `Histórico cargado: ${data.records} solicitudes`;
+    alert(msg);
+    if (modulo === 'recaudo') loadRecaudo();
+    else if (modulo === 'solicitudes') loadSolicitudes();
+  } catch(e) {
+    alert('Error de conexión al subir el archivo');
+  }
+}
+
 // ---------- RECAUDO ----------
 let _rcCharts = {};
 async function loadRecaudo() {
   try {
-    const [s, l] = await Promise.all([
+    const [s, l, sLeg, lLeg] = await Promise.all([
       fetch('/api/recaudo/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/recaudo', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+      fetch('/api/recaudo', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
+      fetch('/api/recaudo/legacy-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/recaudo/legacy', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
     ]);
-    document.getElementById('rcTotal').textContent = fmt(s.total || 0);
-    document.getElementById('rcTotalSub').textContent = 'Pagos registrados';
-    document.getElementById('rcRecaudo').textContent = fmtM(s.recaudo_total || 0);
-    document.getElementById('rcRecaudoSub').textContent = 'Total cobrado';
+    // KPIs sumando legacy + nuevo
+    const totalPagos = (s.total || 0) + (sLeg.pagos_total || 0);
+    const recaudoTotal = (s.recaudo_total || 0) + (sLeg.valor_total || 0);
+    const moraTotal = (s.interes_mora || 0) + (sLeg.mora_total || 0);
+    document.getElementById('rcTotal').textContent = fmt(totalPagos);
+    document.getElementById('rcTotalSub').textContent = `${fmt(s.total || 0)} nuevos · ${fmt(sLeg.pagos_total || 0)} histórico (${fmt(sLeg.prestamos || 0)} préstamos)`;
+    document.getElementById('rcRecaudo').textContent = fmtM(recaudoTotal);
+    document.getElementById('rcRecaudoSub').textContent = `Nuevo: ${fmtM(s.recaudo_total || 0)} · Histórico: ${fmtM(sLeg.valor_total || 0)}`;
     document.getElementById('rcCapital').textContent = fmtM(s.capital_total || 0);
-    document.getElementById('rcCapitalSub').textContent = pct(s.capital_total, s.recaudo_total) + ' del recaudo';
+    document.getElementById('rcCapitalSub').textContent = pct(s.capital_total, s.recaudo_total) + ' del recaudo nuevo';
     document.getElementById('rcIntCorr').textContent = fmtM(s.interes_corr || 0);
-    document.getElementById('rcIntCorrSub').textContent = pct(s.interes_corr, s.recaudo_total) + ' del recaudo';
-    document.getElementById('rcIntMora').textContent = fmtM(s.interes_mora || 0);
-    document.getElementById('rcIntMoraSub').textContent = pct(s.interes_mora, s.recaudo_total) + ' del recaudo';
+    document.getElementById('rcIntCorrSub').textContent = pct(s.interes_corr, s.recaudo_total) + ' del recaudo nuevo';
+    document.getElementById('rcIntMora').textContent = fmtM(moraTotal);
+    document.getElementById('rcIntMoraSub').textContent = `Nuevo: ${fmtM(s.interes_mora || 0)} · Histórico: ${fmtM(sLeg.mora_total || 0)}`;
 
     // Chart canal
     Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); });
@@ -2888,6 +2944,27 @@ async function loadRecaudo() {
       </tr>
     `).join('');
     if (!l.length) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de recaudo para comenzar.</td></tr>';
+
+    // Tabla histórica (legacy agrupada por id_prestamo)
+    const tbLeg = document.querySelector('#tblRecaudoLegacy tbody');
+    if (tbLeg) {
+      tbLeg.innerHTML = lLeg.slice(0, 500).map(p => `
+        <tr>
+          <td><strong>${p.id_prestamo || '-'}</strong></td>
+          <td>${p.nombre || '-'}</td>
+          <td class="num">${fmt(p.num_pagos || 0)}</td>
+          <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
+          <td class="num">${fmtCurrency(p.iva_pagado_total)}</td>
+          <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
+          <td>${p.fecha_primer_pago || '-'}</td>
+          <td>${p.fecha_ultimo_pago || '-'}</td>
+          <td>${p.prestamo_cancelado || '-'}</td>
+        </tr>
+      `).join('');
+      if (!lLeg.length) {
+        tbLeg.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado. Como superadmin, sube el "Informe de Pagos plataforma anterior" desde el botón "Subir Histórico".</td></tr>';
+      }
+    }
   } catch(e) {
     console.error('loadRecaudo', e);
   }
@@ -2898,11 +2975,11 @@ let _slCharts = {};
 async function loadSolicitudes() {
   try {
     const [s, l] = await Promise.all([
-      fetch('/api/solicitudes/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/solicitudes', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+      fetch('/api/solicitudes/combined-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
+      fetch('/api/solicitudes/combined', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
     ]);
     document.getElementById('slTotal').textContent = fmt(s.total || 0);
-    document.getElementById('slTotalSub').textContent = `Valor total: ${fmtM(s.valor_total||0)}`;
+    document.getElementById('slTotalSub').textContent = `${fmt(s.nueva_total||0)} nueva plat. · ${fmt(s.legacy_total||0)} hist. · ${fmtM(s.valor_total||0)}`;
     document.getElementById('slDesem').textContent = fmt(s.desembolsadas || 0);
     document.getElementById('slDesemSub').textContent = pct(s.desembolsadas, s.total) + ' · ' + fmtM(s.valor_desembolsado||0);
     document.getElementById('slPipeline').textContent = fmt(s.pipeline || 0);

@@ -21,6 +21,8 @@ from app.crypto import encrypt, decrypt, mask_identificacion, mask_cliente
 _log = logging.getLogger("fide.extras")
 MAX_UPLOAD_MB = 20
 MAX_ROWS = 50_000
+MAX_LEGACY_MB = 50          # plataforma vieja puede ser pesada (17MB pagos)
+MAX_LEGACY_ROWS = 500_000
 
 
 # ============================================================
@@ -287,6 +289,145 @@ def recaudo_summary(_user=Depends(require_auth)):
         conn.close()
 
 
+# ---------- HISTÓRICO de Pagos (plataforma vieja, agregado por id_prestamo) ----------
+PAGOS_LEGACY_COLS = {
+    0: 'codigo', 1: 'id_prestamo', 2: 'id_solicitud',
+    3: 'identificacion', 4: 'nombre',
+    5: 'id_transaccion', 6: 'fecha_creacion', 7: 'fecha_valor',
+    8: 'metodo_pago', 9: 'estado',
+    14: 'reversado', 15: 'tipo_pago', 16: 'descripcion',
+    17: 'valor_pago', 18: 'usuario',
+    19: 'prestamo_cancelado', 20: 'iva_pagado', 21: 'cargos_netos',
+    22: 'fecha_pago',
+}
+
+
+def _aggregate_pagos_legacy(rows: list[tuple]) -> list[dict]:
+    """Agrupa pagos por id_prestamo, sumando valores y consolidando fechas."""
+    agg = {}
+    for row in rows[1:]:  # skip header
+        if not row or len(row) < 18:
+            continue
+        get = lambda i: row[i] if i < len(row) else None
+        id_prestamo = _str_or_none(get(1))
+        if not id_prestamo:
+            continue
+        # excluir reversados
+        rev = (_str_or_none(get(14)) or '').lower()
+        if rev in ('si', 'yes', 'true', '1'):
+            continue
+        entry = agg.setdefault(id_prestamo, {
+            'id_prestamo': id_prestamo,
+            'id_solicitud': _str_or_none(get(2)),
+            'identificacion': _str_or_none(get(3)),
+            'nombre': _str_or_none(get(4)),
+            'num_pagos': 0,
+            'valor_pago_total': 0.0,
+            'iva_pagado_total': 0.0,
+            'cargos_netos_total': 0.0,
+            'interes_mora_total': 0.0,
+            'fecha_primer_pago': None,
+            'fecha_ultimo_pago': None,
+            'prestamo_cancelado': _str_or_none(get(19)),
+            'metodo_pago_principal': _str_or_none(get(8)),
+        })
+        entry['num_pagos'] += 1
+        entry['valor_pago_total'] += _to_float(get(17)) or 0
+        entry['iva_pagado_total'] += _to_float(get(20)) or 0
+        entry['cargos_netos_total'] += _to_float(get(21)) or 0
+        # "Interes Mora" sale en col 15 (tipo_pago) — sumar valor de pago cuando aplique
+        tipo = (_str_or_none(get(15)) or '').lower()
+        if 'mora' in tipo:
+            entry['interes_mora_total'] += _to_float(get(17)) or 0
+        fp = _to_date(get(22))
+        if fp:
+            if not entry['fecha_primer_pago'] or fp < entry['fecha_primer_pago']:
+                entry['fecha_primer_pago'] = fp
+            if not entry['fecha_ultimo_pago'] or fp > entry['fecha_ultimo_pago']:
+                entry['fecha_ultimo_pago'] = fp
+    # cifrar PII al final
+    for e in agg.values():
+        if e['identificacion']:
+            e['identificacion'] = encrypt(e['identificacion'])
+        if e['nombre']:
+            e['nombre'] = encrypt(e['nombre'])
+    return list(agg.values())
+
+
+@recaudo.post("/upload-legacy")
+async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
+    """Carga el archivo histórico de pagos de la plataforma vieja.
+    Agrupa por id_prestamo y reemplaza la tabla pagos_legacy completa."""
+    content = await file.read()
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > MAX_LEGACY_MB:
+        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_LEGACY_MB} MB")
+    ip = get_client_ip(request) or "unknown"
+    sync_id = _create_sync_log(user["user_id"], "recaudo_legacy_upload")
+    try:
+        rows = _read_excel(content)
+        if len(rows) > MAX_LEGACY_ROWS:
+            raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
+        records = _aggregate_pagos_legacy(rows)
+        cols = ['id_prestamo','id_solicitud','identificacion','nombre','num_pagos',
+                'valor_pago_total','iva_pagado_total','cargos_netos_total','interes_mora_total',
+                'fecha_primer_pago','fecha_ultimo_pago','prestamo_cancelado','metodo_pago_principal']
+        with get_db() as conn:
+            conn.execute("DELETE FROM pagos_legacy")
+            placeholders = ', '.join(['?'] * (len(cols) + 1))
+            cols_sql = ', '.join(cols + ['sync_batch_id'])
+            for rec in records:
+                conn.execute(f"INSERT INTO pagos_legacy ({cols_sql}) VALUES ({placeholders})",
+                             [rec.get(c) for c in cols] + [sync_id])
+        _finalize_sync(sync_id, 'success', len(rows), len(records))
+        log_audit(user["user_id"], user["username"], "recaudo_legacy_upload",
+                  f"file={file.filename} prestamos={len(records)}", ip)
+        return {"status": "success", "prestamos": len(records), "filas_origen": len(rows) - 1}
+    except Exception as e:
+        _log.exception("recaudo_legacy_upload failed")
+        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
+        log_audit(user["user_id"], user["username"], "recaudo_legacy_upload_failed", str(e)[:200], ip)
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico")
+
+
+@recaudo.get("/legacy")
+def recaudo_legacy_list(_user=Depends(require_auth)):
+    """Devuelve los pagos legacy agregados por id_prestamo."""
+    conn = get_connection()
+    try:
+        rows = conn.execute("SELECT * FROM pagos_legacy ORDER BY valor_pago_total DESC").fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d['identificacion'] = mask_identificacion(decrypt(d.get('identificacion')))
+            d['nombre'] = mask_cliente(decrypt(d.get('nombre')))
+            out.append(d)
+        return out
+    finally:
+        conn.close()
+
+
+@recaudo.get("/legacy-summary")
+def recaudo_legacy_summary(_user=Depends(require_auth)):
+    """Totales del histórico."""
+    conn = get_connection()
+    try:
+        row = conn.execute("""
+            SELECT COUNT(*) as prestamos,
+                COALESCE(SUM(num_pagos),0) as pagos_total,
+                COALESCE(SUM(valor_pago_total),0) as valor_total,
+                COALESCE(SUM(iva_pagado_total),0) as iva_total,
+                COALESCE(SUM(cargos_netos_total),0) as cargos_total,
+                COALESCE(SUM(interes_mora_total),0) as mora_total
+            FROM pagos_legacy
+        """).fetchone()
+        return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
 # ============================================================
 #                  MÓDULO SOLICITUDES (Pipeline)
 # ============================================================
@@ -394,6 +535,168 @@ def solic_summary(_user=Depends(require_auth)):
             FROM solicitudes WHERE sync_batch_id = {batch}
         """).fetchone()
         return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
+# ---------- HISTÓRICO de Solicitudes (plataforma vieja, 40 cols) ----------
+SOLIC_LEGACY_COLS = {
+    0: ('id_solicitud', _str_or_none),
+    1: ('id_entidad', _str_or_none),
+    2: ('fecha_solicitud', _to_date),
+    3: ('tipo_identificacion', _str_or_none),
+    4: ('identificacion', None),       # cifrado
+    6: ('nombre_completo', None),      # cifrado
+    7: ('originador', _str_or_none),
+    8: ('producto', _str_or_none),
+    10: ('estado', _str_or_none),
+    11: ('estado_precalif', _str_or_none),
+    12: ('fecha_desembolso', _to_date),
+    13: ('monto', _to_float),
+    14: ('plazo_dias', _to_float),
+    15: ('numero_cuotas', _to_float),
+    16: ('frecuencia_pagos', _str_or_none),
+    17: ('fecha_inicio_pagos', _to_date),
+    18: ('tasa_interes', _to_float),
+    19: ('canal', _str_or_none),
+    20: ('genero', _str_or_none),
+    21: ('edad', _to_float),
+    24: ('departamento', _str_or_none),
+    25: ('ciudad', _str_or_none),
+    27: ('nombre_banco', _str_or_none),
+    36: ('tipo_solicitud', _str_or_none),
+    37: ('asesor_comercial', _str_or_none),
+    38: ('decision_modelo', _str_or_none),
+    39: ('cliente_recurrente', _str_or_none),
+}
+
+
+def _transform_solic_legacy_row(row: tuple) -> dict | None:
+    rec = {}
+    for idx, (key, parser) in SOLIC_LEGACY_COLS.items():
+        val = row[idx] if idx < len(row) else None
+        if key in ('identificacion', 'nombre_completo'):
+            v = _str_or_none(val)
+            rec[key] = encrypt(v) if v else None
+        else:
+            rec[key] = parser(val) if parser else val
+    if not rec.get('id_solicitud') and not rec.get('estado'):
+        return None
+    return rec
+
+
+@solicitudes.post("/upload-legacy")
+async def solic_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
+    """Carga el archivo histórico de solicitudes de la plataforma vieja."""
+    content = await file.read()
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > MAX_LEGACY_MB:
+        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_LEGACY_MB} MB")
+    ip = get_client_ip(request) or "unknown"
+    sync_id = _create_sync_log(user["user_id"], "solicitudes_legacy_upload")
+    try:
+        rows = _read_excel(content)
+        if len(rows) > MAX_LEGACY_ROWS:
+            raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
+        records = [r for r in (_transform_solic_legacy_row(row) for row in rows[1:]) if r]
+        cols = list(records[0].keys()) if records else []
+        with get_db() as conn:
+            conn.execute("DELETE FROM solicitudes_legacy")
+            placeholders = ', '.join(['?'] * (len(cols) + 1))
+            cols_sql = ', '.join(cols + ['sync_batch_id'])
+            for rec in records:
+                conn.execute(f"INSERT INTO solicitudes_legacy ({cols_sql}) VALUES ({placeholders})",
+                             [rec.get(c) for c in cols] + [sync_id])
+        _finalize_sync(sync_id, 'success', len(rows), len(records))
+        log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload",
+                  f"file={file.filename} records={len(records)}", ip)
+        return {"status": "success", "records": len(records)}
+    except Exception as e:
+        _log.exception("solicitudes_legacy_upload failed")
+        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
+        log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload_failed", str(e)[:200], ip)
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico")
+
+
+@solicitudes.get("/combined")
+def solic_combined(_user=Depends(require_auth)):
+    """UNION de legacy + nueva plataforma. Cada solicitud es única."""
+    conn = get_connection()
+    try:
+        # Nueva plataforma
+        new_rows = conn.execute(
+            "SELECT * FROM solicitudes WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
+        ).fetchall()
+        # Legacy
+        legacy_rows = conn.execute("SELECT * FROM solicitudes_legacy").fetchall()
+
+        out = []
+        for r in new_rows:
+            d = dict(r)
+            d['identificacion'] = mask_identificacion(decrypt(d.get('identificacion')))
+            d['solicitante'] = mask_cliente(decrypt(d.get('solicitante')))
+            d['source'] = 'nueva'
+            out.append(d)
+        for r in legacy_rows:
+            d = dict(r)
+            out.append({
+                'source': 'legacy',
+                'solicitud': d.get('id_solicitud'),
+                'linea': d.get('producto'),
+                'identificacion': mask_identificacion(decrypt(d.get('identificacion'))),
+                'solicitante': mask_cliente(decrypt(d.get('nombre_completo'))),
+                'valor': d.get('monto'),
+                'estado': d.get('estado'),
+                'paso_ruta': d.get('estado_precalif'),
+                'oficina': d.get('canal'),
+                'fecha_solicitud': d.get('fecha_solicitud'),
+                'producto': d.get('producto'),
+                'tasa_interes': d.get('tasa_interes'),
+                'plazo_dias': d.get('plazo_dias'),
+                'numero_cuotas': d.get('numero_cuotas'),
+                'fecha_desembolso': d.get('fecha_desembolso'),
+                'canal': d.get('canal'),
+                'asesor_comercial': d.get('asesor_comercial'),
+            })
+        return out
+    finally:
+        conn.close()
+
+
+@solicitudes.get("/combined-summary")
+def solic_combined_summary(_user=Depends(require_auth)):
+    """Totales unión legacy + nueva."""
+    conn = get_connection()
+    try:
+        batch = "(SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
+        new_row = conn.execute(f"""
+            SELECT COUNT(*) as total, COALESCE(SUM(valor),0) as valor_total,
+                SUM(CASE WHEN estado='DESEMBOLSADA' THEN 1 ELSE 0 END) as desembolsadas,
+                SUM(CASE WHEN estado='DESEMBOLSADA' THEN COALESCE(valor,0) ELSE 0 END) as valor_desembolsado,
+                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN 1 ELSE 0 END) as pipeline,
+                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN COALESCE(valor,0) ELSE 0 END) as valor_pipeline
+            FROM solicitudes WHERE sync_batch_id = {batch}
+        """).fetchone()
+        leg_row = conn.execute("""
+            SELECT COUNT(*) as total, COALESCE(SUM(monto),0) as valor_total,
+                SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN 1 ELSE 0 END) as desembolsadas,
+                SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN COALESCE(monto,0) ELSE 0 END) as valor_desembolsado
+            FROM solicitudes_legacy
+        """).fetchone()
+        new_d = dict(new_row) if new_row else {}
+        leg_d = dict(leg_row) if leg_row else {}
+        return {
+            'total': (new_d.get('total') or 0) + (leg_d.get('total') or 0),
+            'valor_total': (new_d.get('valor_total') or 0) + (leg_d.get('valor_total') or 0),
+            'desembolsadas': (new_d.get('desembolsadas') or 0) + (leg_d.get('desembolsadas') or 0),
+            'valor_desembolsado': (new_d.get('valor_desembolsado') or 0) + (leg_d.get('valor_desembolsado') or 0),
+            'pipeline': new_d.get('pipeline') or 0,
+            'valor_pipeline': new_d.get('valor_pipeline') or 0,
+            'legacy_total': leg_d.get('total') or 0,
+            'nueva_total': new_d.get('total') or 0,
+        }
     finally:
         conn.close()
 

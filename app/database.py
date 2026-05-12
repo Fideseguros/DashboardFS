@@ -165,6 +165,65 @@ CREATE INDEX IF NOT EXISTS idx_solicitudes_estado ON solicitudes(estado);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_fecha ON solicitudes(fecha_solicitud);
 CREATE INDEX IF NOT EXISTS idx_solicitudes_sync ON solicitudes(sync_batch_id);
 
+-- ============== Recaudo Histórico (plataforma vieja, AGREGADO por id_prestamo) ==============
+CREATE TABLE IF NOT EXISTS pagos_legacy (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_prestamo TEXT NOT NULL,
+    id_solicitud TEXT,
+    identificacion TEXT,         -- cifrado
+    nombre TEXT,                 -- cifrado
+    num_pagos INTEGER DEFAULT 0,
+    valor_pago_total REAL DEFAULT 0,
+    iva_pagado_total REAL DEFAULT 0,
+    cargos_netos_total REAL DEFAULT 0,
+    interes_mora_total REAL DEFAULT 0,
+    fecha_primer_pago TEXT,
+    fecha_ultimo_pago TEXT,
+    prestamo_cancelado TEXT,
+    metodo_pago_principal TEXT,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pagos_legacy_prestamo ON pagos_legacy(id_prestamo);
+CREATE INDEX IF NOT EXISTS idx_pagos_legacy_sync ON pagos_legacy(sync_batch_id);
+
+-- ============== Solicitudes Histórico (plataforma vieja) ==============
+CREATE TABLE IF NOT EXISTS solicitudes_legacy (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_solicitud TEXT,
+    id_entidad TEXT,
+    fecha_solicitud TEXT,
+    tipo_identificacion TEXT,
+    identificacion TEXT,            -- cifrado
+    nombre_completo TEXT,            -- cifrado
+    originador TEXT,
+    producto TEXT,
+    estado TEXT,
+    estado_precalif TEXT,
+    fecha_desembolso TEXT,
+    monto REAL DEFAULT 0,
+    plazo_dias INTEGER,
+    numero_cuotas INTEGER,
+    frecuencia_pagos TEXT,
+    fecha_inicio_pagos TEXT,
+    tasa_interes REAL,
+    canal TEXT,
+    genero TEXT,
+    edad INTEGER,
+    departamento TEXT,
+    ciudad TEXT,
+    nombre_banco TEXT,
+    tipo_solicitud TEXT,
+    asesor_comercial TEXT,
+    decision_modelo TEXT,
+    cliente_recurrente TEXT,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_solic_legacy_estado ON solicitudes_legacy(estado);
+CREATE INDEX IF NOT EXISTS idx_solic_legacy_fecha ON solicitudes_legacy(fecha_solicitud);
+CREATE INDEX IF NOT EXISTS idx_solic_legacy_sync ON solicitudes_legacy(sync_batch_id);
+
 -- ============== Módulo Cobro Jurídico (Procesos) ==============
 CREATE TABLE IF NOT EXISTS procesos_juridicos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
