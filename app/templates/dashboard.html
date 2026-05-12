@@ -546,6 +546,17 @@ body {
 .role-pill.viewer     { background: #e0edf7; color: var(--semantic-info); }
 .role-pill.consulta   { background: var(--neutral-50); color: var(--neutral-500); }
 
+.upload-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  cursor: help;
+}
+.upload-status-badge.ok { background: var(--fide-teal-tint); color: var(--fide-teal-dark); border: 1px solid var(--fide-teal); }
+.upload-status-badge.err { background: #fcf0dd; color: #b8680f; border: 1px solid #b8680f; }
+.upload-status-badge.empty { background: var(--neutral-50); color: var(--neutral-500); border: 1px solid var(--neutral-100); }
+
 .user-action-btn {
   background: transparent;
   border: 1px solid var(--neutral-100);
@@ -1410,6 +1421,7 @@ body {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
             <button class="btn btn-reset admin-only" id="btnUploadRecaudoLegacy" style="display:none;" onclick="document.getElementById('fileRecaudoLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
             <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel Nuevo</button>
             <input type="file" id="fileRecaudoLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('recaudo', this.files[0])">
@@ -1500,6 +1512,7 @@ body {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
             <button class="btn btn-reset admin-only" id="btnUploadSolicLegacy" style="display:none;" onclick="document.getElementById('fileSolicLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
             <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel Nuevo</button>
             <input type="file" id="fileSolicLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('solicitudes', this.files[0])">
@@ -2829,6 +2842,56 @@ async function uploadExtra(modulo, file) {
   }
 }
 
+function _fmtLocalDateTime(iso) {
+  if (!iso) return '';
+  try {
+    const dt = new Date(iso + (iso.endsWith('Z') ? '' : 'Z'));
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  } catch(e) { return iso; }
+}
+
+async function renderUploadStatus(modulo) {
+  // Cargar estado de los últimos uploads y pintarlos en el badge correspondiente
+  const url = `/api/${modulo}/uploads-status`;
+  const badgeId = modulo === 'recaudo' ? 'rcStatusBadge' : 'slStatusBadge';
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  try {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) { badge.style.display = 'none'; return; }
+    const data = await res.json();
+    // Encontrar el último upload (entre las dos fuentes)
+    const entries = Object.entries(data).filter(([k, v]) => v).map(([k, v]) => v);
+    entries.sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
+    const last = entries[0];
+    if (!last) {
+      badge.className = 'upload-status-badge empty';
+      badge.textContent = 'Sin cargas aún';
+      badge.title = 'Aún no se ha subido ningún archivo.';
+      badge.style.display = '';
+      return;
+    }
+    const when = _fmtLocalDateTime(last.completed_at || last.started_at);
+    if (last.status === 'success') {
+      badge.className = 'upload-status-badge ok';
+      badge.textContent = `✓ Última carga: ${last.records_inserted} reg.`;
+      badge.title = `Fuente: ${last.source}\nUsuario: ${last.username || 'N/A'}\nFecha: ${when}\nFilas leídas: ${last.records_fetched}\nFilas insertadas: ${last.records_inserted}\nDuración: ${(last.duration_seconds || 0).toFixed(1)}s`;
+    } else if (last.status === 'failed') {
+      badge.className = 'upload-status-badge err';
+      badge.textContent = `⚠ Última carga falló`;
+      badge.title = `Fuente: ${last.source}\nFecha: ${when}\nError: ${last.error_message || 'desconocido'}`;
+    } else {
+      badge.className = 'upload-status-badge empty';
+      badge.textContent = `⏳ ${last.status}`;
+      badge.title = `Fuente: ${last.source}\nFecha: ${when}`;
+    }
+    badge.style.display = '';
+  } catch (e) {
+    badge.style.display = 'none';
+  }
+}
+
 async function uploadLegacy(modulo, file) {
   if (!file) return;
   if (!confirm(`Vas a cargar el archivo HISTÓRICO de la plataforma anterior para "${modulo}". Esto reemplazará el histórico previo. ¿Continuar?`)) {
@@ -2859,6 +2922,7 @@ async function uploadLegacy(modulo, file) {
 // ---------- RECAUDO ----------
 let _rcCharts = {};
 async function loadRecaudo() {
+  renderUploadStatus('recaudo');
   try {
     const [s, l, sLeg, lLeg] = await Promise.all([
       fetch('/api/recaudo/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
@@ -2973,6 +3037,7 @@ async function loadRecaudo() {
 // ---------- SOLICITUDES ----------
 let _slCharts = {};
 async function loadSolicitudes() {
+  renderUploadStatus('solicitudes');
   try {
     const [s, l] = await Promise.all([
       fetch('/api/solicitudes/combined-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),

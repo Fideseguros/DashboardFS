@@ -156,6 +156,31 @@ def _finalize_sync(sync_id: int, status: str, fetched: int, inserted: int, error
         )
 
 
+def _upload_status_for(sources: list[str]) -> dict:
+    """Devuelve el último upload de cada source (success/failed/running)."""
+    conn = get_connection()
+    try:
+        result = {}
+        for src in sources:
+            row = conn.execute(
+                "SELECT sl.*, u.username FROM sync_logs sl "
+                "LEFT JOIN users u ON u.id = sl.uploaded_by "
+                "WHERE source = ? ORDER BY id DESC LIMIT 1",
+                (src,)
+            ).fetchone()
+            if not row:
+                result[src] = None
+                continue
+            d = dict(row)
+            # Limpiar el formato de mensaje de error para mostrar amigable
+            err = d.get('error_message') or ''
+            d['error_short'] = err.split(':')[0] if err else ''
+            result[src] = d
+        return result
+    finally:
+        conn.close()
+
+
 def _check_upload(file: UploadFile, content: bytes):
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
@@ -244,7 +269,7 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
         _log.exception("recaudo_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "recaudo_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo")
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
 
 
 @recaudo.get("")
@@ -354,6 +379,12 @@ def _aggregate_pagos_legacy(rows: list[tuple]) -> list[dict]:
     return list(agg.values())
 
 
+@recaudo.get("/uploads-status")
+def recaudo_status(_user=Depends(require_auth)):
+    """Devuelve estado de los últimos uploads (Recaudo nuevo + legacy)."""
+    return _upload_status_for(['recaudo_upload', 'recaudo_legacy_upload'])
+
+
 @recaudo.post("/upload-legacy")
 async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de pagos de la plataforma vieja.
@@ -389,7 +420,7 @@ async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmi
         _log.exception("recaudo_legacy_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "recaudo_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico")
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo histórico. Detalle: {type(e).__name__}: {str(e)[:200]}")
 
 
 @recaudo.get("/legacy")
@@ -497,7 +528,7 @@ async def solic_upload(request: Request, user=Depends(require_superadmin), file:
         _log.exception("solicitudes_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "solicitudes_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo")
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
 
 
 @solicitudes.get("")
@@ -585,6 +616,11 @@ def _transform_solic_legacy_row(row: tuple) -> dict | None:
     return rec
 
 
+@solicitudes.get("/uploads-status")
+def solic_status(_user=Depends(require_auth)):
+    return _upload_status_for(['solicitudes_upload', 'solicitudes_legacy_upload'])
+
+
 @solicitudes.post("/upload-legacy")
 async def solic_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de solicitudes de la plataforma vieja."""
@@ -617,7 +653,7 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
         _log.exception("solicitudes_legacy_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico")
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo histórico. Detalle: {type(e).__name__}: {str(e)[:200]}")
 
 
 @solicitudes.get("/combined")
@@ -757,7 +793,7 @@ async def jur_upload(request: Request, user=Depends(require_superadmin), file: U
         _log.exception("juridico_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "juridico_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo")
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
 
 
 @juridico.get("")
