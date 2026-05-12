@@ -557,6 +557,17 @@ body {
 .upload-status-badge.err { background: #fcf0dd; color: #b8680f; border: 1px solid #b8680f; }
 .upload-status-badge.empty { background: var(--neutral-50); color: var(--neutral-500); border: 1px solid var(--neutral-100); }
 
+.hist-info {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--neutral-500);
+  background: var(--neutral-50);
+  border: 1px dashed var(--neutral-200);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: help;
+}
+
 .user-action-btn {
   background: transparent;
   border: 1px solid var(--neutral-100);
@@ -1421,10 +1432,9 @@ body {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span id="rcHistInfo" class="hist-info" style="display:none;"></span>
             <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
-            <button class="btn btn-reset admin-only" id="btnUploadRecaudoLegacy" style="display:none;" onclick="document.getElementById('fileRecaudoLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
-            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel Nuevo</button>
-            <input type="file" id="fileRecaudoLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('recaudo', this.files[0])">
+            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
             <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
           </div>
         </div>
@@ -1512,10 +1522,9 @@ body {
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span id="slHistInfo" class="hist-info" style="display:none;"></span>
             <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
-            <button class="btn btn-reset admin-only" id="btnUploadSolicLegacy" style="display:none;" onclick="document.getElementById('fileSolicLegacy').click()" title="Cargar archivo histórico de la plataforma vieja (se mantiene siempre)">Subir Hist&oacute;rico</button>
-            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel Nuevo</button>
-            <input type="file" id="fileSolicLegacy" accept=".xlsx" style="display:none;" onchange="uploadLegacy('solicitudes', this.files[0])">
+            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
             <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
           </div>
         </div>
@@ -2945,6 +2954,18 @@ async function loadRecaudo() {
     document.getElementById('rcIntMora').textContent = fmtM(moraTotal);
     document.getElementById('rcIntMoraSub').textContent = `Nuevo: ${fmtM(s.interes_mora || 0)} · Histórico: ${fmtM(sLeg.mora_total || 0)}`;
 
+    // Etiqueta de histórico precargado (solo si hay datos)
+    const rcHist = document.getElementById('rcHistInfo');
+    if (rcHist) {
+      if ((sLeg.prestamos || 0) > 0) {
+        rcHist.textContent = `✓ Histórico precargado: ${fmt(sLeg.prestamos)} préstamos`;
+        rcHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. ${fmt(sLeg.pagos_total||0)} pagos agrupados por Id préstamo. Total: ${fmtM(sLeg.valor_total||0)}.`;
+        rcHist.style.display = '';
+      } else {
+        rcHist.style.display = 'none';
+      }
+    }
+
     // Chart canal
     Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); });
     _rcCharts.canal = new Chart(document.getElementById('chartRcCanal'), {
@@ -3045,6 +3066,18 @@ async function loadSolicitudes() {
     ]);
     document.getElementById('slTotal').textContent = fmt(s.total || 0);
     document.getElementById('slTotalSub').textContent = `${fmt(s.nueva_total||0)} nueva plat. · ${fmt(s.legacy_total||0)} hist. · ${fmtM(s.valor_total||0)}`;
+
+    // Etiqueta de histórico precargado
+    const slHist = document.getElementById('slHistInfo');
+    if (slHist) {
+      if ((s.legacy_total || 0) > 0) {
+        slHist.textContent = `✓ Histórico precargado: ${fmt(s.legacy_total)} solicitudes`;
+        slHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. Total combinado: ${fmt(s.total || 0)} solicitudes.`;
+        slHist.style.display = '';
+      } else {
+        slHist.style.display = 'none';
+      }
+    }
     document.getElementById('slDesem').textContent = fmt(s.desembolsadas || 0);
     document.getElementById('slDesemSub').textContent = pct(s.desembolsadas, s.total) + ' · ' + fmtM(s.valor_desembolsado||0);
     document.getElementById('slPipeline').textContent = fmt(s.pipeline || 0);
