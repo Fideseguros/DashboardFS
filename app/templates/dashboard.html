@@ -1309,32 +1309,32 @@ body {
   <div class="tab-content" id="tab-proyeccion">
     <div class="kpi-grid">
       <div class="kpi-card teal">
-        <div class="kpi-info">i<span class="kpi-tooltip">Cantidad de cuotas activas a&uacute;n por cobrar (no pagadas y dentro del per&iacute;odo de proyecci&oacute;n).</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero de cuotas mensuales proyectadas en el per&iacute;odo (una por mes por cada cr&eacute;dito activo con mora &lt; 20).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
-        <div class="kpi-label">Cuotas Por Cobrar</div>
+        <div class="kpi-label">Cuotas Proyectadas</div>
         <div class="kpi-value" id="prTotal">-</div>
         <div class="kpi-sub" id="prTotalSub"></div>
       </div>
       <div class="kpi-card mint">
-        <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor cuota a recibir en el per&iacute;odo. Excluye cuotas ya pagadas (fecha &uacute;ltimo pago &gt;= vencimiento).</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor cuota de todas las cuotas proyectadas en el per&iacute;odo.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
         <div class="kpi-label">Valor Proyectado</div>
         <div class="kpi-value" id="prValor">-</div>
         <div class="kpi-sub" id="prValorSub"></div>
       </div>
-      <div class="kpi-card coral">
-        <div class="kpi-info">i<span class="kpi-tooltip">Cuotas en mora: vencimiento ya pasado y mora &gt; 30 d&iacute;as. Su pago est&aacute; vencido.</span></div>
-        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
-        <div class="kpi-label">Cuotas En Mora</div>
-        <div class="kpi-value" id="prMora">-</div>
-        <div class="kpi-sub" id="prMoraSub"></div>
-      </div>
       <div class="kpi-card blue">
-        <div class="kpi-info">i<span class="kpi-tooltip">Cuotas pr&oacute;ximas a vencer (al d&iacute;a, dentro del per&iacute;odo).</span></div>
-        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-        <div class="kpi-label">Cuotas Al D&iacute;a</div>
-        <div class="kpi-value" id="prAlDia">-</div>
-        <div class="kpi-sub" id="prAlDiaSub"></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero de cr&eacute;ditos &uacute;nicos incluidos en la proyecci&oacute;n (cada uno aporta N cuotas, una por mes hasta su vencimiento).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 11l3 3 5-6"/></svg></div>
+        <div class="kpi-label">Cr&eacute;ditos Activos</div>
+        <div class="kpi-value" id="prCreditos">-</div>
+        <div class="kpi-sub" id="prCreditosSub"></div>
+      </div>
+      <div class="kpi-card yellow">
+        <div class="kpi-info">i<span class="kpi-tooltip">Promedio mensual proyectado en el per&iacute;odo (valor total &divide; n&uacute;mero de meses).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
+        <div class="kpi-label">Promedio Mensual</div>
+        <div class="kpi-value" id="prPromedio">-</div>
+        <div class="kpi-sub" id="prPromedioSub"></div>
       </div>
     </div>
 
@@ -1357,11 +1357,11 @@ body {
     </div>
 
     <div class="chart-card full">
-      <h3><span class="dot"></span> Detalle de Cuotas Proyectadas <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(ordenadas por vencimiento)</span></h3>
+      <h3><span class="dot"></span> Detalle de Cuotas Proyectadas <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(d&iacute;a de pago = d&iacute;a del mes de fecha_inicio · mora &lt; 20)</span></h3>
       <div class="table-wrapper" style="max-height:480px;">
         <table class="data-table compact" id="tblProyeccion">
           <thead><tr>
-            <th>Vencimiento</th>
+            <th>Fecha Cuota</th>
             <th>Estado</th>
             <th>Cliente</th>
             <th>L&iacute;nea</th>
@@ -3221,31 +3221,59 @@ function prBack() {
 }
 
 function _buildProyeccionData() {
-  // Toma cartera filtrada y proyecta cuotas pendientes a partir de fecha_vencimiento
+  // Política de la líder de Cartera:
+  //  - Día de pago mensual = día del mes de fecha_inicio
+  //  - Solo créditos ACTIVO con fecha_vencimiento futura y dias_mora < 20
+  //  - Generar una cuota proyectada por cada mes (mismo día) desde hoy hasta fecha_vencimiento
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const out = [];
+
   (filteredData || []).forEach(r => {
     if (r.estado !== 'ACTIVO') return;
-    if (!r.fecha_vencimiento) return;
+    if (!r.fecha_inicio || !r.fecha_vencimiento) return;
     const valor = parseFloat(r.valor_cuota) || 0;
     if (valor <= 0) return;
+    const inicio = new Date(r.fecha_inicio + 'T12:00:00');
     const venc = new Date(r.fecha_vencimiento + 'T12:00:00');
-    if (isNaN(venc.getTime())) return;
+    if (isNaN(inicio.getTime()) || isNaN(venc.getTime())) return;
+    if (venc < today) return;  // ya vencido completamente
 
-    // Si pagó después o el día del vencimiento → no cuenta (ya pagada)
-    if (r.fecha_ult_pago) {
-      const pago = new Date(r.fecha_ult_pago + 'T12:00:00');
-      if (!isNaN(pago.getTime()) && pago >= venc) return;
-    }
+    // Filtro mora < 20 días (solo créditos al día / mora leve, política de la líder)
     const dm = parseInt(r.dias_mora) || 0;
-    const enMora = dm > 30; // Política Fideseguros
-    out.push({
-      ...r,
-      _valor_cuota_num: valor,
-      _venc_date: venc,
-      _en_mora: enMora,
-    });
+    if (dm >= 20) return;
+
+    const diaPago = inicio.getDate();  // 1..31
+
+    // Para meses con menos días (ej. febrero con día 30), JS ajusta automáticamente
+    // al día válido más cercano usando new Date(year, month, day): si day=30 y feb,
+    // sale el 1 o 2 de marzo. Lo controlamos clampeando.
+    const mkCuotaDate = (y, m) => {
+      // Devuelve la cuota en el día diaPago del mes (y, m), clampeada al último día del mes si excede.
+      const lastDay = new Date(y, m + 1, 0).getDate(); // último día del mes
+      const day = Math.min(diaPago, lastDay);
+      return new Date(y, m, day);
+    };
+
+    // Primera cuota: este mes en el día diaPago. Si ya pasó, ir al siguiente.
+    let cuotaDate = mkCuotaDate(today.getFullYear(), today.getMonth());
+    if (cuotaDate < today) {
+      cuotaDate = mkCuotaDate(today.getFullYear(), today.getMonth() + 1);
+    }
+
+    // Generar todas las cuotas hasta fecha_vencimiento
+    let safety = 0;
+    while (cuotaDate <= venc && safety < 600) {
+      out.push({
+        ...r,
+        _valor_cuota_num: valor,
+        _venc_date: new Date(cuotaDate),
+        _dia_pago: diaPago,
+        _en_mora: false,
+      });
+      cuotaDate = mkCuotaDate(cuotaDate.getFullYear(), cuotaDate.getMonth() + 1);
+      safety++;
+    }
   });
   return out;
 }
@@ -3284,19 +3312,21 @@ function renderProyeccion() {
   // KPIs (recalculados sobre el período/mes visible)
   const total = inWindow.length;
   const valor = inWindow.reduce((s, r) => s + r._valor_cuota_num, 0);
-  const mora = inWindow.filter(r => r._en_mora);
-  const valMora = mora.reduce((s, r) => s + r._valor_cuota_num, 0);
-  const alDia = inWindow.filter(r => !r._en_mora);
-  const valAlDia = alDia.reduce((s, r) => s + r._valor_cuota_num, 0);
+  // Créditos únicos (por cuenta+solicitud o identificación)
+  const uniqCreditos = new Set(inWindow.map(r => `${r.cuenta || ''}|${r.solicitud || ''}|${r.identificacion || ''}`)).size;
+  // Meses únicos del período visible
+  const pad2 = n => String(n).padStart(2, '0');
+  const monthsSet = new Set(inWindow.map(r => `${r._venc_date.getFullYear()}-${pad2(r._venc_date.getMonth()+1)}`));
+  const nMeses = monthsSet.size || 1;
 
   document.getElementById('prTotal').textContent = fmt(total);
-  document.getElementById('prTotalSub').textContent = _prDrillMonth ? 'Vista diaria' : 'Vista mensual';
+  document.getElementById('prTotalSub').textContent = _prDrillMonth ? 'Vista diaria' : `Sobre ${nMeses} mes(es)`;
   document.getElementById('prValor').textContent = fmtM(valor);
-  document.getElementById('prValorSub').textContent = `Promedio cuota: ${fmtM(total > 0 ? valor / total : 0)}`;
-  document.getElementById('prMora').textContent = fmt(mora.length);
-  document.getElementById('prMoraSub').textContent = `Valor: ${fmtM(valMora)}`;
-  document.getElementById('prAlDia').textContent = fmt(alDia.length);
-  document.getElementById('prAlDiaSub').textContent = `Valor: ${fmtM(valAlDia)}`;
+  document.getElementById('prValorSub').textContent = `Cuota promedio: ${fmtM(total > 0 ? valor / total : 0)}`;
+  document.getElementById('prCreditos').textContent = fmt(uniqCreditos);
+  document.getElementById('prCreditosSub').textContent = `${fmt(total)} cuotas en total`;
+  document.getElementById('prPromedio').textContent = fmtM(valor / nMeses);
+  document.getElementById('prPromedioSub').textContent = `Esperado por mes`;
 
   if (_prChart) { _prChart.destroy(); _prChart = null; }
 
@@ -3310,12 +3340,11 @@ function renderProyeccion() {
     const daysInMonth = new Date(parseInt(yyyy), parseInt(mm), 0).getDate();
     const days = Array.from({length: daysInMonth}, (_, i) => `${yyyy}-${mm}-${pad(i+1)}`);
     const dataMap = {};
-    days.forEach(d => { dataMap[d] = { alDia: 0, mora: 0 }; });
+    days.forEach(d => { dataMap[d] = 0; });
     inWindow.forEach(r => {
       const k = `${r._venc_date.getFullYear()}-${pad(r._venc_date.getMonth()+1)}-${pad(r._venc_date.getDate())}`;
-      if (!dataMap[k]) return;
-      if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
-      else dataMap[k].alDia += r._valor_cuota_num;
+      if (dataMap[k] === undefined) return;
+      dataMap[k] += r._valor_cuota_num;
     });
 
     _prChart = new Chart(ctx, {
@@ -3323,8 +3352,7 @@ function renderProyeccion() {
       data: {
         labels: days.map(d => d.substring(8,10)),
         datasets: [
-          { label: 'Al día', data: days.map(d => dataMap[d].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 2 },
-          { label: 'En mora (> 30 días)', data: days.map(d => dataMap[d].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 2 },
+          { label: 'Valor proyectado', data: days.map(d => dataMap[d]), backgroundColor: FIDE.teal + 'cc', borderRadius: 2 },
         ]
       },
       options: {
@@ -3339,8 +3367,8 @@ function renderProyeccion() {
           } }
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { font: { size: 10 } } },
-          y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+          x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+          y: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
         }
       }
     });
@@ -3352,9 +3380,7 @@ function renderProyeccion() {
     const dataMap = {};
     inWindow.forEach(r => {
       const k = `${r._venc_date.getFullYear()}-${pad(r._venc_date.getMonth()+1)}`;
-      if (!dataMap[k]) dataMap[k] = { alDia: 0, mora: 0 };
-      if (r._en_mora) dataMap[k].mora += r._valor_cuota_num;
-      else dataMap[k].alDia += r._valor_cuota_num;
+      dataMap[k] = (dataMap[k] || 0) + r._valor_cuota_num;
     });
     const keys = Object.keys(dataMap).sort();
 
@@ -3363,8 +3389,7 @@ function renderProyeccion() {
       data: {
         labels: keys,
         datasets: [
-          { label: 'Al día', data: keys.map(k => dataMap[k].alDia), backgroundColor: FIDE.teal + 'cc', stack: 'p', borderRadius: 3 },
-          { label: 'En mora (> 30 días)', data: keys.map(k => dataMap[k].mora), backgroundColor: '#b8680f' + 'cc', stack: 'p', borderRadius: 3 },
+          { label: 'Valor proyectado', data: keys.map(k => dataMap[k]), backgroundColor: FIDE.teal + 'cc', borderRadius: 3 },
         ]
       },
       options: {
@@ -3380,13 +3405,13 @@ function renderProyeccion() {
           legend: { position: 'top' },
           datalabels: { display: false },
           tooltip: { callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}`,
+            label: ctx => `Valor proyectado: ${fmtCurrency(ctx.raw)}`,
             footer: () => 'Clic para ver detalle diario'
           } }
         },
         scales: {
-          x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
-          y: { stacked: true, beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+          x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 10 } } },
+          y: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
         }
       }
     });
@@ -3396,23 +3421,27 @@ function renderProyeccion() {
   const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 300);
   const tb = document.querySelector('#tblProyeccion tbody');
   if (tb) {
+    const fmtDate = d => {
+      const yy = d.getFullYear(), mm = pad2(d.getMonth()+1), dd = pad2(d.getDate());
+      return `${yy}-${mm}-${dd}`;
+    };
     tb.innerHTML = sorted.map(r => {
-      const estadoPill = r._en_mora
-        ? '<span class="role-pill" style="background:#fcf0dd;color:#b8680f;">EN MORA</span>'
-        : '<span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);">AL DÍA</span>';
       const dm = parseInt(r.dias_mora) || 0;
+      const estadoPill = dm > 0
+        ? `<span class="role-pill" style="background:#fbf2d3;color:#c29200;">${dm}d mora</span>`
+        : '<span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);">AL DÍA</span>';
       return `<tr>
-        <td>${r.fecha_vencimiento || '-'}</td>
+        <td>${fmtDate(r._venc_date)}</td>
         <td>${estadoPill}</td>
         <td>${r.cliente || '-'}</td>
         <td>${r.linea || '-'}</td>
         <td>${r.aliado || '-'}</td>
         <td class="num">${fmtCurrency(r._valor_cuota_num)}</td>
         <td class="num">${fmtCurrency(r.saldo_capital)}</td>
-        <td class="num" style="color:${dm > 30 ? '#b8680f' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</td>
+        <td class="num" style="color:${dm > 0 ? '#c29200' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</td>
       </tr>`;
     }).join('');
-    if (!sorted.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin cuotas proyectadas en el período</td></tr>';
+    if (!sorted.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin cuotas proyectadas en el período. Verifica que haya créditos ACTIVO con fecha_inicio, fecha_vencimiento, valor_cuota > 0 y dias_mora < 20.</td></tr>';
   }
 }
 
