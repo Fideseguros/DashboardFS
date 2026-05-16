@@ -110,7 +110,10 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         if not year:
             raise ValueError("No se pudo detectar el año en el archivo")
 
-        records = []
+        # Acumular por (cuenta_code, month) — el Excel tiene filas con códigos
+        # repetidos (ej. 'Total 41 OPERACIONALES' aparece varias veces).
+        # Sumamos los valores en lugar de fallar por UNIQUE constraint.
+        agg = {}  # (code, month) -> {valor, desc, nivel, parent, is_total}
         for r in rows:
             if not r or len(r) < 2:
                 continue
@@ -118,21 +121,34 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             if not parsed:
                 continue
             code, desc, nivel, parent, is_total = parsed
-            # Para cada mes, si tiene valor != 0, guardar
             for month, col_idx in MONTH_COLS.items():
                 if col_idx >= len(r):
                     continue
                 val = _to_float(r[col_idx])
-                # Guardar incluso valores 0 para meses con datos del año actual
-                # Pero solo guardamos meses con algún valor real para no inflar
                 if val == 0:
                     continue
-                records.append({
-                    'year': year, 'month': month,
-                    'cuenta_code': code, 'cuenta_descripcion': desc,
-                    'nivel': nivel, 'parent_code': parent,
-                    'is_total': 1 if is_total else 0, 'valor': val,
-                })
+                key = (code, month)
+                if key not in agg:
+                    agg[key] = {
+                        'descripcion': desc, 'nivel': nivel, 'parent': parent,
+                        'is_total': 1 if is_total else 0, 'valor': 0.0,
+                    }
+                # Subtotales duplicados (mismo 'Total xxxx' repetido) → tomar el último valor
+                # Cuentas detalle (is_total=0) → sumar (puede haber legit varias filas
+                # de la misma cuenta auxiliar en distintos renglones).
+                if is_total:
+                    agg[key]['valor'] = val
+                else:
+                    agg[key]['valor'] += val
+
+        records = [
+            {
+                'year': year, 'month': m, 'cuenta_code': code,
+                'cuenta_descripcion': v['descripcion'], 'nivel': v['nivel'],
+                'parent_code': v['parent'], 'is_total': v['is_total'], 'valor': v['valor'],
+            }
+            for (code, m), v in agg.items()
+        ]
 
         # Reemplazar año completo
         with get_db() as conn:
