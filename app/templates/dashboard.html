@@ -1099,6 +1099,7 @@ body {
     <div class="tab" data-tab="proyeccion">Proyecci&oacute;n Pagos</div>
     <div class="tab" data-tab="recaudo">Recaudo</div>
     <div class="tab" data-tab="solicitudes">Solicitudes</div>
+    <div class="tab" data-tab="financieros">Estados Financieros</div>
     <div class="tab admin-only" data-tab="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
     <div class="tab admin-only" data-tab="usuarios" style="display:none;">Usuarios</div>
   </div>
@@ -1543,6 +1544,86 @@ body {
             <tbody></tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Estados Financieros -->
+  <div class="tab-content" id="tab-financieros">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">
+      <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.85rem;">
+        <label style="font-weight:700;color:var(--neutral-700);">A&ntilde;o:</label>
+        <select id="efYear" onchange="loadFinancieros()" style="padding:0.4rem 0.7rem;border:1.5px solid var(--neutral-200);border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;min-width:90px;">
+          <option value="">Sin datos</option>
+        </select>
+        <span id="efInfo" class="hist-info" style="display:none;"></span>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <span id="efStatusBadge" class="upload-status-badge" style="display:none;"></span>
+        <button class="btn btn-export admin-only" id="btnUploadFin" style="display:none;" onclick="document.getElementById('fileFinancieros').click()">Subir Estado de Resultados</button>
+        <input type="file" id="fileFinancieros" accept=".xlsx" style="display:none;" onchange="uploadFinancieros(this.files[0])">
+      </div>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card mint">
+        <div class="kpi-info">i<span class="kpi-tooltip">Total de ingresos del a&ntilde;o: suma de todas las cuentas detalle PUC 4xxxx (operacionales + no operacionales) hasta el &uacute;ltimo mes con datos.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
+        <div class="kpi-label">Ingresos Totales</div>
+        <div class="kpi-value" id="efIngresos">-</div>
+        <div class="kpi-sub" id="efIngresosSub"></div>
+      </div>
+      <div class="kpi-card coral">
+        <div class="kpi-info">i<span class="kpi-tooltip">Total de gastos PUC 5xxxx (operacionales + no operacionales).</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 7 7M14 16h7V9"/></svg></div>
+        <div class="kpi-label">Gastos Totales</div>
+        <div class="kpi-value" id="efGastos">-</div>
+        <div class="kpi-sub" id="efGastosSub"></div>
+      </div>
+      <div class="kpi-card teal">
+        <div class="kpi-info">i<span class="kpi-tooltip">Utilidad = Ingresos - Gastos - Costos. Si es positivo, la operaci&oacute;n es rentable.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
+        <div class="kpi-label">Utilidad</div>
+        <div class="kpi-value" id="efUtilidad">-</div>
+        <div class="kpi-sub" id="efUtilidadSub"></div>
+      </div>
+      <div class="kpi-card blue">
+        <div class="kpi-info">i<span class="kpi-tooltip">Margen = Utilidad / Ingresos &times; 100. Mide qu&eacute; porcentaje de cada peso de ingreso se convierte en utilidad.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M19 5L5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg></div>
+        <div class="kpi-label">Margen</div>
+        <div class="kpi-value" id="efMargen">-</div>
+        <div class="kpi-sub" id="efMargenSub"></div>
+      </div>
+    </div>
+
+    <div class="chart-card full" style="margin-bottom:1.5rem;">
+      <h3><span class="dot"></span> Evoluci&oacute;n Mensual</h3>
+      <div class="chart-container tall"><canvas id="chartFinEvol"></canvas></div>
+    </div>
+
+    <div class="chart-card full">
+      <h3><span class="dot"></span> Detalle por Cuenta <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(haz clic en una fila para expandir/colapsar grupos)</span></h3>
+      <div class="table-wrapper" style="max-height:560px;">
+        <table class="data-table compact" id="tblFinancieros">
+          <thead><tr>
+            <th>C&oacute;digo</th>
+            <th>Descripci&oacute;n</th>
+            <th class="num">Ene</th>
+            <th class="num">Feb</th>
+            <th class="num">Mar</th>
+            <th class="num">Abr</th>
+            <th class="num">May</th>
+            <th class="num">Jun</th>
+            <th class="num">Jul</th>
+            <th class="num">Ago</th>
+            <th class="num">Sep</th>
+            <th class="num">Oct</th>
+            <th class="num">Nov</th>
+            <th class="num">Dic</th>
+            <th class="num">Acumulado</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -2824,6 +2905,7 @@ document.querySelectorAll('.tab').forEach(tab=>{
     if (tab.dataset.tab === 'solicitudes') loadSolicitudes();
     if (tab.dataset.tab === 'juridico') loadJuridico();
     if (tab.dataset.tab === 'proyeccion') renderProyeccion();
+    if (tab.dataset.tab === 'financieros') loadFinancierosInit();
   });
 });
 
@@ -3206,6 +3288,174 @@ async function loadJuridico() {
     }).join('');
     if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
   } catch(e) { console.error('loadJuridico', e); }
+}
+
+// ============================================================
+//              ESTADOS FINANCIEROS (Estado de Resultados)
+// ============================================================
+let _efChart = null;
+
+async function loadFinancierosInit() {
+  // Cargar años disponibles y seleccionar el más reciente
+  try {
+    const res = await fetch('/api/estados-financieros/years', { credentials: 'same-origin' });
+    const years = res.ok ? await res.json() : [];
+    const sel = document.getElementById('efYear');
+    if (!sel) return;
+    if (!years.length) {
+      sel.innerHTML = '<option value="">Sin datos cargados</option>';
+      _efClearKpis();
+      return;
+    }
+    sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
+    loadFinancieros();
+  } catch (e) { console.error(e); }
+}
+
+function _efClearKpis() {
+  ['efIngresos','efGastos','efUtilidad','efMargen'].forEach(id => {
+    document.getElementById(id).textContent = '-';
+    document.getElementById(id+'Sub').textContent = 'Sin datos del año';
+  });
+  document.querySelector('#tblFinancieros tbody').innerHTML =
+    '<tr><td colspan="15" style="text-align:center;padding:1.5rem;color:#5a6a6e;">' +
+    'Sin datos. Como superadmin, sube el archivo "ESTADO DE RESULTADOS INTEGRAL MENSUAL".</td></tr>';
+}
+
+async function loadFinancieros() {
+  const year = document.getElementById('efYear').value;
+  if (!year) { _efClearKpis(); return; }
+  try {
+    const [s, rows] = await Promise.all([
+      fetch(`/api/estados-financieros/summary?year=${year}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
+      fetch(`/api/estados-financieros?year=${year}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
+    ]);
+    if (!s) { _efClearKpis(); return; }
+
+    // KPIs
+    document.getElementById('efIngresos').textContent = fmtM(s.ingresos_total);
+    document.getElementById('efIngresosSub').textContent =
+      `${s.meses_con_datos} mes(es) · Prom: ${fmtM(s.ingresos_promedio_mensual)}`;
+    document.getElementById('efGastos').textContent = fmtM(s.gastos_total);
+    document.getElementById('efGastosSub').textContent =
+      `Prom: ${fmtM(s.gastos_promedio_mensual)}`;
+    const utEl = document.getElementById('efUtilidad');
+    utEl.textContent = fmtM(s.utilidad_total);
+    utEl.style.color = s.utilidad_total >= 0 ? '#0f7b6c' : '#b8680f';
+    document.getElementById('efUtilidadSub').textContent =
+      `Prom: ${fmtM(s.utilidad_promedio_mensual)}`;
+    const mEl = document.getElementById('efMargen');
+    mEl.textContent = `${(s.margen_pct || 0).toFixed(1)}%`;
+    mEl.style.color = (s.margen_pct || 0) >= 0 ? '#0f7b6c' : '#b8680f';
+    document.getElementById('efMargenSub').textContent = 'Utilidad / Ingresos';
+
+    // Chart evolución
+    if (_efChart) { _efChart.destroy(); _efChart = null; }
+    const months = (s.by_month || []).map(b => `Mes ${b.month}`);
+    _efChart = new Chart(document.getElementById('chartFinEvol'), {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'Ingresos', data: (s.by_month||[]).map(b=>b.ingresos), backgroundColor: FIDE.teal+'cc', borderRadius: 3 },
+          { label: 'Gastos', data: (s.by_month||[]).map(b=>(b.gastos||0)+(b.costos||0)+(b.costos_prod||0)), backgroundColor: '#b8680f'+'cc', borderRadius: 3 },
+          { label: 'Utilidad', data: (s.by_month||[]).map(b=>b.utilidad), type: 'line', borderColor: FIDE.blue, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: FIDE.blue, tension: 0.3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect: false },
+        plugins: { legend:{ position: 'top' }, datalabels: { display: false },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}` } } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
+        }
+      }
+    });
+
+    // Tabla jerárquica
+    renderFinTable(rows);
+  } catch (e) { console.error('loadFinancieros', e); }
+}
+
+function renderFinTable(rows) {
+  const tb = document.querySelector('#tblFinancieros tbody');
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:1rem;color:#5a6a6e;">Sin datos para este año</td></tr>';
+    return;
+  }
+  // Agrupar por cuenta_code, calculando valores por mes y acumulado
+  const accounts = {};
+  rows.forEach(r => {
+    const k = r.cuenta_code;
+    if (!accounts[k]) {
+      accounts[k] = {
+        code: k, desc: r.cuenta_descripcion, nivel: r.nivel,
+        parent: r.parent_code, is_total: r.is_total,
+        meses: {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0},
+        acum: 0
+      };
+    }
+    accounts[k].meses[r.month] += r.valor;
+    accounts[k].acum += r.valor;
+  });
+
+  // Ordenar por código PUC
+  const ordered = Object.values(accounts).sort((a, b) => {
+    // Por código natural (string)
+    return a.code.localeCompare(b.code);
+  });
+
+  const fmt = v => v ? fmtCurrency(v) : '-';
+  const padLeft = nivel => Math.max(0, (nivel - 1) * 8);  // sangría según profundidad
+  tb.innerHTML = ordered.map(a => {
+    const totalClass = a.is_total ? 'style="font-weight:800;background:var(--neutral-50);"' : '';
+    const codeColor = a.nivel <= 2 ? 'color:var(--fide-teal-dark);font-weight:800;'
+                      : (a.nivel <= 4 ? 'color:var(--neutral-700);font-weight:700;' : 'color:var(--neutral-500);');
+    return `<tr ${totalClass}>
+      <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${a.code}</td>
+      <td style="${codeColor}">${a.desc || ''}</td>
+      <td class="num">${fmt(a.meses[1])}</td>
+      <td class="num">${fmt(a.meses[2])}</td>
+      <td class="num">${fmt(a.meses[3])}</td>
+      <td class="num">${fmt(a.meses[4])}</td>
+      <td class="num">${fmt(a.meses[5])}</td>
+      <td class="num">${fmt(a.meses[6])}</td>
+      <td class="num">${fmt(a.meses[7])}</td>
+      <td class="num">${fmt(a.meses[8])}</td>
+      <td class="num">${fmt(a.meses[9])}</td>
+      <td class="num">${fmt(a.meses[10])}</td>
+      <td class="num">${fmt(a.meses[11])}</td>
+      <td class="num">${fmt(a.meses[12])}</td>
+      <td class="num"><strong>${fmt(a.acum)}</strong></td>
+    </tr>`;
+  }).join('');
+}
+
+async function uploadFinancieros(file) {
+  if (!file) return;
+  const btn = document.getElementById('btnUploadFin');
+  const origTxt = btn.textContent;
+  btn.textContent = 'Subiendo...'; btn.disabled = true;
+  try {
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/api/estados-financieros/upload', {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Error: ' + (data.detail || 'no se pudo subir'));
+    } else {
+      alert(`Carga exitosa: año ${data.year}, ${data.records} registros importados`);
+      loadFinancierosInit();
+    }
+  } catch (e) {
+    alert('Error de conexión: ' + e.message);
+  } finally {
+    btn.textContent = origTxt; btn.disabled = false;
+    document.getElementById('fileFinancieros').value = '';
+  }
 }
 
 // ============================================================

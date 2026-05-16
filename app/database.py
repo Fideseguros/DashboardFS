@@ -224,6 +224,25 @@ CREATE INDEX IF NOT EXISTS idx_solic_legacy_estado ON solicitudes_legacy(estado)
 CREATE INDEX IF NOT EXISTS idx_solic_legacy_fecha ON solicitudes_legacy(fecha_solicitud);
 CREATE INDEX IF NOT EXISTS idx_solic_legacy_sync ON solicitudes_legacy(sync_batch_id);
 
+-- ============== Estados Financieros (Estado de Resultados mensual) ==============
+CREATE TABLE IF NOT EXISTS estados_financieros (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,           -- 1-12
+    cuenta_code TEXT NOT NULL,        -- e.g. '41502001'
+    cuenta_descripcion TEXT,          -- 'INTERESES FINANCIACION POLIZAS'
+    nivel INTEGER NOT NULL,           -- profundidad PUC: 1=grupo, 2=cuenta, 4=subgrupo, 6=cuenta detalle, 8=auxiliar
+    parent_code TEXT,                 -- código del nivel padre
+    is_total INTEGER DEFAULT 0,       -- 1 si es fila Total, 0 si es cuenta
+    valor REAL DEFAULT 0,
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ef_year_month ON estados_financieros(year, month);
+CREATE INDEX IF NOT EXISTS idx_ef_cuenta ON estados_financieros(cuenta_code);
+CREATE INDEX IF NOT EXISTS idx_ef_sync ON estados_financieros(sync_batch_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ef_year_month_cuenta ON estados_financieros(year, month, cuenta_code);
+
 -- ============== Módulo Cobro Jurídico (Procesos) ==============
 CREATE TABLE IF NOT EXISTS procesos_juridicos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
