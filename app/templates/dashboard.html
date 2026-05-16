@@ -3763,7 +3763,7 @@ async function uploadFinancieros(file) {
     if (!res.ok) {
       alert('Error: ' + (data.detail || 'no se pudo subir'));
     } else {
-      alert(`Carga exitosa: año ${data.year}, ${data.records} registros importados`);
+      alert(`Carga exitosa para ${data.year}\nMeses actualizados: ${data.meses_cargados || data.n_meses + ' mes(es)'}\nRegistros importados: ${data.records}\n\n(Los meses no presentes en el archivo conservan sus datos previos.)`);
       loadFinancierosInit();
     }
   } catch (e) {

@@ -150,9 +150,20 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             for (code, m), v in agg.items()
         ]
 
-        # Reemplazar año completo
+        # Identifica solo los meses con datos reales en este upload
+        months_in_file = sorted({rec['month'] for rec in records})
+
         with get_db() as conn:
-            conn.execute("DELETE FROM estados_financieros WHERE year = ?", (year,))
+            # Reemplazar SOLO los meses presentes en el archivo. Si el usuario
+            # sube un archivo solo con la columna ABRIL → solo se reemplaza
+            # abril; los meses previos permanecen intactos. Si sube uno
+            # acumulado (Ene-Abr) → se reemplazan los 4.
+            if months_in_file:
+                placeholders = ','.join(['?'] * len(months_in_file))
+                conn.execute(
+                    f"DELETE FROM estados_financieros WHERE year = ? AND month IN ({placeholders})",
+                    [year, *months_in_file]
+                )
             for rec in records:
                 conn.execute("""
                     INSERT INTO estados_financieros
@@ -165,9 +176,17 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
                 WHERE id=?
             """, (datetime.utcnow().isoformat(), len(rows), len(records), sync_id))
 
+        nombres_mes = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+        meses_str = ', '.join(nombres_mes[m] for m in months_in_file)
         log_audit(user["user_id"], user["username"], "financieros_upload",
-                  f"file={file.filename} year={year} records={len(records)}", ip)
-        return {"status": "success", "year": year, "records": len(records)}
+                  f"file={file.filename} year={year} meses=[{meses_str}] records={len(records)}", ip)
+        return {
+            "status": "success",
+            "year": year,
+            "meses_cargados": meses_str,
+            "n_meses": len(months_in_file),
+            "records": len(records),
+        }
     except Exception as e:
         _log.exception("financieros_upload failed")
         with get_db() as conn:
