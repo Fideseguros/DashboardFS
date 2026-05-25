@@ -484,27 +484,65 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
         return {"status": "success", "records": len(records)}
 
 
+# Normalización de estados de solicitudes solicitada por la líder de cartera:
+#  Nueva plataforma:
+#    DEVUELTA ATENDIDA / DEVUELTA HOJA RUTA → EN ESTUDIO
+#  Legacy:
+#    Aprobada → DESEMBOLSADA
+#    Borrada → ANULADA
+#    Pendiente → se excluye (préstamos pre-plataforma-anterior, sin información)
+#    Iniciada / En Estudio → se conservan como están (caso por caso)
+SOLIC_NUEVA_REMAP = {
+    'DEVUELTA ATENDIDA': 'EN ESTUDIO',
+    'DEVUELTA HOJA RUTA': 'EN ESTUDIO',
+}
+SOLIC_LEGACY_REMAP = {
+    'APROBADA': 'DESEMBOLSADA',
+    'BORRADA': 'ANULADA',
+}
+SOLIC_LEGACY_EXCLUDE = {'PENDIENTE'}
+
+
+def _normalize_estado(estado, source: str) -> str | None:
+    """Normaliza el estado según la plataforma. Devuelve None si se debe excluir la fila."""
+    if not estado:
+        return estado
+    key = str(estado).strip().upper()
+    if source == 'legacy':
+        if key in SOLIC_LEGACY_EXCLUDE:
+            return None
+        return SOLIC_LEGACY_REMAP.get(key, key)
+    # Nueva plataforma
+    return SOLIC_NUEVA_REMAP.get(key, key)
+
+
 @solicitudes.get("/combined")
 def solic_combined(_user=Depends(require_auth)):
-    """UNION de legacy + nueva plataforma. Cada solicitud es única."""
+    """UNION de legacy + nueva plataforma con estados normalizados."""
     conn = get_connection()
     try:
-        # Nueva plataforma
         new_rows = conn.execute(
             "SELECT * FROM solicitudes WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
         ).fetchall()
-        # Legacy
         legacy_rows = conn.execute("SELECT * FROM solicitudes_legacy").fetchall()
 
         out = []
         for r in new_rows:
             d = dict(r)
+            normalized = _normalize_estado(d.get('estado'), 'nueva')
+            if normalized is None:
+                continue
+            d['estado'] = normalized
             d['identificacion'] = mask_identificacion(decrypt(d.get('identificacion')))
             d['solicitante'] = mask_cliente(decrypt(d.get('solicitante')))
             d['source'] = 'nueva'
             out.append(d)
         for r in legacy_rows:
             d = dict(r)
+            normalized = _normalize_estado(d.get('estado'), 'legacy')
+            if normalized is None:
+                # 'Pendiente' legacy → se excluye del análisis
+                continue
             out.append({
                 'source': 'legacy',
                 'solicitud': d.get('id_solicitud'),
@@ -512,7 +550,7 @@ def solic_combined(_user=Depends(require_auth)):
                 'identificacion': mask_identificacion(decrypt(d.get('identificacion'))),
                 'solicitante': mask_cliente(decrypt(d.get('nombre_completo'))),
                 'valor': d.get('monto'),
-                'estado': d.get('estado'),
+                'estado': normalized,
                 'paso_ruta': d.get('estado_precalif'),
                 'oficina': d.get('canal'),
                 'fecha_solicitud': d.get('fecha_solicitud'),
@@ -531,7 +569,12 @@ def solic_combined(_user=Depends(require_auth)):
 
 @solicitudes.get("/combined-summary")
 def solic_combined_summary(_user=Depends(require_auth)):
-    """Totales unión legacy + nueva."""
+    """Totales unión legacy + nueva, con estados normalizados.
+
+    Nueva: DESEMBOLSADA cuenta como tal.
+    Legacy: APROBADA cuenta como desembolsada (mapeo solicitado por líder).
+    Legacy: PENDIENTE se EXCLUYE de todos los conteos (pre-plataforma anterior).
+    """
     conn = get_connection()
     try:
         batch = "(SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
@@ -548,6 +591,7 @@ def solic_combined_summary(_user=Depends(require_auth)):
                 SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN 1 ELSE 0 END) as desembolsadas,
                 SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN COALESCE(monto,0) ELSE 0 END) as valor_desembolsado
             FROM solicitudes_legacy
+            WHERE UPPER(COALESCE(estado,'')) <> 'PENDIENTE'
         """).fetchone()
         new_d = dict(new_row) if new_row else {}
         leg_d = dict(leg_row) if leg_row else {}

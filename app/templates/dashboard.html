@@ -2206,6 +2206,22 @@ body {
           <div class="module-meta">Calidad de cartera por per&iacute;odo de desembolso &middot; usa el batch activo de cartera</div>
         </div>
       </div>
+      <div class="module-actions">
+        <label style="font-size:0.72rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;">Fecha desembolso:</label>
+        <select id="anFecha" onchange="onAnFechaChange()" style="padding:0.35rem 0.55rem;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-weight:600;font-size:0.8rem;cursor:pointer;background:white;">
+          <option value="all">Todo el hist&oacute;rico</option>
+          <option value="year">Este a&ntilde;o</option>
+          <option value="last12m" selected>&Uacute;ltimos 12 meses</option>
+          <option value="last24m">&Uacute;ltimos 24 meses</option>
+          <option value="last36m">&Uacute;ltimos 36 meses</option>
+          <option value="custom">Rango personalizado</option>
+        </select>
+        <span id="anFechaCustom" style="display:none;gap:0.3rem;align-items:center;">
+          <input type="date" id="anFechaFrom" onchange="renderAnalitica()" style="padding:0.32rem 0.5rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:0.78rem;">
+          <span style="color:var(--text-secondary);font-size:0.75rem;">&mdash;</span>
+          <input type="date" id="anFechaTo" onchange="renderAnalitica()" style="padding:0.32rem 0.5rem;border:1px solid var(--border);border-radius:5px;font-family:inherit;font-size:0.78rem;">
+        </span>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -4135,14 +4151,60 @@ function _sevClassFromPct(pct) {
   return 'sev-6';
 }
 
+function _anFechaRange() {
+  // Devuelve {from, to} en YYYY-MM-DD o null si no aplica filtro.
+  const preset = document.getElementById('anFecha')?.value || 'all';
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const toISO = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  if (preset === 'all') return null;
+  if (preset === 'custom') {
+    const f = document.getElementById('anFechaFrom')?.value || '';
+    const t = document.getElementById('anFechaTo')?.value || '';
+    return (f || t) ? { from: f, to: t } : null;
+  }
+  if (preset === 'year') return { from: `${today.getFullYear()}-01-01`, to: toISO(today) };
+  const m = { last12m: 12, last24m: 24, last36m: 36 }[preset] || 0;
+  if (m > 0) {
+    const from = new Date(today); from.setMonth(from.getMonth() - m);
+    return { from: toISO(from), to: toISO(today) };
+  }
+  return null;
+}
+
+function onAnFechaChange() {
+  const isCustom = document.getElementById('anFecha')?.value === 'custom';
+  const custEl = document.getElementById('anFechaCustom');
+  if (custEl) custEl.style.display = isCustom ? 'inline-flex' : 'none';
+  renderAnalitica();
+}
+
 function renderAnalitica() {
   const container = document.getElementById('tab-analitica');
   if (!container) return;
-  const data = (RAW_DATA || []).filter(r => r.estado === 'ACTIVO');
+  // Filtro de fecha de desembolso (independiente de los filtros globales de cartera)
+  const range = _anFechaRange();
+  let data = (RAW_DATA || []).filter(r => r.estado === 'ACTIVO');
+  if (range) {
+    data = data.filter(r => {
+      const fd = r.fecha_desembolso || '';
+      if (!fd) return false;
+      if (range.from && fd < range.from) return false;
+      if (range.to && fd > range.to) return false;
+      return true;
+    });
+  }
   if (!data.length) {
-    // Empty state — los charts se quedan como están; la tabla muestra mensaje
+    // Empty state
+    ['anAlDia','anNPL','anMoraProm','anCosechaPeor'].forEach(id => {
+      const v = document.getElementById(id); if (v) v.textContent = '-';
+      const s = document.getElementById(id+'Sub'); if (s) s.textContent = range ? 'Sin créditos en el rango' : '';
+    });
+    Object.keys(_anCharts).forEach(k => { _anCharts[k]?.destroy?.(); });
+    const heatmapEl = document.getElementById('vintageHeatmap');
+    if (heatmapEl) heatmapEl.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:2rem;font-style:italic;">Sin créditos activos en el rango seleccionado.</p>';
     const tb = document.querySelector('#tblCosechas tbody');
-    if (tb) tb.innerHTML = '<tr><td colspan="9">Sin datos. Carga la cartera primero.</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="9">Sin créditos activos en el rango seleccionado.</td></tr>';
     return;
   }
 
