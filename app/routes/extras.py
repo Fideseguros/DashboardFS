@@ -55,8 +55,9 @@ def _upload_status_for(sources: list[str]) -> dict:
 # ============================================================
 recaudo = APIRouter(prefix="/api/recaudo", tags=["recaudo"])
 
-# Mapeo columna Excel -> campo BD (basado en IngresosDesembolso-Pagos.xlsx)
-PAGOS_COL_MAP = {
+# Mapeo columna Excel -> campo BD (formato detallado, 28 cols).
+# Origen: 'Informe de pagos plataforma nueva.xlsx' (IngresosDesembolso-Pagos).
+PAGOS_COL_MAP_DETALLADO = {
     0: ('entidad', _str_or_none),
     1: ('linea_credito', _str_or_none),
     2: ('fecha_movimiento', _to_date),
@@ -86,10 +87,38 @@ PAGOS_COL_MAP = {
     27: ('observaciones', _str_or_none),
 }
 
+# Mapeo del formato simplificado (9 cols).
+# Origen: 'Informe pagos nueva plataforma.xlsx'
+# Headers: Gestor | Producto | Nombre Producto | Credito | Identificacion | Cliente | Estado | Recaudo | Valor Pago
+PAGOS_COL_MAP_SIMPLE = {
+    0: ('aliado', _str_or_none),           # Gestor
+    2: ('linea_credito', _str_or_none),    # Nombre Producto (descriptivo)
+    3: ('cuenta', _str_or_none),           # Credito
+    4: ('identificacion', None),           # cifrado
+    5: ('cliente', None),                  # cifrado
+    6: ('tipo_mvto', _str_or_none),        # Estado (Normal / Anormal / etc.)
+    7: ('fecha_movimiento', _to_date),     # Recaudo (fecha de pago)
+    8: ('total', _to_float),               # Valor Pago
+}
 
-def _transform_pago_row(row: tuple) -> dict | None:
+
+def _detect_pagos_schema(rows: list[tuple]) -> dict:
+    """Detecta el esquema según el header row.
+
+    Devuelve PAGOS_COL_MAP_SIMPLE para formato nuevo (9 cols, header con
+    'Gestor' + 'Valor Pago') o PAGOS_COL_MAP_DETALLADO para el legacy (28 cols).
+    Fallback al detallado si no se reconoce."""
+    if not rows or not rows[0]:
+        return PAGOS_COL_MAP_DETALLADO
+    header = [str(c).strip().lower() if c else '' for c in rows[0]]
+    if 'gestor' in header and any('valor pago' in h for h in header):
+        return PAGOS_COL_MAP_SIMPLE
+    return PAGOS_COL_MAP_DETALLADO
+
+
+def _transform_pago_row(row: tuple, col_map: dict) -> dict | None:
     rec = {}
-    for idx, (key, parser) in PAGOS_COL_MAP.items():
+    for idx, (key, parser) in col_map.items():
         val = row[idx] if idx < len(row) else None
         if key == 'identificacion':
             v = _str_or_none(val); rec[key] = encrypt(v) if v else None
@@ -109,7 +138,10 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
         rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
-        records = [r for r in (_transform_pago_row(row) for row in rows[1:]) if r]
+        col_map = _detect_pagos_schema(rows)
+        schema_name = 'simple' if col_map is PAGOS_COL_MAP_SIMPLE else 'detallado'
+        records = [r for r in (_transform_pago_row(row, col_map) for row in rows[1:]) if r]
+        ctx.set_audit_extra(f"schema={schema_name}")
 
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
