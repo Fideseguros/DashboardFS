@@ -492,19 +492,55 @@ body {
 }
 .nav-tab[hidden] { display: none; }
 
-/* Hamburger toggle (mobile only) */
+/* Mobile topbar: barra fina arriba del header verde, solo en móvil */
+.mobile-topbar {
+  display: none;          /* oculto por defecto (desktop) */
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: var(--fide-teal-deeper);
+  color: white;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 90;
+}
+.mobile-topbar .menu-side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mobile-topbar .menu-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
 .sidebar-toggle {
-  display: none;
   background: rgba(255,255,255,0.18);
   border: 1px solid rgba(255,255,255,0.3);
   color: white;
-  padding: 0.35rem 0.55rem;
+  padding: 0.4rem 0.55rem;
   border-radius: 6px;
   cursor: pointer;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.sidebar-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+.sidebar-toggle:hover { background: rgba(255,255,255,0.28); }
+.sidebar-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+.mobile-topbar .btn-salir {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.mobile-topbar .btn-salir:hover { background: rgba(255,255,255,0.28); }
 .sidebar-backdrop {
   display: none;
   position: fixed;
@@ -1036,6 +1072,14 @@ body {
   .chart-container { height: 240px !important; }
   .chart-container.tall { height: 280px !important; }
 
+  /* Mobile topbar visible, hamburger ya está dentro */
+  .mobile-topbar { display: flex; }
+  /* En móvil, el header verde no necesita su botón Salir (ya está en el topbar) */
+  .header-right .header-actions .header-btn:not(.btn-salir) { /* placeholder */ }
+  .header .header-actions { display: none; }
+  .header-right { display: flex; flex-direction: column; gap: 0.3rem; }
+  .header-right > div:not(.header-actions) { font-size: 0.78rem; }
+
   /* Sidebar como drawer off-canvas */
   .app-shell { display: block; }
   .sidebar {
@@ -1049,7 +1093,6 @@ body {
     box-shadow: 4px 0 14px rgba(0,0,0,0.18);
   }
   .sidebar.open { transform: translateX(0); }
-  .sidebar-toggle { display: inline-flex; }
   .app-main { width: 100%; }
 
   /* Tabla: scroll horizontal dentro del wrapper, contenido no desborda la tarjeta */
@@ -1074,8 +1117,6 @@ body {
     { display: none; }
   #tblAliados th:nth-child(4), #tblAliados td:nth-child(4),           /* Activos */
   #tblAliados th:nth-child(5), #tblAliados td:nth-child(5)            /* Valor Total */
-    { display: none; }
-  #tblCiudades th:nth-child(4), #tblCiudades td:nth-child(4)          /* Valor Total */
     { display: none; }
 }
 @media (max-width: 480px) {
@@ -1113,11 +1154,19 @@ body {
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
+<!-- Mobile topbar (solo visible en celular): hamburguesa + Salir -->
+<div class="mobile-topbar">
+  <div class="menu-side">
     <button class="sidebar-toggle" id="btnMenu" aria-label="Men&uacute;" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
+    <span class="menu-label">Men&uacute;</span>
+  </div>
+  <button class="btn-salir" onclick="doLogout()">Salir</button>
+</div>
+
+<div class="header">
+  <div class="header-left">
     <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-logo">
     <div class="header-title">
       <h1>Dashboard Operaci&oacute;n Comercial</h1>
@@ -1148,6 +1197,7 @@ body {
       An&aacute;lisis de Cartera
     </div>
     <div class="nav-tab" data-tab="proyeccion" data-group="cartera">Proyecci&oacute;n Pagos</div>
+    <div class="nav-tab admin-only" data-tab="juridico" data-group="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
   </div>
 
   <div class="nav-group" data-group="operacion">
@@ -1172,7 +1222,6 @@ body {
       <svg class="cat-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
       Admin
     </div>
-    <div class="nav-tab" data-tab="juridico" data-group="admin">Cobro Jur&iacute;dico</div>
     <div class="nav-tab" data-tab="usuarios" data-group="admin">Panel de Configuraci&oacute;n</div>
   </div>
 </aside>
@@ -1483,22 +1532,6 @@ body {
           </table>
         </div>
       </div>
-      <div class="chart-card full">
-        <h3><span class="dot"></span> Detalle de Ciudades</h3>
-        <div class="table-wrapper" style="max-height:460px;">
-          <table class="data-table compact" id="tblCiudades">
-            <thead><tr>
-              <th>#</th>
-              <th>Ciudad</th>
-              <th>#&nbsp;Cr&eacute;ditos</th>
-              <th class="num">Valor Total</th>
-              <th class="num">Saldo Capital</th>
-              <th class="num">% Mora</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -1607,6 +1640,23 @@ body {
 
   <!-- Tab: Recaudo -->
   <div class="tab-content" id="tab-recaudo">
+    <div class="module-header">
+      <div class="module-title">
+        <svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg>
+        <div>
+          <h2>Recaudo</h2>
+          <div class="module-meta">
+            <span id="rcHistInfo" class="hist-info" style="display:none;"></span>
+          </div>
+        </div>
+      </div>
+      <div class="module-actions">
+        <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
+        <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
+        <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
+      </div>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi-card teal">
         <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero total de pagos cargados desde el archivo de recaudo.</span></div>
@@ -1658,15 +1708,7 @@ body {
         <div class="chart-container tall"><canvas id="chartRcMensual"></canvas></div>
       </div>
       <div class="chart-card full">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
-          <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
-          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-            <span id="rcHistInfo" class="hist-info" style="display:none;"></span>
-            <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
-            <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
-            <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
-          </div>
-        </div>
+        <h3><span class="dot"></span> Detalle de Pagos</h3>
         <div class="table-wrapper" style="max-height:480px;">
           <table class="data-table compact" id="tblRecaudo">
             <thead><tr>
@@ -1708,6 +1750,23 @@ body {
 
   <!-- Tab: Solicitudes -->
   <div class="tab-content" id="tab-solicitudes">
+    <div class="module-header">
+      <div class="module-title">
+        <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></svg>
+        <div>
+          <h2>Solicitudes</h2>
+          <div class="module-meta">
+            <span id="slHistInfo" class="hist-info" style="display:none;"></span>
+          </div>
+        </div>
+      </div>
+      <div class="module-actions">
+        <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
+        <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
+        <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
+      </div>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi-card teal">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de solicitudes registradas en el archivo cargado.</span></div>
@@ -1748,15 +1807,7 @@ body {
         <div class="chart-container"><canvas id="chartSlLinea"></canvas></div>
       </div>
       <div class="chart-card full">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
-          <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
-          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-            <span id="slHistInfo" class="hist-info" style="display:none;"></span>
-            <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
-            <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
-            <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
-          </div>
-        </div>
+        <h3><span class="dot"></span> Detalle de Solicitudes</h3>
         <div class="table-wrapper" style="max-height:480px;">
           <table class="data-table compact" id="tblSolicitudes">
             <thead><tr>
@@ -1778,15 +1829,23 @@ body {
 
   <!-- Tab: Estados Financieros -->
   <div class="tab-content" id="tab-financieros">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:1rem;">
-      <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.85rem;">
-        <label style="font-weight:700;color:var(--neutral-700);">A&ntilde;o:</label>
-        <select id="efYear" onchange="loadFinancieros()" style="padding:0.4rem 0.7rem;border:1.5px solid var(--neutral-200);border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;min-width:90px;">
-          <option value="">Sin datos</option>
-        </select>
-        <span id="efInfo" class="hist-info" style="display:none;"></span>
+    <div class="module-header">
+      <div class="module-title">
+        <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        <div>
+          <h2>Estados Financieros</h2>
+          <div class="module-meta">
+            <span style="display:inline-flex;align-items:center;gap:0.35rem;">
+              <strong>A&ntilde;o:</strong>
+              <select id="efYear" onchange="loadFinancieros()" style="padding:0.2rem 0.5rem;border:1.5px solid var(--neutral-200);border-radius:5px;font-family:inherit;font-weight:600;cursor:pointer;font-size:0.78rem;">
+                <option value="">Sin datos</option>
+              </select>
+            </span>
+            <span id="efInfo" class="hist-info" style="display:none;"></span>
+          </div>
+        </div>
       </div>
-      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+      <div class="module-actions">
         <span id="efStatusBadge" class="upload-status-badge" style="display:none;"></span>
         <button class="btn btn-export admin-only" id="btnUploadFin" style="display:none;" onclick="document.getElementById('fileFinancieros').click()">Subir Estado de Resultados</button>
         <input type="file" id="fileFinancieros" accept=".xlsx" style="display:none;" onchange="uploadFinancieros(this.files[0])">
@@ -1858,6 +1917,20 @@ body {
 
   <!-- Tab: Cobro Jurídico (solo superadmin) -->
   <div class="tab-content" id="tab-juridico">
+    <div class="module-header">
+      <div class="module-title">
+        <svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-4z"/></svg>
+        <div>
+          <h2>Cobro Jur&iacute;dico</h2>
+          <div class="module-meta"><span>Procesos judiciales activos y cruce con cartera</span></div>
+        </div>
+      </div>
+      <div class="module-actions">
+        <button class="btn btn-export admin-only" id="btnUploadJuridico" style="display:none;" onclick="document.getElementById('fileJuridico').click()">Subir Informe Conexi&oacute;n</button>
+        <input type="file" id="fileJuridico" accept=".xlsx" style="display:none;" onchange="uploadExtra('juridico', this.files[0])">
+      </div>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi-card teal">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de procesos judiciales activos cargados en el sistema.</span></div>
@@ -1912,13 +1985,7 @@ body {
         <div class="chart-container"><canvas id="chartJrJuzgado"></canvas></div>
       </div>
       <div class="chart-card full">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
-          <h3 style="margin:0;"><span class="dot"></span> Procesos Judiciales</h3>
-          <div>
-            <button class="btn btn-export admin-only" id="btnUploadJuridico" style="display:none;" onclick="document.getElementById('fileJuridico').click()">Subir Informe Conexi&oacute;n</button>
-            <input type="file" id="fileJuridico" accept=".xlsx" style="display:none;" onchange="uploadExtra('juridico', this.files[0])">
-          </div>
-        </div>
+        <h3><span class="dot"></span> Procesos Judiciales</h3>
         <div class="table-wrapper" style="max-height:520px;">
           <table class="data-table compact" id="tblJuridico">
             <thead><tr>
