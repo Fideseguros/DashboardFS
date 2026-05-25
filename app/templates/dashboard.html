@@ -327,12 +327,17 @@ body {
 /* =================== KPIs =================== */
 .kpi-grid {
   display: grid;
-  /* Auto-fit hace que cuando hay 9 cards en una pantalla ancha queden 5+4
-   * (disproporcionado). Forzamos columnas más pequeñas para que quepan más
-   * por fila y los rows queden equilibrados visualmente. */
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  /* Default: auto-fit (módulos con 4-6 KPIs como Recaudo, Solicitudes, etc.) */
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
   margin-bottom: 1.5rem;
+}
+/* Cartera tiene 9 KPIs: forzar grid 3x3 uniforme en desktop. */
+.kpi-grid.cartera-scope {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .kpi-grid.cartera-scope { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .kpi-card {
   background: var(--card);
@@ -620,9 +625,9 @@ body {
 }
 .chart-card:hover { border-color: #C8C6C4; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
 .chart-card h3 {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #323130;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1a1a1a;
   margin-bottom: 0.9rem;
   padding-bottom: 0.55rem;
   border-bottom: 1px solid #EDEBE9;
@@ -763,6 +768,18 @@ body {
 .data-table tr:nth-child(even) td { background: #f8fcfb; }
 .data-table tr:hover td { background: var(--fide-mint-light); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+/* Empty-state estandarizado: cualquier celda con colspan (= fila ocupando todo el ancho)
+ * en un tbody se trata como "sin datos / cargando / error". Las cargas inline
+ * existentes con style="..." todavía funcionan (sobrescriben este default). */
+.data-table tbody td[colspan] {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.8rem;
+  background: transparent;
+}
+.data-table tbody tr:has(td[colspan]):hover td { background: transparent; }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -2585,6 +2602,11 @@ function toggleChartFilter(dimension, value) {
   }
   applyFilters();
   renderChartFilterBar();
+  // El usuario ya descubrió el cross-filter → ocultar el hint para siempre
+  try {
+    localStorage.setItem('fide_chart_hint_dismissed', '1');
+    document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
+  } catch (e) {}
 }
 
 function clearAllChartFilters() {
@@ -4324,6 +4346,13 @@ if (_role === 'consulta') {
   const exp = document.getElementById('btnExport');
   if (exp) exp.style.display = 'none';
 }
+
+// Ocultar el hint de cross-filter si el usuario ya lo descubrió en sesiones previas
+try {
+  if (localStorage.getItem('fide_chart_hint_dismissed') === '1') {
+    document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
+  }
+} catch (e) {}
 
 function confirmReloadBase() {
   const ok = confirm(
