@@ -1317,8 +1317,14 @@ body {
       </div>
     </div>
     <div class="module-actions">
-      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;" class="btn btn-export admin-only">Subir Excel Cartera</button>
+      <!-- Acción primaria: actualizar diariamente con archivo de plataforma nueva -->
+      <button id="btnUpdateCartera" onclick="document.getElementById('fileCarteraUpdate').click()" style="display:none;" class="btn btn-export admin-only" title="Actualiza solo las columnas naranja desde el archivo de la plataforma nueva. Las cuentas que no aparezcan se conservan.">Actualizar Cartera</button>
+      <input type="file" id="fileCarteraUpdate" accept=".xlsx,.xls" style="display:none;" onchange="uploadCarteraUpdate(this.files[0])">
+
+      <!-- Acción secundaria: recargar la base completa (uso esporádico) -->
+      <button id="btnUpload" onclick="confirmReloadBase()" style="display:none;" class="btn btn-reset admin-only" title="Reemplaza TODA la cartera con el archivo base (plataforma vieja). Uso esporádico.">Recargar Base</button>
       <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
+
       <button class="btn btn-export" id="btnExport" onclick="exportCSV()">Exportar CSV</button>
     </div>
   </div>
@@ -4290,6 +4296,15 @@ if (_role === 'consulta') {
   if (exp) exp.style.display = 'none';
 }
 
+function confirmReloadBase() {
+  const ok = confirm(
+    'Recargar Base reemplaza TODA la cartera con el contenido del archivo seleccionado.\n\n' +
+    'Las actualizaciones incrementales acumuladas se pierden.\n\n' +
+    '¿Continuar?'
+  );
+  if (ok) document.getElementById('fileExcel').click();
+}
+
 async function uploadExcel(file) {
   if (!file) return;
   const btn = document.getElementById('btnUpload');
@@ -4306,7 +4321,7 @@ async function uploadExcel(file) {
     if (!res.ok) {
       alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
     } else {
-      alert('Carga exitosa: ' + data.records + ' registros en ' + data.duration + 's');
+      alert('Base recargada: ' + data.records + ' registros en ' + data.duration + 's');
       location.reload();
     }
   } catch (e) {
@@ -4315,6 +4330,39 @@ async function uploadExcel(file) {
     btn.textContent = originalText;
     btn.disabled = false;
     document.getElementById('fileExcel').value = '';
+  }
+}
+
+async function uploadCarteraUpdate(file) {
+  if (!file) return;
+  const btn = document.getElementById('btnUpdateCartera');
+  const originalText = btn.textContent;
+  btn.textContent = 'Actualizando...';
+  btn.disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/sync/update-incremental', {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert('Error: ' + (data.detail || 'No se pudo aplicar la actualización'));
+    } else {
+      alert(
+        'Cartera actualizada en ' + data.duration + 's:\n' +
+        '  • ' + data.actualizados + ' cuentas existentes actualizadas\n' +
+        '  • ' + data.nuevos + ' cuentas nuevas insertadas\n' +
+        '  • Filas procesadas del archivo: ' + data.filas_archivo
+      );
+      location.reload();
+    }
+  } catch (e) {
+    alert('Error de conexión al subir el archivo. Verifica tu conexión.');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    document.getElementById('fileCarteraUpdate').value = '';
   }
 }
 </script>
