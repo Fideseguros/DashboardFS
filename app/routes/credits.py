@@ -66,14 +66,18 @@ def get_summary(_user=Depends(require_auth)):
     conn = get_connection()
     try:
         batch = "sync_batch_id = (SELECT id FROM sync_logs WHERE status='success' AND source='manual_upload' ORDER BY id DESC LIMIT 1)"
+        # Mora siguiendo política Fideseguros: > 30 días.
+        # Tasa promedio ponderada por saldo capital activo.
         row = conn.execute(f"""
             SELECT COUNT(*) as total,
                 SUM(CASE WHEN estado='ACTIVO' THEN 1 ELSE 0 END) as activos,
                 SUM(valor_credito) as valor_total,
+                SUM(CASE WHEN estado='ACTIVO' THEN saldo_capital ELSE 0 END) as saldo_capital_activo,
                 SUM(saldo_capital) as saldo_capital,
-                AVG(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN tasa_efectiva END) as tasa_promedio,
-                SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 0 THEN 1 ELSE 0 END) as en_mora_count,
-                SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 0 THEN saldo_capital ELSE 0 END) as en_mora_saldo
+                CAST(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN tasa_efectiva * saldo_capital ELSE 0 END) AS REAL) /
+                    NULLIF(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN saldo_capital ELSE 0 END), 0) as tasa_promedio,
+                SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 30 THEN 1 ELSE 0 END) as en_mora_count,
+                SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 30 THEN saldo_capital ELSE 0 END) as en_mora_saldo
             FROM credits WHERE {batch}
         """).fetchone()
         return dict(row) if row else {}
@@ -98,8 +102,18 @@ def export_csv(
         conn.close()
 
     ip = get_client_ip(request)
+    # Para trazabilidad bajo Habeas Data, registramos los IDs de los créditos
+    # exportados. Si son muchos, truncamos el listado y guardamos hash + rango
+    # para permitir reconstruir el set sin saturar audit_logs.
+    ids = [r['id'] for r in rows]
+    if len(ids) <= 200:
+        ids_str = ','.join(str(i) for i in ids)
+    else:
+        import hashlib
+        h = hashlib.sha256(','.join(str(i) for i in ids).encode()).hexdigest()[:16]
+        ids_str = f"hash={h} count={len(ids)} ids[0:20]={','.join(str(i) for i in ids[:20])}"
     log_audit(user["user_id"], user["username"], "csv_export",
-              f"filas={len(rows)} filtros={dict(request.query_params)}", ip)
+              f"filas={len(rows)} filtros={dict(request.query_params)} ids={ids_str}", ip)
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -130,18 +144,31 @@ def export_csv(
 @router.get("/{credit_id}/reveal")
 def reveal_credit(credit_id: int, request: Request,
                   user=Depends(require_superadmin)):
-    """Return full (decrypted) identificacion + cliente for one record. Superadmin only, audited."""
+    """Return full (decrypted) identificacion + cliente for one record.
+    Solo permite revelar registros del batch ACTIVO (último upload exitoso de
+    manual_upload). Bajo Habeas Data, no se exponen registros de cargas
+    históricas que ya no se muestran en el dashboard. Audited.
+    """
+    ip = get_client_ip(request)
     conn = get_connection()
     try:
-        row = conn.execute("SELECT id, identificacion, cliente FROM credits WHERE id = ?",
-                           (credit_id,)).fetchone()
+        # Restringe a batch activo
+        row = conn.execute(
+            "SELECT c.id, c.identificacion, c.cliente, c.sync_batch_id "
+            "FROM credits c WHERE c.id = ? AND c.sync_batch_id = "
+            "(SELECT id FROM sync_logs WHERE source='manual_upload' AND status='success' "
+            " ORDER BY id DESC LIMIT 1)",
+            (credit_id,)
+        ).fetchone()
     finally:
         conn.close()
     if not row:
-        return {}
-    ip = get_client_ip(request)
+        log_audit(user["user_id"], user["username"], "credit_reveal_denied",
+                  f"credit_id={credit_id} reason=not_in_active_batch", ip)
+        raise HTTPException(status_code=404,
+                            detail="Registro no disponible en la carga actual")
     log_audit(user["user_id"], user["username"], "credit_reveal",
-              f"credit_id={credit_id}", ip)
+              f"credit_id={credit_id} batch={row['sync_batch_id']}", ip)
     return {
         "id": row["id"],
         "identificacion": decrypt(row["identificacion"]),

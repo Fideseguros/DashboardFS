@@ -194,7 +194,7 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
                 UPDATE sync_logs SET status='failed', completed_at=?, error_message=? WHERE id=?
             """, (datetime.utcnow().isoformat(), f"{type(e).__name__}: {str(e)[:200]}", sync_id))
         log_audit(user["user_id"], user["username"], "financieros_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato del Estado de Resultados.")
 
 
 @router.get("/years")

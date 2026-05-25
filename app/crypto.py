@@ -69,12 +69,14 @@ def decrypt(value: str | None) -> str | None:
 
 
 def mask_identificacion(value: str | None) -> str:
+    """Enmascarar identificación. Uso `*` (ASCII) en lugar de `•` para
+    compatibilidad universal con Excel y CSV."""
     if not value:
         return ""
     s = str(value)
     if len(s) <= 5:
-        return "•" * len(s)
-    return f"{s[:2]}{'•' * (len(s) - 5)}{s[-3:]}"
+        return "*" * len(s)
+    return f"{s[:2]}{'*' * (len(s) - 5)}{s[-3:]}"
 
 
 def mask_cliente(value: str | None) -> str:

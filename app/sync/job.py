@@ -15,14 +15,21 @@ def _insert_credits(conn, records: list[dict], sync_id: int):
 
 
 def _cleanup_old_batches(conn, current_sync_id: int):
-    """Keep last 7 days of credit data and 30 days of logs."""
+    """Mantiene los últimos 7 días de datos de cartera (manual_upload) y 30
+    días de sync_logs. Filtra estrictamente por source='manual_upload' para
+    evitar eliminar datos de otros módulos (recaudo, solicitudes, etc.)."""
     conn.execute("""
         DELETE FROM credits WHERE sync_batch_id IN (
             SELECT id FROM sync_logs
-            WHERE id != ? AND started_at < datetime('now', '-7 days')
+            WHERE id != ?
+              AND source = 'manual_upload'
+              AND started_at < datetime('now', '-7 days')
         )
     """, (current_sync_id,))
-    conn.execute("DELETE FROM sync_logs WHERE started_at < datetime('now', '-30 days') AND status != 'running'")
+    conn.execute(
+        "DELETE FROM sync_logs WHERE source = 'manual_upload' "
+        "AND started_at < datetime('now', '-30 days') AND status != 'running'"
+    )
 
 
 def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:

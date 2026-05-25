@@ -167,9 +167,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     });
     const data = await res.json();
     if (!res.ok) {
-      err.textContent = data.detail || 'Credenciales invalidas';
+      err.textContent = data.detail || 'Credenciales inválidas';
       btn.disabled = false;
-      btn.textContent = 'Iniciar Sesion';
+      btn.textContent = 'Iniciar Sesión';
       return;
     }
     // Cookie is already set server-side (HttpOnly, Secure, SameSite=Strict).
@@ -178,7 +178,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
     sessionStorage.setItem('fide_role', data.role || '');
     window.location.href = '/';
   } catch (e) {
-    err.textContent = 'Error de conexion. Intenta de nuevo.';
+    err.textContent = 'Error de conexión. Intenta de nuevo.';
     btn.disabled = false;
     btn.textContent = 'Iniciar Sesion';
   }

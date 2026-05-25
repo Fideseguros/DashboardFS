@@ -353,7 +353,7 @@ body {
   border-radius: 10px;
   transition: all 0.25s;
 }
-.tab:hover { color: var(--fide-teal); background: var(--fide-mint-bg); }
+.tab:hover { color: var(--fide-teal); background: var(--fide-teal-tint); }
 .tab.active {
   background: var(--fide-teal);
   color: white;
@@ -691,11 +691,11 @@ body {
   letter-spacing: 0.3px;
 }
 .badge-activo { background: var(--fide-mint-light); color: var(--fide-teal-deeper); }
-.badge-cancelado { background: #fde8e8; color: #b33a3a; }
+.badge-cancelado { background: #fcf0dd; color: #b8680f; }
 .badge-a { background: var(--fide-mint-light); color: #006b5a; }
 .badge-b { background: #fff8d6; color: #7a6000; }
 .badge-c { background: #ffe8d6; color: #9a4800; }
-.badge-d { background: #fde8e8; color: #b33a3a; }
+.badge-d { background: #fcf0dd; color: #b8680f; }
 .badge-e { background: var(--fide-gray); color: #4a5568; }
 
 /* Pagination */
@@ -1959,7 +1959,7 @@ function updateCosecha() {
       labels: months,
       datasets: [
         { label:'Activos al día', data:months.map(m=>buckets[m].sano), backgroundColor:FIDE.teal+'cc', stack:'s', borderRadius:3 },
-        { label:'Mora 1-30', data:months.map(m=>buckets[m].mora1_30), backgroundColor:'#ecc94b'+'cc', stack:'s', borderRadius:3 },
+        { label:'Mora 1-30', data:months.map(m=>buckets[m].mora1_30), backgroundColor:'#c29200'+'cc', stack:'s', borderRadius:3 },
         { label:'Mora +30', data:months.map(m=>buckets[m].mora30plus), backgroundColor:FIDE.coral+'cc', stack:'s', borderRadius:3 },
         { label:'Cancelados', data:months.map(m=>buckets[m].cancelado), backgroundColor:FIDE.gray+'cc', stack:'s', borderRadius:3 }
       ]
@@ -2393,8 +2393,21 @@ function updateKPIs() {
   const act = d.filter(r => r.estado==='ACTIVO');
   const tVal = d.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
   const tSal = d.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
-  const tasas = d.map(r => parseFloat(r.tasa_efectiva)).filter(t => !isNaN(t) && t>0);
-  const tProm = tasas.length ? tasas.reduce((a,b)=>a+b,0)/tasas.length : 0;
+  // Saldo capital de cartera ACTIVA (denominador correcto para ICV y otras métricas).
+  const tSalActivo = act.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
+  // Tasa promedio PONDERADA por saldo capital activo (no media simple).
+  let sumWTasa = 0, sumWSaldo = 0;
+  act.forEach(r => {
+    const tasa = parseFloat(r.tasa_efectiva);
+    const saldo = parseFloat(r.saldo_capital) || 0;
+    if (!isNaN(tasa) && tasa > 0 && saldo > 0) {
+      sumWTasa += tasa * saldo;
+      sumWSaldo += saldo;
+    }
+  });
+  const tProm = sumWSaldo > 0 ? sumWTasa / sumWSaldo : 0;
+  // Rango de tasas (para sub-KPI informativo)
+  const tasasAct = act.map(r => parseFloat(r.tasa_efectiva)).filter(t => !isNaN(t) && t>0);
   // Política Fideseguros: mora real = más de 30 días vencidos
   const enMora = act.filter(r => (parseInt(r.dias_mora)||0) > 30);
   const sMora = enMora.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
@@ -2409,9 +2422,9 @@ function updateKPIs() {
   document.getElementById('kpiSaldo').textContent = fmtM(tSal);
   document.getElementById('kpiSaldoSub').textContent = pct(tSal, tVal) + ' del valor original';
   document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
-  document.getElementById('kpiTasaSub').textContent = `Rango: ${tasas.length?Math.min(...tasas).toFixed(1):0}% - ${tasas.length?Math.max(...tasas).toFixed(1):0}%`;
+  document.getElementById('kpiTasaSub').textContent = `Ponderada por saldo · Rango: ${tasasAct.length?Math.min(...tasasAct).toFixed(1):0}% - ${tasasAct.length?Math.max(...tasasAct).toFixed(1):0}%`;
   document.getElementById('kpiMora').textContent = fmt(enMora.length);
-  document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSal)}) · mora > 30 días`;
+  document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSalActivo)} del activo) · mora > 30 días`;
 
   // Ticket promedio = valor crédito promedio (todos los filtrados con valor > 0)
   const vals = d.map(r => parseFloat(r.valor_credito)).filter(v => !isNaN(v) && v>0);
@@ -2422,19 +2435,19 @@ function updateKPIs() {
   document.getElementById('kpiTicketSub').textContent = valsAct.length
     ? `Activos: ${fmtM(ticketAct)}` : `Sobre ${fmt(vals.length)} créditos`;
 
-  // ICV = saldo en mora > 30 días / saldo total activo
+  // ICV = saldo en mora > 30 días / saldo ACTIVO (no saldo total — corregido)
   const saldoMora30 = act
     .filter(r => (parseInt(r.dias_mora)||0) > 30)
     .reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
-  const icv = tSal > 0 ? (saldoMora30 / tSal) * 100 : 0;
+  const icv = tSalActivo > 0 ? (saldoMora30 / tSalActivo) * 100 : 0;
   const icvEl = document.getElementById('kpiICV');
   icvEl.textContent = icv.toFixed(2) + '%';
-  // Color cue: < 5% verde, 5-8% amarillo, > 8% rojo
+  // Color semaforico (paleta corporativa, sin rojo): < 5% teal · 5-8% ámbar · > 8% naranja oscuro
   let icvColor = '#00a79d';
   if (icv > 8) icvColor = '#b8680f';
-  else if (icv > 5) icvColor = '#b5990a';
+  else if (icv > 5) icvColor = '#c29200';
   icvEl.style.color = icvColor;
-  document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(saldoMora30)}`;
+  document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(saldoMora30)} / Activo: ${fmtM(tSalActivo)}`;
 
   // Desembolsos del Mes Actual (basados en fecha_desembolso del mes corriente)
   const now = new Date();
@@ -2681,9 +2694,12 @@ function updateCharts() {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins: {
-        legend:{ position:'top', onClick: legendFilter('mora'), labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
+        // No usamos legendFilter aquí: la leyenda muestra nombres de datasets
+        // ('Saldo Capital', '# Créditos'), no rangos de mora. Para filtrar
+        // por rango, el usuario debe hacer clic directamente en una barra.
+        legend:{ position:'top', labels:{ usePointStyle:true, pointStyle:'circle', font:{ weight:700 } } },
         datalabels:{ display:false },
-        tooltip: { callbacks: { footer: () => moraSaldoActive ? 'Clic para quitar filtro' : 'Clic para filtrar por rango de mora' } }
+        tooltip: { callbacks: { footer: () => moraSaldoActive ? 'Clic en la barra para quitar filtro' : 'Clic en una barra para filtrar por rango de mora' } }
       },
       scales: {
         y: { beginAtZero:true, position:'left', title:{ display:true, text:'Saldo ($)', font:{ weight:700 } }, ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } },
@@ -2984,32 +3000,6 @@ async function renderUploadStatus(modulo) {
   }
 }
 
-async function uploadLegacy(modulo, file) {
-  if (!file) return;
-  if (!confirm(`Vas a cargar el archivo HISTÓRICO de la plataforma anterior para "${modulo}". Esto reemplazará el histórico previo. ¿Continuar?`)) {
-    document.getElementById(modulo === 'recaudo' ? 'fileRecaudoLegacy' : 'fileSolicLegacy').value = '';
-    return;
-  }
-  const fd = new FormData(); fd.append('file', file);
-  try {
-    const res = await fetch(`/api/${modulo}/upload-legacy`, {
-      method: 'POST', body: fd, credentials: 'same-origin'
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
-      return;
-    }
-    const msg = modulo === 'recaudo'
-      ? `Histórico cargado: ${data.prestamos} préstamos (de ${data.filas_origen} pagos)`
-      : `Histórico cargado: ${data.records} solicitudes`;
-    alert(msg);
-    if (modulo === 'recaudo') loadRecaudo();
-    else if (modulo === 'solicitudes') loadSolicitudes();
-  } catch(e) {
-    alert('Error de conexión al subir el archivo');
-  }
-}
 
 // ---------- RECAUDO ----------
 let _rcCharts = {};
@@ -3130,7 +3120,7 @@ async function loadRecaudo() {
         </tr>
       `).join('');
       if (!lLeg.length) {
-        tbLeg.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado. Como superadmin, sube el "Informe de Pagos plataforma anterior" desde el botón "Subir Histórico".</td></tr>';
+        tbLeg.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado en la base de datos.</td></tr>';
       }
     }
   } catch(e) {
@@ -3872,7 +3862,8 @@ function updateAggTables() {
     g.saldo += parseFloat(r.saldo_capital) || 0;
     const dm = parseInt(r.dias_mora) || 0;
     if (dm > g.moraMax) g.moraMax = dm;
-    if (dm > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+    // Política Fideseguros: mora real = > 30 días
+    if (dm > 30) g.saldoMora += parseFloat(r.saldo_capital) || 0;
   });
   const topCli = Object.values(byCli).sort((a, b) => b.saldo - a.saldo).slice(0, 20);
   const tbCli = document.querySelector('#tblTopClientes tbody');
@@ -3885,7 +3876,7 @@ function updateAggTables() {
         <td class="num">${fmt(c.count)}</td>
         <td class="num">${fmtCurrency(c.valor)}</td>
         <td class="num">${fmtCurrency(c.saldo)}</td>
-        <td class="num" style="color:${c.moraMax > 0 ? '#b8680f' : '#0f7b6c'};font-weight:800;">${fmt(c.moraMax)}</td>
+        <td class="num" style="color:${c.moraMax > 30 ? '#b8680f' : '#0f7b6c'};font-weight:800;">${fmt(c.moraMax)}</td>
         <td class="num">${c.saldoMora > 0 ? fmtCurrency(c.saldoMora) : '-'}</td>
       </tr>
     `).join('');
@@ -3904,7 +3895,7 @@ function updateAggTables() {
     if (r.estado === 'ACTIVO') {
       g.activos++;
       g.saldoActSum += parseFloat(r.saldo_capital) || 0;
-      if ((parseInt(r.dias_mora) || 0) > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+      if ((parseInt(r.dias_mora) || 0) > 30) g.saldoMora += parseFloat(r.saldo_capital) || 0;
     }
   });
   const topAli = Object.values(byAliado).sort((a, b) => b.valor - a.valor).slice(0, 20);
@@ -3939,7 +3930,7 @@ function updateAggTables() {
     g.saldo += parseFloat(r.saldo_capital) || 0;
     if (r.estado === 'ACTIVO') {
       g.saldoActSum += parseFloat(r.saldo_capital) || 0;
-      if ((parseInt(r.dias_mora) || 0) > 0) g.saldoMora += parseFloat(r.saldo_capital) || 0;
+      if ((parseInt(r.dias_mora) || 0) > 30) g.saldoMora += parseFloat(r.saldo_capital) || 0;
     }
   });
   const topCiu = Object.values(byCiu).sort((a, b) => b.valor - a.valor).slice(0, 20);

@@ -269,7 +269,7 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
         _log.exception("recaudo_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "recaudo_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @recaudo.get("")
@@ -360,7 +360,10 @@ def _aggregate_pagos_legacy(rows: list[tuple]) -> list[dict]:
         entry['valor_pago_total'] += _to_float(get(17)) or 0
         entry['iva_pagado_total'] += _to_float(get(20)) or 0
         entry['cargos_netos_total'] += _to_float(get(21)) or 0
-        # "Interes Mora" sale en col 15 (tipo_pago) — sumar valor de pago cuando aplique
+        # En el Excel legacy cada fila representa UN componente de pago de una
+        # transacción (col 15 = tipo: 'Capital', 'Interes Mora', etc.; col 17 =
+        # valor de ese componente específico). Cuando tipo es Interes Mora,
+        # col 17 ES exclusivamente el valor del interés mora pagado.
         tipo = (_str_or_none(get(15)) or '').lower()
         if 'mora' in tipo:
             entry['interes_mora_total'] += _to_float(get(17)) or 0
@@ -420,12 +423,18 @@ async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmi
         _log.exception("recaudo_legacy_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "recaudo_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo histórico. Detalle: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo.")
 
 
 @recaudo.get("/legacy")
 def recaudo_legacy_list(_user=Depends(require_auth)):
-    """Devuelve los pagos legacy agregados por id_prestamo."""
+    """Devuelve los pagos legacy agregados por id_prestamo.
+
+    Acceso: cualquier rol autenticado. PII (identificación, nombre) viene
+    enmascarada con mask_identificacion/mask_cliente. No existe endpoint
+    de reveal para datos legacy, por lo cual no hay riesgo de fuga PII
+    completo desde este endpoint.
+    """
     conn = get_connection()
     try:
         rows = conn.execute("SELECT * FROM pagos_legacy ORDER BY valor_pago_total DESC").fetchall()
@@ -528,7 +537,7 @@ async def solic_upload(request: Request, user=Depends(require_superadmin), file:
         _log.exception("solicitudes_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "solicitudes_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @solicitudes.get("")
@@ -653,7 +662,7 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
         _log.exception("solicitudes_legacy_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo histórico. Detalle: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo.")
 
 
 @solicitudes.get("/combined")
@@ -793,7 +802,7 @@ async def jur_upload(request: Request, user=Depends(require_superadmin), file: U
         _log.exception("juridico_upload failed")
         _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
         log_audit(user["user_id"], user["username"], "juridico_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail=f"No se pudo importar el archivo. Detalle: {type(e).__name__}: {str(e)[:200]}")
+        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @juridico.get("")
@@ -826,9 +835,22 @@ def jur_list(user=Depends(require_superadmin)):
             )
         """).fetchall()
 
+        def _norm_id(v):
+            """Normaliza identificación para hacer match robusto.
+            Strip whitespace, remove leading zeros, remove non-digit chars (.,-)."""
+            if not v:
+                return None
+            s = str(v).strip()
+            # Quitar caracteres no numéricos comunes (puntos de miles, guiones)
+            s = re.sub(r'[\s.\-,]', '', s)
+            # Quitar ceros iniciales (preserva "0" como caso especial)
+            s = s.lstrip('0') or s
+            return s if s else None
+
         cartera_idx = {}
         for c in credit_rows:
-            ident = decrypt(c["identificacion"])
+            ident_raw = decrypt(c["identificacion"])
+            ident = _norm_id(ident_raw)
             if not ident:
                 continue
             # Un cliente puede tener varios créditos: agregamos saldo, máx mora.
@@ -865,8 +887,8 @@ def jur_list(user=Depends(require_superadmin)):
             d = dict(r)
             d['identificacion'] = decrypt(d.get('identificacion'))
             d['nombre'] = decrypt(d.get('nombre'))
-            # Cruce
-            cartera = cartera_idx.get(str(d['identificacion']) if d['identificacion'] else None)
+            # Cruce con identificación normalizada (lstrip ceros, sin guiones/puntos)
+            cartera = cartera_idx.get(_norm_id(d.get('identificacion')))
             if cartera:
                 d['cartera_creditos_total'] = cartera['creditos_total']
                 d['cartera_creditos_activos'] = cartera['creditos_activos']
