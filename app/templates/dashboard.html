@@ -285,14 +285,17 @@ body {
 /* =================== KPIs =================== */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  /* Auto-fit hace que cuando hay 9 cards en una pantalla ancha queden 5+4
+   * (disproporcionado). Forzamos columnas más pequeñas para que quepan más
+   * por fila y los rows queden equilibrados visualmente. */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
 }
 .kpi-card {
   background: var(--card);
   border-radius: 8px;
-  padding: 1.1rem 1.25rem 1rem;
+  padding: 0.75rem 0.9rem 0.7rem;
   border: 1px solid #E1DFDD;
   border-left: 3px solid var(--fide-teal);
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
@@ -363,15 +366,15 @@ body {
   border-color: transparent transparent var(--fide-black) transparent;
 }
 .kpi-icon {
-  width: 36px; height: 36px;
-  border-radius: 8px;
+  width: 28px; height: 28px;
+  border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.45rem;
   background: var(--fide-teal-tint);
   color: var(--fide-teal-dark);
 }
 .kpi-icon svg {
-  width: 20px; height: 20px;
+  width: 16px; height: 16px;
   stroke: currentColor;
   stroke-width: 1.75;
   fill: none;
@@ -385,15 +388,15 @@ body {
 .kpi-card.coral .kpi-icon  { background: #fcf0dd;                  color: var(--fide-coral); }
 .kpi-card.magenta .kpi-icon{ background: #f1e4ec;                  color: var(--fide-magenta); }
 .kpi-label {
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: 0.6px;
   color: var(--text-secondary);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.1rem;
 }
 .kpi-value {
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   font-weight: 900;
   color: var(--fide-teal-deeper);
   line-height: 1.1;
@@ -402,10 +405,11 @@ body {
 .kpi-card.coral .kpi-value { color: #b8680f; }
 .kpi-card.yellow .kpi-value { color: #8a7200; }
 .kpi-sub {
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   color: var(--text-secondary);
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
   font-weight: 600;
+  line-height: 1.25;
 }
 
 /* =================== APP SHELL (sidebar + main) =================== */
@@ -1045,19 +1049,28 @@ body {
   .header-right > div { margin: 0 !important; }
 
   .filters {
-    padding: 0.7rem 0.8rem;
-    gap: 0.5rem;
+    padding: 0.6rem 0.7rem;
+    gap: 0.4rem 0.5rem;
     overflow-x: hidden;
+    /* Grid para que en móvil queden 2 filtros por fila siempre */
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
-  .filter-group { flex: 1 1 45%; min-width: 0; }
-  .filter-group label { font-size: 0.62rem; }
+  .filter-group { min-width: 0; }
+  .filter-group label {
+    font-size: 0.58rem;
+    margin-bottom: 0.15rem;
+    letter-spacing: 0.4px;
+  }
   .filter-group select, .filter-group input {
     min-width: 0;
     width: 100%;
-    padding: 0.4rem 0.5rem;
+    padding: 0.38rem 0.5rem;
     font-size: 0.78rem;
+    border-width: 1.5px;
   }
-  .filters > div[style] { flex: 1 1 100% !important; justify-content: flex-end; }
+  /* El botón Limpiar va a ancho completo en su propia fila */
+  .filters > div[style] { grid-column: 1 / -1; justify-content: flex-end; }
 
   .container { padding: 0.8rem 0.7rem; max-width: 100%; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 0.7rem; }
@@ -1128,7 +1141,8 @@ body {
   .kpi-value { font-size: 1.1rem; }
   .kpi-label { font-size: 0.62rem; }
   .kpi-sub { font-size: 0.6rem; }
-  .filter-group { flex: 1 1 100%; }
+  /* En pantallas muy estrechas (≤480px), filtros a 1 columna */
+  .filters { grid-template-columns: 1fr; }
 }
 
 /* Tooltip KPI: ajustar ancho/posición en móvil para no cortarse */
@@ -1154,17 +1168,6 @@ body {
 </head>
 <body>
 
-<!-- Mobile topbar (solo visible en celular): hamburguesa + Salir -->
-<div class="mobile-topbar">
-  <div class="menu-side">
-    <button class="sidebar-toggle" id="btnMenu" aria-label="Men&uacute;" onclick="toggleSidebar()">
-      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <span class="menu-label">Men&uacute;</span>
-  </div>
-  <button class="btn-salir" onclick="doLogout()">Salir</button>
-</div>
-
 <div class="header">
   <div class="header-left">
     <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-logo">
@@ -1179,6 +1182,17 @@ body {
       <button onclick="doLogout()" class="header-btn">Salir</button>
     </div>
   </div>
+</div>
+
+<!-- Mobile topbar (solo visible en celular): hamburguesa + Salir, DEBAJO del header verde -->
+<div class="mobile-topbar">
+  <div class="menu-side">
+    <button class="sidebar-toggle" id="btnMenu" aria-label="Men&uacute;" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="menu-label">Men&uacute;</span>
+  </div>
+  <button class="btn-salir" onclick="doLogout()">Salir</button>
 </div>
 
 <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
@@ -1263,10 +1277,6 @@ body {
   <div class="filter-group">
     <label>Aliado / Vendedor</label>
     <select id="fAliado"><option value="">Todos</option></select>
-  </div>
-  <div class="filter-group">
-    <label>Ciudad</label>
-    <select id="fCiudad"><option value="">Todas</option></select>
   </div>
   <div class="filter-group">
     <label>Mora (d&iacute;as)</label>
@@ -1506,10 +1516,6 @@ body {
       <div class="chart-card">
         <h3><span class="dot"></span> Top 15 Aliados por N&uacute;mero de Cr&eacute;ditos</h3>
         <div class="chart-container tall"><canvas id="chartAliadosCount"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3><span class="dot"></span> Top 15 Ciudades</h3>
-        <div class="chart-container tall"><canvas id="chartCiudades"></canvas></div>
       </div>
       <div class="chart-card full">
         <h3><span class="dot"></span> Saldo en Mora por Intermediario <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(mora &gt; 30 d&iacute;as)</span></h3>
@@ -2517,7 +2523,7 @@ function legendFilter(dimension) {
 // Supported filter dimensions from chart clicks
 const FILTER_LABELS = {
   estado: 'Estado', linea: 'Línea', calificacion: 'Calificación',
-  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado', ciudad: 'Ciudad'
+  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado'
 };
 
 function toggleChartFilter(dimension, value) {
@@ -2562,7 +2568,6 @@ function matchesChartFilters(r) {
     if (dim === 'linea' && r.linea !== val) return false;
     if (dim === 'calificacion' && (r.calificacion||'').trim() !== val) return false;
     if (dim === 'aliado' && r.aliado !== val) return false;
-    if (dim === 'ciudad' && r.ciudad !== val) return false;
     if (dim === 'mora') {
       const mr = getMoraRange(r.dias_mora);
       if (mr !== val) return false;
@@ -2600,7 +2605,7 @@ function populateFilters() {
       const o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
     });
   };
-  add('fLinea','linea'); add('fAliado','aliado'); add('fCiudad','ciudad');
+  add('fLinea','linea'); add('fAliado','aliado');
 }
 
 function _periodoRange() {
@@ -2631,7 +2636,6 @@ function applyFilters() {
     linea: document.getElementById('fLinea').value,
     calif: document.getElementById('fCalif').value,
     aliado: document.getElementById('fAliado').value,
-    ciudad: document.getElementById('fCiudad').value,
     mora: document.getElementById('fMora').value
   };
   // Toggle visibility of custom range inputs
@@ -2653,7 +2657,6 @@ function applyFilters() {
     if (f.linea && r.linea !== f.linea) return false;
     if (f.calif && (r.calificacion||'').trim() !== f.calif) return false;
     if (f.aliado && r.aliado !== f.aliado) return false;
-    if (f.ciudad && r.ciudad !== f.ciudad) return false;
     if (f.mora) {
       const dm = parseInt(r.dias_mora)||0;
       if (f.mora==='0' && dm!==0) return false;
@@ -2673,7 +2676,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  ['fEstado','fLinea','fCalif','fAliado','fCiudad','fMora'].forEach(id => document.getElementById(id).value = '');
+  ['fEstado','fLinea','fCalif','fAliado','fMora'].forEach(id => document.getElementById(id).value = '');
   const per = document.getElementById('fPeriodo'); if (per) per.value = 'all';
   const f1 = document.getElementById('fFrom'); if (f1) f1.value = '';
   const f2 = document.getElementById('fTo'); if (f2) f2.value = '';
@@ -3039,20 +3042,6 @@ function updateCharts() {
     plugins: [ChartDataLabels]
   });
 
-  destroyChart('chartCiudades');
-  const cC = countBy(d,'ciudad');
-  const topC = Object.entries(cC).sort((a,b)=>b[1]-a[1]).slice(0,15);
-  charts.chartCiudades = new Chart(document.getElementById('chartCiudades'), {
-    type:'bar',
-    data: { labels:topC.map(c=>c[0]), datasets:[{ label:'# Créditos', data:topC.map(c=>c[1]), backgroundColor:CHART_COLORS, borderRadius:8 }] },
-    options: {
-      indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins: { legend:{ display:false }, datalabels:{ anchor:'end', align:'right', color:'#1a1a1a', font:{ size:11, weight:800 } } },
-      scales: { x:{ beginAtZero:true, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } }
-    },
-    plugins: [ChartDataLabels]
-  });
-
   // Saldo en Mora por Intermediario (mora > 30 días)
   destroyChart('chartMoraIntermediario');
   const moraIntMap = {};
@@ -3164,7 +3153,7 @@ async function exportCSV() {
     try {
       const q = new URLSearchParams();
       const mapping = { estado:'fEstado', linea:'fLinea', calificacion:'fCalif',
-                        aliado:'fAliado', ciudad:'fCiudad' };
+                        aliado:'fAliado' };
       for (const [k, id] of Object.entries(mapping)) {
         const v = document.getElementById(id)?.value;
         if (v) q.append(k, v);
@@ -4167,7 +4156,7 @@ document.querySelectorAll('.data-table th').forEach(th=>{
 // ---- INIT ----
 function updateAll() { updateKPIs(); updateCharts(); updateTable(); updateAggTables(); }
 
-// ---- Tablas agregadas (Top Clientes / Aliados / Ciudades) ----
+// ---- Tablas agregadas (Top Clientes / Aliados) ----
 function _moraColor(pct) {
   if (pct < 5) return { bg: '#dbffe6', fg: '#008f87' };
   if (pct < 10) return { bg: '#fff6c9', fg: '#8a7200' };
@@ -4247,40 +4236,6 @@ function updateAggTables() {
     }).join('');
     if (!topAli.length) tbAli.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos</td></tr>';
   }
-
-  // Top Ciudades
-  const byCiu = {};
-  d.forEach(r => {
-    const k = r.ciudad || 'N/A';
-    if (!byCiu[k]) byCiu[k] = { name: k, count: 0, valor: 0, saldo: 0, saldoMora: 0, saldoActSum: 0 };
-    const g = byCiu[k];
-    g.count++;
-    g.valor += parseFloat(r.valor_credito) || 0;
-    g.saldo += parseFloat(r.saldo_capital) || 0;
-    if (r.estado === 'ACTIVO') {
-      g.saldoActSum += parseFloat(r.saldo_capital) || 0;
-      if ((parseInt(r.dias_mora) || 0) > 30) g.saldoMora += parseFloat(r.saldo_capital) || 0;
-    }
-  });
-  const topCiu = Object.values(byCiu).sort((a, b) => b.valor - a.valor).slice(0, 20);
-  const tbCiu = document.querySelector('#tblCiudades tbody');
-  if (tbCiu) {
-    tbCiu.innerHTML = topCiu.map((g, i) => {
-      const moraPct = g.saldoActSum > 0 ? (g.saldoMora / g.saldoActSum) * 100 : 0;
-      const c = _moraColor(moraPct);
-      return `
-        <tr>
-          <td class="rank">${i + 1}</td>
-          <td>${g.name}</td>
-          <td class="num">${fmt(g.count)}</td>
-          <td class="num">${fmtCurrency(g.valor)}</td>
-          <td class="num">${fmtCurrency(g.saldo)}</td>
-          <td class="num"><span class="mora-pill" style="background:${c.bg};color:${c.fg};">${moraPct.toFixed(1)}%</span></td>
-        </tr>
-      `;
-    }).join('');
-    if (!topCiu.length) tbCiu.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos</td></tr>';
-  }
 }
 document.querySelectorAll('.filters select').forEach(sel=>sel.addEventListener('change', applyFilters));
 document.querySelectorAll('.filters input[type="date"]').forEach(inp=>inp.addEventListener('change', applyFilters));
@@ -4303,7 +4258,6 @@ function registerChartClicks() {
   addChartClick('chartMoraSaldo', 'mora');
   addChartClick('chartAliados', 'aliado');
   addChartClick('chartAliadosCount', 'aliado');
-  addChartClick('chartCiudades', 'ciudad');
   addChartClick('chartMoraIntermediario', 'aliado');
 }
 // Re-register clicks after charts are rebuilt
