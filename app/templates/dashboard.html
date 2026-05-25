@@ -354,11 +354,16 @@ body {
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   transition: box-shadow 0.2s, transform 0.2s;
   position: relative;
+  z-index: 1;
 }
 .kpi-card::after { content: none; }
-.kpi-card:hover {
+.kpi-card:hover,
+.kpi-card:focus-within {
   transform: translateY(-1px);
   box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+  /* Subir la card por encima de sus vecinas para que el tooltip
+   * no quede oculto detrás del KPI siguiente. */
+  z-index: 50;
 }
 .kpi-card.mint { border-left-color: var(--fide-mint); }
 .kpi-card.blue { border-left-color: var(--fide-blue); }
