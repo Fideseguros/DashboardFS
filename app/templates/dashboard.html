@@ -1707,11 +1707,7 @@ body {
       </div>
     </div>
     <div class="charts-grid">
-      <div class="chart-card">
-        <h3><span class="dot"></span> Recaudo por Canal</h3>
-        <div class="chart-container"><canvas id="chartRcCanal"></canvas></div>
-      </div>
-      <div class="chart-card">
+      <div class="chart-card full">
         <h3><span class="dot"></span> Top 10 Aliados por Recaudo</h3>
         <div class="chart-container"><canvas id="chartRcAliado"></canvas></div>
       </div>
@@ -3363,24 +3359,8 @@ async function loadRecaudo() {
       }
     }
 
-    // Chart canal
+    // Destroy previous charts before re-rendering
     Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); });
-    _rcCharts.canal = new Chart(document.getElementById('chartRcCanal'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Efectivo', 'Cheque', 'Tarjeta', 'Interno'],
-        datasets: [{
-          data: [s.efectivo||0, s.cheque||0, s.tarjeta||0, s.interno||0],
-          backgroundColor: [FIDE.teal, FIDE.tealDark, FIDE.blue, FIDE.gray],
-          borderWidth: 3, borderColor: '#fff'
-        }]
-      },
-      options: { responsive:true, maintainAspectRatio:false, cutout:'62%',
-        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:11 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
-          formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t&&v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } }
-      },
-      plugins: [ChartDataLabels]
-    });
 
     // Top aliados
     const aliMap = {};

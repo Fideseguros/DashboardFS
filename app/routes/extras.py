@@ -55,19 +55,23 @@ def _upload_status_for(sources: list[str]) -> dict:
 # ============================================================
 recaudo = APIRouter(prefix="/api/recaudo", tags=["recaudo"])
 
-# Mapeo columna Excel -> campo BD (formato detallado, 28 cols).
-# Origen: 'Informe de pagos plataforma nueva.xlsx' (IngresosDesembolso-Pagos).
-PAGOS_COL_MAP_DETALLADO = {
-    0: ('entidad', _str_or_none),
-    1: ('linea_credito', _str_or_none),
-    2: ('fecha_movimiento', _to_date),
-    3: ('fecha_documento', _to_date),
-    4: ('identificacion', None),  # cifrado abajo
-    5: ('cliente', None),         # cifrado
-    6: ('cuenta', _str_or_none),
-    7: ('solicitud', _str_or_none),
-    8: ('aliado', _str_or_none),
-    9: ('tipo_mvto', _str_or_none),
+# Mapeo columna Excel -> campo BD.
+# Origen: 'Informe Pagos Nueva Plataforma.xlsx' (30 cols).
+# Cols 18 (Retencion En La Fuente) y 21 (Deudores Varios) son nuevas vs el
+# formato anterior — los índices siguientes están corridos por 2.
+# total_cheque/efectivo/tarjeta/interno se IGNORAN por solicitud explícita
+# (no relevantes para el análisis).
+PAGOS_COL_MAP = {
+    0:  ('entidad', _str_or_none),
+    1:  ('linea_credito', _str_or_none),
+    2:  ('fecha_movimiento', _to_date),
+    3:  ('fecha_documento', _to_date),
+    4:  ('identificacion', None),       # cifrado abajo
+    5:  ('cliente', None),              # cifrado
+    6:  ('cuenta', _str_or_none),
+    7:  ('solicitud', _str_or_none),
+    8:  ('aliado', _str_or_none),
+    9:  ('tipo_mvto', _str_or_none),
     10: ('tipo_documento', _str_or_none),
     11: ('documento', _str_or_none),
     12: ('usuario', _str_or_none),
@@ -75,50 +79,21 @@ PAGOS_COL_MAP_DETALLADO = {
     15: ('interes_corriente', _to_float),
     16: ('interes_mora', _to_float),
     17: ('iva', _to_float),
-    18: ('saldo_favor', _to_float),
-    19: ('gastos_pj', _to_float),
-    20: ('cargos_admin', _to_float),
-    21: ('total', _to_float),
-    22: ('total_cheque', _to_float),
-    23: ('total_efectivo', _to_float),
-    24: ('total_tarjeta', _to_float),
-    25: ('total_interno', _to_float),
-    26: ('autorizacion', _str_or_none),
-    27: ('observaciones', _str_or_none),
-}
-
-# Mapeo del formato simplificado (9 cols).
-# Origen: 'Informe pagos nueva plataforma.xlsx'
-# Headers: Gestor | Producto | Nombre Producto | Credito | Identificacion | Cliente | Estado | Recaudo | Valor Pago
-PAGOS_COL_MAP_SIMPLE = {
-    0: ('aliado', _str_or_none),           # Gestor
-    2: ('linea_credito', _str_or_none),    # Nombre Producto (descriptivo)
-    3: ('cuenta', _str_or_none),           # Credito
-    4: ('identificacion', None),           # cifrado
-    5: ('cliente', None),                  # cifrado
-    6: ('tipo_mvto', _str_or_none),        # Estado (Normal / Anormal / etc.)
-    7: ('fecha_movimiento', _to_date),     # Recaudo (fecha de pago)
-    8: ('total', _to_float),               # Valor Pago
+    # 18: 'Retencion En La Fuente' (no se almacena, no se analiza)
+    19: ('saldo_favor', _to_float),
+    20: ('gastos_pj', _to_float),
+    # 21: 'Deudores Varios' (no se almacena)
+    22: ('cargos_admin', _to_float),
+    23: ('total', _to_float),
+    # 24-27: total_cheque/efectivo/tarjeta/interno → IGNORADOS por solicitud
+    28: ('autorizacion', _str_or_none),
+    29: ('observaciones', _str_or_none),
 }
 
 
-def _detect_pagos_schema(rows: list[tuple]) -> dict:
-    """Detecta el esquema según el header row.
-
-    Devuelve PAGOS_COL_MAP_SIMPLE para formato nuevo (9 cols, header con
-    'Gestor' + 'Valor Pago') o PAGOS_COL_MAP_DETALLADO para el legacy (28 cols).
-    Fallback al detallado si no se reconoce."""
-    if not rows or not rows[0]:
-        return PAGOS_COL_MAP_DETALLADO
-    header = [str(c).strip().lower() if c else '' for c in rows[0]]
-    if 'gestor' in header and any('valor pago' in h for h in header):
-        return PAGOS_COL_MAP_SIMPLE
-    return PAGOS_COL_MAP_DETALLADO
-
-
-def _transform_pago_row(row: tuple, col_map: dict) -> dict | None:
+def _transform_pago_row(row: tuple) -> dict | None:
     rec = {}
-    for idx, (key, parser) in col_map.items():
+    for idx, (key, parser) in PAGOS_COL_MAP.items():
         val = row[idx] if idx < len(row) else None
         if key == 'identificacion':
             v = _str_or_none(val); rec[key] = encrypt(v) if v else None
@@ -138,10 +113,7 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
         rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
-        col_map = _detect_pagos_schema(rows)
-        schema_name = 'simple' if col_map is PAGOS_COL_MAP_SIMPLE else 'detallado'
-        records = [r for r in (_transform_pago_row(row, col_map) for row in rows[1:]) if r]
-        ctx.set_audit_extra(f"schema={schema_name}")
+        records = [r for r in (_transform_pago_row(row) for row in rows[1:]) if r]
 
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
@@ -185,11 +157,7 @@ def recaudo_summary(_user=Depends(require_auth)):
                 COALESCE(SUM(total),0) as recaudo_total,
                 COALESCE(SUM(capital),0) as capital_total,
                 COALESCE(SUM(interes_corriente),0) as interes_corr,
-                COALESCE(SUM(interes_mora),0) as interes_mora,
-                COALESCE(SUM(total_efectivo),0) as efectivo,
-                COALESCE(SUM(total_cheque),0) as cheque,
-                COALESCE(SUM(total_tarjeta),0) as tarjeta,
-                COALESCE(SUM(total_interno),0) as interno
+                COALESCE(SUM(interes_mora),0) as interes_mora
             FROM pagos WHERE sync_batch_id = {batch}
         """).fetchone()
         return dict(row) if row else {}
