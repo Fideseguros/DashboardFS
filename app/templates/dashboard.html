@@ -207,6 +207,70 @@ body {
   padding: 1.8rem 2rem;
   min-width: 0;
 }
+
+/* Cartera-scope: contenidos que solo aplican al grupo "cartera".
+ * Se ocultan en el resto de módulos. */
+.app-main:not([data-active-group="cartera"]) .cartera-scope { display: none !important; }
+
+/* Module header (título + upload + estado) — patrón reutilizable por módulo */
+.module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 1.2rem;
+}
+.module-title {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.module-title svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0.35rem;
+  background: var(--fide-teal-tint);
+  border-radius: 8px;
+  fill: none;
+  stroke: var(--fide-teal-deeper);
+  stroke-width: 2;
+  box-sizing: content-box;
+}
+.module-title h2 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--fide-teal-deeper);
+  margin: 0;
+  letter-spacing: 0.3px;
+}
+.module-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+.module-meta strong { color: var(--fide-teal-deeper); }
+.module-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 600px) {
+  .module-header { padding: 0.7rem 0.8rem; }
+  .module-title h2 { font-size: 0.9rem; }
+  .module-meta { font-size: 0.7rem; gap: 0.15rem 0.7rem; }
+}
 /* Garantizar que el grid de charts y los charts mismos nunca desborden su contenedor */
 .charts-grid { min-width: 0; }
 .charts-grid > * { min-width: 0; max-width: 100%; }
@@ -1061,13 +1125,9 @@ body {
     </div>
   </div>
   <div class="header-right">
-    <div><strong>Actualizado:</strong> <span id="lastSync">&mdash;</span></div>
-    <div><strong>Registros:</strong> <span id="totalRecords">-</span></div>
     <div class="header-actions">
       <span id="userName" style="font-weight:700;"></span>
-      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;" class="header-btn">Subir Excel</button>
       <button onclick="doLogout()" class="header-btn">Salir</button>
-      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
     </div>
   </div>
 </div>
@@ -1117,9 +1177,9 @@ body {
   </div>
 </aside>
 
-<main class="app-main">
+<main class="app-main" id="appMain" data-active-group="cartera">
 
-<div class="filters">
+<div class="filters cartera-scope">
   <div class="filter-group">
     <label>Per&iacute;odo (Fecha Desembolso)</label>
     <select id="fPeriodo">
@@ -1174,19 +1234,38 @@ body {
   </div>
   <div style="display:flex;gap:0.5rem;align-items:flex-end;padding-top:0.5rem;">
     <button class="btn btn-reset" onclick="resetFilters()">Limpiar</button>
-    <button class="btn btn-export" id="btnExport" onclick="exportCSV()">Exportar CSV</button>
   </div>
 </div>
 
 <div class="container">
   <!-- Chart cross-filter banner -->
-  <div class="chart-filters-bar" id="chartFilterBar">
+  <div class="chart-filters-bar cartera-scope" id="chartFilterBar">
     <span class="cflabel">Filtros activos:</span>
     <div id="chartFilterChips"></div>
     <button class="chip-clear" onclick="clearAllChartFilters()">Limpiar todo</button>
   </div>
+
+  <!-- Module header de Cartera: upload + estado (solo visible en grupo cartera) -->
+  <div class="module-header cartera-scope">
+    <div class="module-title">
+      <svg viewBox="0 0 24 24"><path d="M3 12l2-2 4 4 8-8 4 4"/><path d="M3 20h18"/></svg>
+      <div>
+        <h2>Cartera de Cr&eacute;ditos</h2>
+        <div class="module-meta">
+          <span><strong>Actualizado:</strong> <span id="lastSync">&mdash;</span></span>
+          <span><strong>Registros:</strong> <span id="totalRecords">-</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="module-actions">
+      <button id="btnUpload" onclick="document.getElementById('fileExcel').click()" style="display:none;" class="btn btn-export admin-only">Subir Excel Cartera</button>
+      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
+      <button class="btn btn-export" id="btnExport" onclick="exportCSV()">Exportar CSV</button>
+    </div>
+  </div>
+
   <!-- KPIs -->
-  <div class="kpi-grid">
+  <div class="kpi-grid cartera-scope">
     <div class="kpi-card teal">
       <div class="kpi-info">i<span class="kpi-tooltip">Cantidad total de cr&eacute;ditos registrados en el per&iacute;odo filtrado (activos + cancelados).</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 14h3M7 18h1"/></svg></div>
@@ -1252,7 +1331,7 @@ body {
     </div>
   </div>
 
-  <div class="cross-filter-hint">
+  <div class="cross-filter-hint cartera-scope">
     <span>&#128161;</span> Haz clic en cualquier gr&aacute;fica para filtrar din&aacute;micamente. Vuelve a hacer clic para quitar el filtro.
   </div>
 
@@ -3083,6 +3162,9 @@ function activateTab(tab) {
     const el = document.getElementById('tab-' + name);
     if (el) el.classList.add('active');
   });
+  // Notificar al main qué grupo está activo (drive el .cartera-scope CSS)
+  const main = document.getElementById('appMain');
+  if (main) main.dataset.activeGroup = tab.dataset.group || '';
   setTimeout(() => Object.values(charts).forEach(c => c.resize()), 50);
   // Carga bajo demanda según el tab
   const tabName = tab.dataset.tab;
