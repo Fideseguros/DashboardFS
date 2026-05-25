@@ -568,84 +568,6 @@ body {
   cursor: help;
 }
 
-/* ============= Métricas Clave (Nubank-style) ============= */
-.metric-intro {
-  background: var(--neutral-50);
-  border-left: 4px solid var(--fide-teal);
-  border-radius: var(--radius-sm);
-  padding: 0.8rem 1.2rem;
-  margin-bottom: 1.2rem;
-}
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-}
-.metric-card {
-  background: var(--card);
-  border-radius: var(--radius);
-  padding: 1.4rem 1.3rem 1.2rem;
-  border: 1px solid var(--neutral-100);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  min-height: 140px;
-}
-.metric-card .metric-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--neutral-500);
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  margin-bottom: 0.4rem;
-}
-.metric-card .metric-value {
-  font-size: 2.1rem;
-  font-weight: 800;
-  color: var(--neutral-900);
-  line-height: 1.1;
-  letter-spacing: -0.5px;
-}
-.metric-card .metric-unit {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--neutral-500);
-  margin-left: 0.2rem;
-}
-.metric-card .metric-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  margin-top: 0.6rem;
-  width: fit-content;
-}
-.metric-card .metric-status.ok    { background: var(--fide-teal-tint); color: var(--fide-teal-dark); }
-.metric-card .metric-status.warn  { background: #fbf2d3; color: var(--semantic-warning); }
-.metric-card .metric-status.bad   { background: #fcf0dd; color: #b8680f; }
-.metric-card .metric-status .dot-st {
-  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
-}
-.metric-card .metric-desc {
-  font-size: 0.7rem;
-  color: var(--neutral-500);
-  margin-top: 0.5rem;
-  line-height: 1.4;
-}
-.metric-card .metric-bench {
-  font-size: 0.68rem;
-  color: var(--neutral-500);
-  margin-top: 0.35rem;
-  font-style: italic;
-}
-@media (max-width: 480px) {
-  .metric-grid { grid-template-columns: 1fr; }
-  .metric-card .metric-value { font-size: 1.7rem; }
-}
 
 .user-action-btn {
   background: transparent;
@@ -1179,7 +1101,6 @@ body {
     <div class="tab" data-tab="recaudo">Recaudo</div>
     <div class="tab" data-tab="solicitudes">Solicitudes</div>
     <div class="tab" data-tab="financieros">Estados Financieros</div>
-    <div class="tab" data-tab="metricas">M&eacute;tricas Clave</div>
     <div class="tab admin-only" data-tab="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
     <div class="tab admin-only" data-tab="usuarios" style="display:none;">Usuarios</div>
   </div>
@@ -1701,45 +1622,6 @@ body {
             <th class="num">Nov</th>
             <th class="num">Dic</th>
             <th class="num">Acumulado</th>
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- Tab: Métricas Clave (estilo Nubank, prestador financiero) -->
-  <div class="tab-content" id="tab-metricas">
-    <div class="metric-intro">
-      <div style="font-weight:800;color:var(--neutral-900);font-size:1rem;margin-bottom:0.25rem;">M&eacute;tricas Clave del Sector</div>
-      <div style="color:var(--neutral-500);font-size:0.82rem;">Indicadores estilo fintech (Nubank, Mercado Pago) para monitorear rentabilidad y riesgo de la cartera de cr&eacute;ditos. Cada m&eacute;trica usa la cartera filtrada con los controles superiores.</div>
-    </div>
-
-    <div class="metric-grid">
-      <div class="metric-card" id="mcNPL"></div>
-      <div class="metric-card" id="mcEarly"></div>
-      <div class="metric-card" id="mcYield"></div>
-      <div class="metric-card" id="mcLpC"></div>
-      <div class="metric-card" id="mcTicket"></div>
-      <div class="metric-card" id="mcConc"></div>
-    </div>
-
-    <div class="chart-card full" style="margin-top:1.5rem;">
-      <h3><span class="dot"></span> Aging del Saldo en Mora <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(distribuci&oacute;n del saldo activo por antig&uuml;edad de mora)</span></h3>
-      <div class="chart-container tall"><canvas id="chartAging"></canvas></div>
-    </div>
-
-    <div class="chart-card full" style="margin-top:1rem;">
-      <h3><span class="dot"></span> Top 10 Clientes por Saldo Activo <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(riesgo de concentraci&oacute;n)</span></h3>
-      <div class="table-wrapper" style="max-height:400px;">
-        <table class="data-table compact" id="tblTopConc">
-          <thead><tr>
-            <th>#</th>
-            <th>Cliente</th>
-            <th class="num">Saldo Capital</th>
-            <th class="num">% Cartera Act.</th>
-            <th class="num">Cr&eacute;ditos</th>
-            <th class="num">D&iacute;as Mora M&aacute;x</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -3025,7 +2907,6 @@ document.querySelectorAll('.tab').forEach(tab=>{
     if (tab.dataset.tab === 'juridico') loadJuridico();
     if (tab.dataset.tab === 'proyeccion') renderProyeccion();
     if (tab.dataset.tab === 'financieros') loadFinancierosInit();
-    if (tab.dataset.tab === 'metricas') renderMetricasClave();
   });
 });
 
@@ -3408,202 +3289,6 @@ async function loadJuridico() {
     }).join('');
     if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
   } catch(e) { console.error('loadJuridico', e); }
-}
-
-// ============================================================
-//        MÉTRICAS CLAVE — KPIs sector financiero (Nubank-style)
-// ============================================================
-let _agingChart = null;
-
-function _statusFor(value, benchOk, benchBad, inverted = false) {
-  // Para métricas donde MÁS ALTO = peor (como NPL): inverted = true
-  // Para métricas donde MÁS ALTO = mejor (como Yield): inverted = false
-  if (inverted) {
-    if (value <= benchOk) return 'ok';
-    if (value <= benchBad) return 'warn';
-    return 'bad';
-  } else {
-    if (value >= benchOk) return 'ok';
-    if (value >= benchBad) return 'warn';
-    return 'bad';
-  }
-}
-
-function _renderMetric(id, label, value, unit, status, statusText, desc, bench) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.innerHTML = `
-    <div class="metric-label">${label}</div>
-    <div><span class="metric-value">${value}</span><span class="metric-unit">${unit || ''}</span></div>
-    <div class="metric-status ${status}"><span class="dot-st"></span>${statusText}</div>
-    <div class="metric-desc">${desc}</div>
-    <div class="metric-bench">${bench}</div>
-  `;
-}
-
-function renderMetricasClave() {
-  const d = filteredData || [];
-  if (!d.length) {
-    ['mcNPL','mcEarly','mcYield','mcLpC','mcTicket','mcConc'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = '<div class="metric-label">Sin datos</div><div class="metric-value">-</div>';
-    });
-    return;
-  }
-  const act = d.filter(r => r.estado === 'ACTIVO');
-  const saldoActivo = act.reduce((s,r) => s + (parseFloat(r.saldo_capital) || 0), 0);
-  const saldoNPL90 = act.filter(r => (parseInt(r.dias_mora) || 0) > 90)
-                       .reduce((s,r) => s + (parseFloat(r.saldo_capital) || 0), 0);
-  const saldoEarly = act.filter(r => {
-    const dm = parseInt(r.dias_mora) || 0;
-    return dm >= 31 && dm <= 90;
-  }).reduce((s,r) => s + (parseFloat(r.saldo_capital) || 0), 0);
-
-  // 1) NPL Ratio (>90 días)
-  const nplRatio = saldoActivo > 0 ? (saldoNPL90 / saldoActivo) * 100 : 0;
-  const st1 = _statusFor(nplRatio, 5, 10, true);
-  _renderMetric('mcNPL', 'NPL Ratio',
-    nplRatio.toFixed(2), '%',
-    st1, st1 === 'ok' ? 'Sano' : st1 === 'warn' ? 'Atención' : 'Alto riesgo',
-    `Saldo en mora >90 días sobre saldo activo. Es la métrica regulatoria estándar de cartera vencida.`,
-    `Benchmark sector: < 5% sano · 5-10% alerta · > 10% crítico`
-  );
-
-  // 2) NPL Early Stage (31-90)
-  const earlyRatio = saldoActivo > 0 ? (saldoEarly / saldoActivo) * 100 : 0;
-  const st2 = _statusFor(earlyRatio, 3, 7, true);
-  _renderMetric('mcEarly', 'NPL Early Stage',
-    earlyRatio.toFixed(2), '%',
-    st2, st2 === 'ok' ? 'Bajo' : st2 === 'warn' ? 'Moderado' : 'Elevado',
-    `Saldo en mora 31-90 días sobre saldo activo. Predictor temprano de deterioro de cartera.`,
-    `Benchmark sector: < 3% bajo · 3-7% moderado · > 7% elevado`
-  );
-
-  // 3) Yield Anualizado (tasa ponderada por saldo activo)
-  let sumWeight = 0, sumWeighted = 0;
-  act.forEach(r => {
-    const saldo = parseFloat(r.saldo_capital) || 0;
-    const tasa = parseFloat(r.tasa_efectiva) || 0;
-    if (saldo > 0 && tasa > 0) {
-      sumWeight += saldo;
-      sumWeighted += saldo * tasa;
-    }
-  });
-  const yieldPond = sumWeight > 0 ? sumWeighted / sumWeight : 0;
-  const st3 = _statusFor(yieldPond, 22, 18);
-  _renderMetric('mcYield', 'Yield Anualizado',
-    yieldPond.toFixed(2), '%',
-    st3, st3 === 'ok' ? 'Saludable' : st3 === 'warn' ? 'Bajo' : 'Crítico',
-    `Tasa efectiva promedio ponderada por saldo capital de los créditos activos. Refleja el rendimiento real de la cartera.`,
-    `Benchmark fintech LATAM: > 22% saludable · 18-22% bajo · < 18% crítico`
-  );
-
-  // 4) Loans per Customer
-  const clientes = new Set(act.map(r => `${r.identificacion || ''}|${r.cliente || ''}`));
-  const lpc = clientes.size > 0 ? act.length / clientes.size : 0;
-  const st4 = _statusFor(lpc, 1.5, 1.1);
-  _renderMetric('mcLpC', 'Créditos por Cliente',
-    lpc.toFixed(2), '',
-    st4, st4 === 'ok' ? 'Alto cross-sell' : st4 === 'warn' ? 'Medio' : 'Bajo',
-    `Número promedio de créditos activos por cliente único. Mide cross-sell y fidelización.`,
-    `${act.length} créditos activos · ${clientes.size} clientes únicos`
-  );
-
-  // 5) Ticket Promedio Activo (saldo capital)
-  const ticketAct = act.length > 0 ? saldoActivo / act.length : 0;
-  // Sin benchmark formal, solo info
-  _renderMetric('mcTicket', 'Ticket Promedio',
-    fmtM(ticketAct), '',
-    'ok', 'Activos',
-    `Saldo capital promedio por crédito activo. Ayuda a entender el tamaño típico de exposición.`,
-    `Saldo activo total: ${fmtM(saldoActivo)} sobre ${fmt(act.length)} créditos`
-  );
-
-  // 6) Customer Concentration (Top 10)
-  const byClient = {};
-  act.forEach(r => {
-    const k = `${r.identificacion || ''}|${r.cliente || ''}`;
-    byClient[k] = (byClient[k] || 0) + (parseFloat(r.saldo_capital) || 0);
-  });
-  const top10 = Object.entries(byClient).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  const top10Sum = top10.reduce((s, [_,v]) => s + v, 0);
-  const concPct = saldoActivo > 0 ? (top10Sum / saldoActivo) * 100 : 0;
-  const st6 = _statusFor(concPct, 30, 50, true);
-  _renderMetric('mcConc', 'Concentración Top 10',
-    concPct.toFixed(1), '%',
-    st6, st6 === 'ok' ? 'Diversificada' : st6 === 'warn' ? 'Moderada' : 'Alta',
-    `Porcentaje del saldo capital activo concentrado en los 10 clientes más grandes. Mide riesgo de concentración.`,
-    `Benchmark: < 30% diversificada · 30-50% moderada · > 50% concentrada`
-  );
-
-  // Chart Aging — distribución del saldo activo por rangos de mora
-  const buckets = { 'Al día': 0, '1-30': 0, '31-60': 0, '61-90': 0, '91-180': 0, '181-360': 0, '+360': 0 };
-  act.forEach(r => {
-    const dm = parseInt(r.dias_mora) || 0;
-    const saldo = parseFloat(r.saldo_capital) || 0;
-    let key;
-    if (dm === 0) key = 'Al día';
-    else if (dm <= 30) key = '1-30';
-    else if (dm <= 60) key = '31-60';
-    else if (dm <= 90) key = '61-90';
-    else if (dm <= 180) key = '91-180';
-    else if (dm <= 360) key = '181-360';
-    else key = '+360';
-    buckets[key] += saldo;
-  });
-  if (_agingChart) { _agingChart.destroy(); _agingChart = null; }
-  _agingChart = new Chart(document.getElementById('chartAging'), {
-    type: 'bar',
-    data: {
-      labels: Object.keys(buckets),
-      datasets: [{
-        label: 'Saldo Activo', data: Object.values(buckets),
-        backgroundColor: MORA_COLORS, borderRadius: 5
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        datalabels: { anchor:'end', align:'top', color:'#1a1a1a', font:{weight:800, size:11}, formatter: v => v > 0 ? fmtM(v) : '' },
-        tooltip: { callbacks: {
-          label: ctx => `Saldo: ${fmtCurrency(ctx.raw)} (${saldoActivo > 0 ? ((ctx.raw/saldoActivo)*100).toFixed(1) : 0}%)`
-        } }
-      },
-      scales: {
-        x: { grid: { display: false } },
-        y: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
-      }
-    },
-    plugins: [ChartDataLabels]
-  });
-
-  // Tabla Top Concentración
-  const tb = document.querySelector('#tblTopConc tbody');
-  if (tb) {
-    // Re-construir top 10 con nombre y datos
-    const byClient2 = {};
-    act.forEach(r => {
-      const k = `${r.identificacion || ''}|${r.cliente || ''}`;
-      if (!byClient2[k]) byClient2[k] = { cliente: r.cliente, count: 0, saldo: 0, mora: 0 };
-      byClient2[k].count++;
-      byClient2[k].saldo += parseFloat(r.saldo_capital) || 0;
-      const dm = parseInt(r.dias_mora) || 0;
-      if (dm > byClient2[k].mora) byClient2[k].mora = dm;
-    });
-    const top10b = Object.values(byClient2).sort((a,b) => b.saldo - a.saldo).slice(0, 10);
-    tb.innerHTML = top10b.map((c, i) => `
-      <tr>
-        <td class="rank">${i+1}</td>
-        <td>${c.cliente || '-'}</td>
-        <td class="num"><strong>${fmtCurrency(c.saldo)}</strong></td>
-        <td class="num">${saldoActivo > 0 ? ((c.saldo/saldoActivo)*100).toFixed(2) : '0'}%</td>
-        <td class="num">${fmt(c.count)}</td>
-        <td class="num" style="color:${c.mora > 30 ? '#b8680f' : '#0f7b6c'};font-weight:700;">${fmt(c.mora)}</td>
-      </tr>
-    `).join('');
-    if (!top10b.length) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1rem;color:#5a6a6e;">Sin datos</td></tr>';
-  }
 }
 
 // ============================================================
