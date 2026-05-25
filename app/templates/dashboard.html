@@ -1958,6 +1958,12 @@ body {
       </div>
     </div>
 
+    <div class="chart-filters-bar" id="slFilterBar">
+      <span class="cflabel">Filtros activos:</span>
+      <div id="slFilterChips"></div>
+      <button class="chip-clear" onclick="clearAllSlFilters()">Limpiar todo</button>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi-card teal">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de solicitudes registradas en el archivo cargado.</span></div>
@@ -3722,70 +3728,183 @@ async function loadRecaudo() {
   }
 }
 
-// ---------- SOLICITUDES ----------
+// ---------- SOLICITUDES (con cross-filter de gráficas) ----------
 let _slCharts = {};
+let _slRawData = [];           // crudo del /combined endpoint
+let _slFilters = {};           // {estado: 'DESEMBOLSADA', linea: 'POLIZA PERSONAS', ...}
+const SL_FILTER_LABELS = { estado: 'Estado', linea: 'Línea' };
+
 async function loadSolicitudes() {
   renderUploadStatus('solicitudes');
   try {
-    const [s, l] = await Promise.all([
-      fetch('/api/solicitudes/combined-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/solicitudes/combined', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
-    ]);
-    document.getElementById('slTotal').textContent = fmt(s.total || 0);
-    document.getElementById('slTotalSub').textContent = `${fmt(s.nueva_total||0)} nueva plat. · ${fmt(s.legacy_total||0)} hist. · ${fmtM(s.valor_total||0)}`;
+    const data = await fetch('/api/solicitudes/combined', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : []);
+    _slRawData = Array.isArray(data) ? data : [];
+    // Reset filters al recargar
+    _slFilters = {};
+    renderSolicitudes();
+  } catch (e) { console.error('loadSolicitudes', e); }
+}
 
-    // Etiqueta de histórico precargado
-    const slHist = document.getElementById('slHistInfo');
-    if (slHist) {
-      if ((s.legacy_total || 0) > 0) {
-        slHist.textContent = `✓ Histórico precargado: ${fmt(s.legacy_total)} solicitudes`;
-        slHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. Total combinado: ${fmt(s.total || 0)} solicitudes.`;
-        slHist.style.display = '';
-      } else {
-        slHist.style.display = 'none';
-      }
+function _slMatchesFilters(r) {
+  for (const k in _slFilters) {
+    if ((r[k] || '') !== _slFilters[k]) return false;
+  }
+  return true;
+}
+
+function toggleSlChartFilter(dim, val) {
+  if (_slFilters[dim] === val) delete _slFilters[dim];
+  else _slFilters[dim] = val;
+  renderSolicitudes();
+}
+
+function removeSlFilter(dim) {
+  delete _slFilters[dim];
+  renderSolicitudes();
+}
+
+function clearAllSlFilters() {
+  Object.keys(_slFilters).forEach(k => delete _slFilters[k]);
+  renderSolicitudes();
+}
+
+function renderSlFilterBar() {
+  const bar = document.getElementById('slFilterBar');
+  const chipsEl = document.getElementById('slFilterChips');
+  if (!bar || !chipsEl) return;
+  const entries = Object.entries(_slFilters);
+  if (!entries.length) {
+    bar.classList.remove('active');
+    chipsEl.innerHTML = '';
+    return;
+  }
+  bar.classList.add('active');
+  chipsEl.innerHTML = entries.map(([dim, val]) =>
+    `<span class="chip" onclick="removeSlFilter('${dim}')" title="Quitar filtro">${SL_FILTER_LABELS[dim] || dim}: <strong>${val}</strong> <span class="x">&times;</span></span>`
+  ).join('');
+}
+
+function renderSolicitudes() {
+  // Filtered subset (cross-filters aplicados)
+  const filtered = _slRawData.filter(_slMatchesFilters);
+  // Totales globales (sin filtro) para el sub-label de histórico precargado
+  const rawTotal = _slRawData.length;
+  const legacyTotal = _slRawData.filter(r => r.source === 'legacy').length;
+  const nuevaTotal = _slRawData.filter(r => r.source === 'nueva').length;
+
+  // ============ KPIs (recomputados desde filtered) ============
+  const total = filtered.length;
+  const desembolsadas = filtered.filter(r => r.estado === 'DESEMBOLSADA').length;
+  const valorTotal = filtered.reduce((s, r) => s + (parseFloat(r.valor) || 0), 0);
+  const valorDesembolsado = filtered
+    .filter(r => r.estado === 'DESEMBOLSADA')
+    .reduce((s, r) => s + (parseFloat(r.valor) || 0), 0);
+
+  document.getElementById('slTotal').textContent = fmt(total);
+  document.getElementById('slTotalSub').textContent =
+    `${fmt(nuevaTotal)} nueva plat. · ${fmt(legacyTotal)} hist. · ${fmtM(valorTotal)}`;
+
+  // Etiqueta histórico precargado
+  const slHist = document.getElementById('slHistInfo');
+  if (slHist) {
+    if (legacyTotal > 0) {
+      slHist.textContent = `✓ Histórico precargado: ${fmt(legacyTotal)} solicitudes`;
+      slHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. Total combinado: ${fmt(rawTotal)} solicitudes.`;
+      slHist.style.display = '';
+    } else {
+      slHist.style.display = 'none';
     }
-    document.getElementById('slDesem').textContent = fmt(s.desembolsadas || 0);
-    document.getElementById('slDesemSub').textContent = fmtM(s.valor_desembolsado||0) + ' colocados';
-    // Tasa de Aceptación = Desembolsadas / Total
-    const tasaAcept = (s.total||0) > 0 ? ((s.desembolsadas||0) / s.total * 100) : 0;
-    document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
-    document.getElementById('slTasaAceptSub').textContent = `${fmt(s.desembolsadas||0)} de ${fmt(s.total||0)} solicitudes`;
-    // Ticket Promedio Desembolsado = Valor Desembolsado / # Desembolsadas
-    const ticket = (s.desembolsadas||0) > 0 ? ((s.valor_desembolsado||0) / s.desembolsadas) : 0;
-    document.getElementById('slTicketProm').textContent = fmtM(ticket);
-    document.getElementById('slTicketPromSub').textContent = 'Por solicitud aprobada';
+  }
 
-    Object.keys(_slCharts).forEach(k => { _slCharts[k]?.destroy?.(); });
+  document.getElementById('slDesem').textContent = fmt(desembolsadas);
+  document.getElementById('slDesemSub').textContent = fmtM(valorDesembolsado) + ' colocados';
 
-    // Estados
-    const estMap = {};
-    l.forEach(x => { const k = x.estado || 'N/A'; estMap[k] = (estMap[k]||0) + 1; });
-    const estLabels = Object.keys(estMap);
-    _slCharts.estado = new Chart(document.getElementById('chartSlEstado'), {
-      type:'doughnut',
-      data:{ labels: estLabels, datasets:[{ data: estLabels.map(k=>estMap[k]), backgroundColor: CHART_COLORS, borderWidth:3, borderColor:'#fff' }] },
-      options:{ responsive:true, maintainAspectRatio:false, cutout:'58%',
-        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:11 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
-          formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } } },
-      plugins: [ChartDataLabels]
-    });
+  const tasaAcept = total > 0 ? (desembolsadas / total * 100) : 0;
+  document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
+  document.getElementById('slTasaAceptSub').textContent = `${fmt(desembolsadas)} de ${fmt(total)} solicitudes`;
 
-    // Líneas
-    const lnMap = {};
-    l.forEach(x => { const k = x.linea || 'N/A'; lnMap[k] = (lnMap[k]||0) + 1; });
-    const lnLabels = Object.keys(lnMap).sort();
-    _slCharts.linea = new Chart(document.getElementById('chartSlLinea'), {
-      type:'bar',
-      data:{ labels: lnLabels, datasets:[{ label:'Solicitudes', data: lnLabels.map(k=>lnMap[k]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
-      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
-        scales:{ x:{ grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } }
-    });
+  const ticket = desembolsadas > 0 ? (valorDesembolsado / desembolsadas) : 0;
+  document.getElementById('slTicketProm').textContent = fmtM(ticket);
+  document.getElementById('slTicketPromSub').textContent = 'Por solicitud aprobada';
 
-    // Tabla
-    const tb = document.querySelector('#tblSolicitudes tbody');
-    tb.innerHTML = l.slice(0, 200).map(x => `
+  // ============ Charts (con onClick = cross-filter) ============
+  Object.keys(_slCharts).forEach(k => { _slCharts[k]?.destroy?.(); });
+
+  // Estados (doughnut)
+  const estMap = {};
+  filtered.forEach(x => { const k = x.estado || 'N/A'; estMap[k] = (estMap[k]||0) + 1; });
+  const estLabels = Object.keys(estMap);
+  _slCharts.estado = new Chart(document.getElementById('chartSlEstado'), {
+    type: 'doughnut',
+    data: {
+      labels: estLabels,
+      datasets: [{
+        data: estLabels.map(k => estMap[k]),
+        backgroundColor: CHART_COLORS,
+        borderWidth: 3, borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      onClick: (evt, els) => {
+        if (!els.length) return;
+        const label = estLabels[els[0].index];
+        toggleSlChartFilter('estado', label);
+      },
+      plugins: {
+        legend: { position: 'bottom' },
+        datalabels: {
+          color: '#fff', font: { weight: 800, size: 11 },
+          textStrokeColor: 'rgba(0,0,0,0.5)', textStrokeWidth: 3,
+          formatter: (v, ctx) => {
+            const t = ctx.dataset.data.reduce((a, b) => a + b, 0);
+            return t && v/t >= 0.05 ? (v/t * 100).toFixed(0) + '%' : '';
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+
+  // Líneas (bar horizontal)
+  const lnMap = {};
+  filtered.forEach(x => { const k = x.linea || 'N/A'; lnMap[k] = (lnMap[k]||0) + 1; });
+  const lnLabels = Object.keys(lnMap).sort();
+  _slCharts.linea = new Chart(document.getElementById('chartSlLinea'), {
+    type: 'bar',
+    data: {
+      labels: lnLabels,
+      datasets: [{
+        label: 'Solicitudes',
+        data: lnLabels.map(k => lnMap[k]),
+        backgroundColor: FIDE.teal + 'cc',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      onClick: (evt, els) => {
+        if (!els.length) return;
+        const label = lnLabels[els[0].index];
+        toggleSlChartFilter('linea', label);
+      },
+      plugins: { legend: { display: false }, datalabels: { display: false } },
+      scales: { x: { grid: { color: '#F3F2F1' } }, y: { grid: { display: false } } }
+    }
+  });
+
+  // ============ Tabla ============
+  const tb = document.querySelector('#tblSolicitudes tbody');
+  if (!tb) return;
+  if (!filtered.length) {
+    const msg = Object.keys(_slFilters).length
+      ? 'Sin solicitudes que cumplan los filtros seleccionados.'
+      : 'Sin datos. Sube el archivo de solicitudes.';
+    tb.innerHTML = `<tr><td colspan="8">${msg}</td></tr>`;
+  } else {
+    tb.innerHTML = filtered.slice(0, 200).map(x => `
       <tr>
         <td><strong>${x.solicitud || '-'}</strong></td>
         <td>${x.solicitante || '-'}</td>
@@ -3797,8 +3916,10 @@ async function loadSolicitudes() {
         <td>${x.fecha_solicitud || '-'}</td>
       </tr>
     `).join('');
-    if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de solicitudes.</td></tr>';
-  } catch(e) { console.error('loadSolicitudes', e); }
+  }
+
+  // ============ Chip bar ============
+  renderSlFilterBar();
 }
 
 // ---------- JURÍDICO (solo superadmin) ----------
