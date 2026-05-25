@@ -1863,18 +1863,18 @@ body {
         <div class="kpi-sub" id="slDesemSub"></div>
       </div>
       <div class="kpi-card blue">
-        <div class="kpi-info">i<span class="kpi-tooltip">Solicitudes en alg&uacute;n paso del flujo (no desembolsadas, no rechazadas).</span></div>
-        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
-        <div class="kpi-label">En Pipeline</div>
-        <div class="kpi-value" id="slPipeline">-</div>
-        <div class="kpi-sub" id="slPipelineSub"></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Porcentaje de solicitudes que terminaron en DESEMBOLSADA sobre el total. Mide la eficiencia del embudo de aprobaci&oacute;n.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 5-6"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <div class="kpi-label">Tasa de Aceptaci&oacute;n</div>
+        <div class="kpi-value" id="slTasaAcept">-</div>
+        <div class="kpi-sub" id="slTasaAceptSub"></div>
       </div>
       <div class="kpi-card yellow">
-        <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor de todas las solicitudes en pipeline (potencial desembolsable).</span></div>
-        <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-        <div class="kpi-label">Valor Pipeline</div>
-        <div class="kpi-value" id="slValorPip">-</div>
-        <div class="kpi-sub" id="slValorPipSub"></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Valor promedio de las solicitudes desembolsadas = Valor Desembolsado / Cantidad de Desembolsadas. Muestra el tama&ntilde;o t&iacute;pico de un cr&eacute;dito aprobado.</span></div>
+        <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg></div>
+        <div class="kpi-label">Ticket Promedio</div>
+        <div class="kpi-value" id="slTicketProm">-</div>
+        <div class="kpi-sub" id="slTicketPromSub"></div>
       </div>
     </div>
     <div class="charts-grid">
@@ -3536,11 +3536,15 @@ async function loadSolicitudes() {
       }
     }
     document.getElementById('slDesem').textContent = fmt(s.desembolsadas || 0);
-    document.getElementById('slDesemSub').textContent = pct(s.desembolsadas, s.total) + ' · ' + fmtM(s.valor_desembolsado||0);
-    document.getElementById('slPipeline').textContent = fmt(s.pipeline || 0);
-    document.getElementById('slPipelineSub').textContent = pct(s.pipeline, s.total) + ' del total';
-    document.getElementById('slValorPip').textContent = fmtM(s.valor_pipeline || 0);
-    document.getElementById('slValorPipSub').textContent = 'Potencial por desembolsar';
+    document.getElementById('slDesemSub').textContent = fmtM(s.valor_desembolsado||0) + ' colocados';
+    // Tasa de Aceptación = Desembolsadas / Total
+    const tasaAcept = (s.total||0) > 0 ? ((s.desembolsadas||0) / s.total * 100) : 0;
+    document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
+    document.getElementById('slTasaAceptSub').textContent = `${fmt(s.desembolsadas||0)} de ${fmt(s.total||0)} solicitudes`;
+    // Ticket Promedio Desembolsado = Valor Desembolsado / # Desembolsadas
+    const ticket = (s.desembolsadas||0) > 0 ? ((s.valor_desembolsado||0) / s.desembolsadas) : 0;
+    document.getElementById('slTicketProm').textContent = fmtM(ticket);
+    document.getElementById('slTicketPromSub').textContent = 'Por solicitud aprobada';
 
     Object.keys(_slCharts).forEach(k => { _slCharts[k]?.destroy?.(); });
 
