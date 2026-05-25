@@ -205,7 +205,18 @@ body {
   max-width: 1480px;
   margin: 0 auto;
   padding: 1.8rem 2rem;
+  min-width: 0;
 }
+/* Garantizar que el grid de charts y los charts mismos nunca desborden su contenedor */
+.charts-grid { min-width: 0; }
+.charts-grid > * { min-width: 0; max-width: 100%; }
+.chart-card { overflow: hidden; }
+.chart-container { max-width: 100%; }
+.chart-container canvas { max-width: 100% !important; }
+/* Filtros con flex-wrap: garantizar que cada item respete el ancho disponible */
+.filters { min-width: 0; flex-wrap: wrap; }
+.filter-group { min-width: 0; max-width: 100%; }
+.filter-group select, .filter-group input { max-width: 100%; }
 
 /* =================== KPIs =================== */
 .kpi-grid {
@@ -333,32 +344,115 @@ body {
   font-weight: 600;
 }
 
-/* =================== TABS =================== */
-.tab-bar {
+/* =================== APP SHELL (sidebar + main) =================== */
+.app-shell {
   display: flex;
-  gap: 0;
-  margin-bottom: 1.8rem;
+  align-items: flex-start;
+  min-height: calc(100vh - 80px);
+}
+.app-main {
+  flex: 1;
+  min-width: 0;       /* permite que el grid hijo no fuerce overflow */
+  width: 100%;
+}
+
+/* =================== SIDEBAR =================== */
+.sidebar {
+  flex: 0 0 240px;
+  width: 240px;
   background: white;
-  border-radius: var(--radius);
-  padding: 0.35rem;
-  box-shadow: var(--shadow);
-  width: fit-content;
+  border-right: 1px solid var(--border);
+  padding: 1.4rem 0.9rem 2rem;
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  max-height: 100vh;
+  overflow-y: auto;
+  box-shadow: 1px 0 3px rgba(0,0,0,0.03);
 }
-.tab {
-  padding: 0.6rem 1.6rem;
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 0.85rem;
+.sidebar-header {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
   color: var(--text-secondary);
-  border-radius: 10px;
-  transition: all 0.25s;
+  padding: 0 0.6rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.9rem;
 }
-.tab:hover { color: var(--fide-teal); background: var(--fide-teal-tint); }
-.tab.active {
-  background: var(--fide-teal);
+.nav-group {
+  margin-bottom: 1.1rem;
+}
+.nav-group-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--fide-teal-deeper);
+  padding: 0.3rem 0.7rem;
+  margin-bottom: 0.3rem;
+}
+.nav-group-label .cat-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  margin: 0.1rem 0;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  border-radius: 7px;
+  border-left: 3px solid transparent;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+.nav-tab:hover {
+  color: var(--fide-teal-deeper);
+  background: var(--fide-teal-tint);
+}
+.nav-tab.active {
+  color: var(--fide-teal-deeper);
+  background: var(--fide-teal-tint);
+  border-left-color: var(--fide-teal);
+  font-weight: 800;
+}
+.nav-tab[hidden] { display: none; }
+
+/* Hamburger toggle (mobile only) */
+.sidebar-toggle {
+  display: none;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.3);
   color: white;
-  box-shadow: 0 2px 8px rgba(0,167,157,0.3);
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
 }
+.sidebar-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; }
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 99;
+}
+.sidebar-backdrop.show { display: block; }
+
+/* =================== TAB CONTENTS (sin tab-bar visible) =================== */
+.tab-bar { display: none; }       /* la barra horizontal antigua ya no se usa */
+.tab[hidden] { display: none; }
 
 /* =================== CHARTS =================== */
 .tab-content { display: none; }
@@ -812,6 +906,11 @@ body {
 
 /* Responsive */
 /* =================== RESPONSIVE (tablet) =================== */
+@media (max-width: 1100px) {
+  .sidebar { flex-basis: 200px; width: 200px; padding: 1.1rem 0.7rem; }
+  .nav-tab { font-size: 0.78rem; padding: 0.5rem 0.6rem; }
+  .nav-group-label { font-size: 0.65rem; padding: 0.25rem 0.55rem; }
+}
 @media (max-width: 1024px) {
   .container { padding: 1.2rem 1rem; }
   .header { padding: 1.2rem 1.5rem; }
@@ -873,9 +972,21 @@ body {
   .chart-container { height: 240px !important; }
   .chart-container.tall { height: 280px !important; }
 
-  .tab-bar { width: 100%; overflow-x: auto; scrollbar-width: none; }
-  .tab-bar::-webkit-scrollbar { display: none; }
-  .tab { padding: 0.6rem 1rem; font-size: 0.78rem; white-space: nowrap; }
+  /* Sidebar como drawer off-canvas */
+  .app-shell { display: block; }
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: 260px;
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease-out;
+    max-height: 100vh;
+    box-shadow: 4px 0 14px rgba(0,0,0,0.18);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle { display: inline-flex; }
+  .app-main { width: 100%; }
 
   /* Tabla: scroll horizontal dentro del wrapper, contenido no desborda la tarjeta */
   .charts-grid { min-width: 0; }
@@ -940,6 +1051,9 @@ body {
 
 <div class="header">
   <div class="header-left">
+    <button class="sidebar-toggle" id="btnMenu" aria-label="Men&uacute;" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-logo">
     <div class="header-title">
       <h1>Dashboard Operaci&oacute;n Comercial</h1>
@@ -957,6 +1071,53 @@ body {
     </div>
   </div>
 </div>
+
+<div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+<div class="app-shell">
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">Navegaci&oacute;n</div>
+
+  <div class="nav-group" data-group="cartera">
+    <div class="nav-group-label">
+      <svg class="cat-icon" viewBox="0 0 24 24"><path d="M3 12l2-2 4 4 8-8 4 4"/><path d="M3 20h18"/></svg>
+      Cartera
+    </div>
+    <div class="nav-tab active" data-tab="cartera-360"
+         data-tab-contents="resumen cartera aliados detalle" data-group="cartera">
+      An&aacute;lisis de Cartera
+    </div>
+    <div class="nav-tab" data-tab="proyeccion" data-group="cartera">Proyecci&oacute;n Pagos</div>
+  </div>
+
+  <div class="nav-group" data-group="operacion">
+    <div class="nav-group-label">
+      <svg class="cat-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg>
+      Operaci&oacute;n
+    </div>
+    <div class="nav-tab" data-tab="recaudo" data-group="operacion">Recaudo</div>
+    <div class="nav-tab" data-tab="solicitudes" data-group="operacion">Solicitudes</div>
+  </div>
+
+  <div class="nav-group" data-group="finanzas">
+    <div class="nav-group-label">
+      <svg class="cat-icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Finanzas
+    </div>
+    <div class="nav-tab" data-tab="financieros" data-group="finanzas">Estados Financieros</div>
+  </div>
+
+  <div class="nav-group admin-only" data-group="admin" style="display:none;">
+    <div class="nav-group-label">
+      <svg class="cat-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+      Admin
+    </div>
+    <div class="nav-tab" data-tab="juridico" data-group="admin">Cobro Jur&iacute;dico</div>
+    <div class="nav-tab" data-tab="usuarios" data-group="admin">Panel de Configuraci&oacute;n</div>
+  </div>
+</aside>
+
+<main class="app-main">
 
 <div class="filters">
   <div class="filter-group">
@@ -1091,19 +1252,6 @@ body {
     </div>
   </div>
 
-  <!-- Tabs -->
-  <div class="tab-bar">
-    <div class="tab active" data-tab="resumen">Resumen General</div>
-    <div class="tab" data-tab="cartera">An&aacute;lisis de Cartera</div>
-    <div class="tab" data-tab="aliados">Aliados &amp; Geograf&iacute;a</div>
-    <div class="tab" data-tab="detalle">Detalle Cr&eacute;ditos</div>
-    <div class="tab" data-tab="proyeccion">Proyecci&oacute;n Pagos</div>
-    <div class="tab" data-tab="recaudo">Recaudo</div>
-    <div class="tab" data-tab="solicitudes">Solicitudes</div>
-    <div class="tab" data-tab="financieros">Estados Financieros</div>
-    <div class="tab admin-only" data-tab="juridico" style="display:none;">Cobro Jur&iacute;dico</div>
-    <div class="tab admin-only" data-tab="usuarios" style="display:none;">Usuarios</div>
-  </div>
   <div class="cross-filter-hint">
     <span>&#128161;</span> Haz clic en cualquier gr&aacute;fica para filtrar din&aacute;micamente. Vuelve a hacer clic para quitar el filtro.
   </div>
@@ -1711,11 +1859,11 @@ body {
     </div>
   </div>
 
-  <!-- Tab: Usuarios (solo superadmin) -->
+  <!-- Tab: Panel de Configuración (solo superadmin) -->
   <div class="tab-content" id="tab-usuarios">
     <div class="table-section">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.8rem;margin-bottom:1rem;">
-        <h3 style="margin:0;">Gesti&oacute;n de Usuarios</h3>
+        <h3 style="margin:0;">Panel de Configuraci&oacute;n &mdash; Usuarios</h3>
         <button class="btn btn-export" onclick="openUserModal()">+ Nuevo Usuario</button>
       </div>
       <div class="table-wrapper" style="max-height:520px;">
@@ -1735,6 +1883,8 @@ body {
     </div>
   </div>
 </div>
+</main>
+</div><!-- /.app-shell -->
 
 <!-- Modal de usuario (crear / editar) -->
 <div class="user-modal" id="userModal" style="display:none;">
@@ -2908,22 +3058,52 @@ async function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
-// ---- TABS ----
-document.querySelectorAll('.tab').forEach(tab=>{
-  tab.addEventListener('click',()=>{
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('tab-'+tab.dataset.tab).classList.add('active');
-    setTimeout(()=>Object.values(charts).forEach(c=>c.resize()),50);
-    // Carga bajo demanda según el tab
-    if (tab.dataset.tab === 'usuarios') loadUsers();
-    if (tab.dataset.tab === 'recaudo') loadRecaudo();
-    if (tab.dataset.tab === 'solicitudes') loadSolicitudes();
-    if (tab.dataset.tab === 'juridico') loadJuridico();
-    if (tab.dataset.tab === 'proyeccion') renderProyeccion();
-    if (tab.dataset.tab === 'financieros') loadFinancierosInit();
+// ---- SIDEBAR (mobile drawer) ----
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sidebarBackdrop');
+  const opening = !sb.classList.contains('open');
+  sb.classList.toggle('open', opening);
+  bd.classList.toggle('show', opening);
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('show');
+}
+
+// ---- TABS (nav-tab en sidebar) ----
+function activateTab(tab) {
+  if (!tab) return;
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  tab.classList.add('active');
+  // Soportar tabs que muestran múltiples contenidos (e.g. Análisis de Cartera 360°)
+  const contents = (tab.dataset.tabContents || tab.dataset.tab).split(/\s+/);
+  contents.forEach(name => {
+    const el = document.getElementById('tab-' + name);
+    if (el) el.classList.add('active');
   });
+  setTimeout(() => Object.values(charts).forEach(c => c.resize()), 50);
+  // Carga bajo demanda según el tab
+  const tabName = tab.dataset.tab;
+  if (tabName === 'usuarios') loadUsers();
+  if (tabName === 'recaudo') loadRecaudo();
+  if (tabName === 'solicitudes') loadSolicitudes();
+  if (tabName === 'juridico') loadJuridico();
+  if (tabName === 'proyeccion') renderProyeccion();
+  if (tabName === 'financieros') loadFinancierosInit();
+  // En móvil, cerrar el sidebar tras seleccionar
+  if (window.innerWidth <= 768) closeSidebar();
+}
+
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab));
+});
+
+// Activar el tab inicial (Análisis de Cartera muestra 4 divs combinados)
+document.addEventListener('DOMContentLoaded', () => {
+  const initial = document.querySelector('.nav-tab.active');
+  if (initial) activateTab(initial);
 });
 
 // ============================================================
@@ -3999,7 +4179,7 @@ if (_role === 'superadmin') {
   const btn = document.getElementById('btnUpload');
   if (btn) btn.style.display = 'inline-block';
   // Revelar tabs admin-only y botones de upload para superadmin
-  document.querySelectorAll('.tab.admin-only, .btn.admin-only').forEach(el => el.style.display = '');
+  document.querySelectorAll('.nav-tab.admin-only, .nav-group.admin-only, .btn.admin-only').forEach(el => el.style.display = '');
 }
 // "consulta" role: solo lectura — ocultar cualquier acción de exportación
 if (_role === 'consulta') {

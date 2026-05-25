@@ -11,12 +11,11 @@ Estructura del Excel esperado:
 import io
 import logging
 import re
-from datetime import datetime
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Request
 import openpyxl
 from app.database import get_db, get_connection
 from app.auth.middleware import require_auth, require_superadmin
-from app.audit import log_audit, get_client_ip
+from app.sync.upload_helpers import upload_session
 
 router = APIRouter(prefix="/api/estados-financieros", tags=["estados-financieros"])
 
@@ -85,22 +84,12 @@ def _detect_year(rows: list[tuple]) -> int | None:
 
 @router.post("/upload")
 async def upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
-    content = await file.read()
-    if len(content) / (1024 * 1024) > MAX_UPLOAD_MB:
-        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_UPLOAD_MB} MB")
-
-    ip = get_client_ip(request) or "unknown"
-    with get_db() as conn:
-        conn.execute(
-            "INSERT INTO sync_logs (started_at, status, source, uploaded_by) VALUES (?, 'running', 'financieros_upload', ?)",
-            (datetime.utcnow().isoformat(), user["user_id"])
-        )
-        sync_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-
-    try:
-        wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    async with upload_session(
+        request, user, file, source="financieros_upload", max_mb=MAX_UPLOAD_MB,
+        generic_error_msg="No se pudo importar el archivo. Revisa el formato del Estado de Resultados."
+    ) as ctx:
+        # El Excel de Estados de Resultados usa una hoja específica (no la activa)
+        wb = openpyxl.load_workbook(io.BytesIO(ctx.content), data_only=True, read_only=True)
         sheet_name = next((s for s in wb.sheetnames if 'mes' in s.lower() or 'res' in s.lower()), wb.sheetnames[0])
         ws = wb[sheet_name]
         rows = list(ws.iter_rows(values_only=True))
@@ -170,16 +159,12 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
                     (year, month, cuenta_code, cuenta_descripcion, nivel, parent_code, is_total, valor, sync_batch_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (rec['year'], rec['month'], rec['cuenta_code'], rec['cuenta_descripcion'],
-                      rec['nivel'], rec['parent_code'], rec['is_total'], rec['valor'], sync_id))
-            conn.execute("""
-                UPDATE sync_logs SET status='success', completed_at=?, records_fetched=?, records_inserted=?
-                WHERE id=?
-            """, (datetime.utcnow().isoformat(), len(rows), len(records), sync_id))
+                      rec['nivel'], rec['parent_code'], rec['is_total'], rec['valor'], ctx.sync_id))
 
         nombres_mes = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
         meses_str = ', '.join(nombres_mes[m] for m in months_in_file)
-        log_audit(user["user_id"], user["username"], "financieros_upload",
-                  f"file={file.filename} year={year} meses=[{meses_str}] records={len(records)}", ip)
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
+        ctx.set_audit_extra(f"year={year} meses=[{meses_str}]")
         return {
             "status": "success",
             "year": year,
@@ -187,14 +172,6 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             "n_meses": len(months_in_file),
             "records": len(records),
         }
-    except Exception as e:
-        _log.exception("financieros_upload failed")
-        with get_db() as conn:
-            conn.execute("""
-                UPDATE sync_logs SET status='failed', completed_at=?, error_message=? WHERE id=?
-            """, (datetime.utcnow().isoformat(), f"{type(e).__name__}: {str(e)[:200]}", sync_id))
-        log_audit(user["user_id"], user["username"], "financieros_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato del Estado de Resultados.")
 
 
 @router.get("/years")

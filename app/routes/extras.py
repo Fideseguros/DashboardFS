@@ -5,155 +5,24 @@ Cada módulo expone:
   - GET  /api/{modulo}           (auth)
   - GET  /api/{modulo}/summary   (auth)
 """
-import io
 import logging
-import zipfile
-import xml.etree.ElementTree as ET
 import re
-from datetime import datetime, date
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Request
-import openpyxl
+from fastapi import APIRouter, Depends, UploadFile, File, Request
 from app.database import get_db, get_connection
 from app.auth.middleware import require_auth, require_superadmin
-from app.audit import log_audit, get_client_ip
 from app.crypto import encrypt, decrypt, mask_identificacion, mask_cliente
+from app.sync.upload_helpers import (
+    upload_session,
+    to_float as _to_float,
+    to_date as _to_date,
+    str_or_none as _str_or_none,
+)
 
 _log = logging.getLogger("fide.extras")
 MAX_UPLOAD_MB = 20
 MAX_ROWS = 50_000
 MAX_LEGACY_MB = 50          # plataforma vieja puede ser pesada (17MB pagos)
 MAX_LEGACY_ROWS = 500_000
-
-
-# ============================================================
-#                   HELPERS DE PARSEO
-# ============================================================
-def _parse_with_openpyxl(content: bytes):
-    """Parser principal — funciona con la mayoría de Excel."""
-    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    wb.close()
-    return rows
-
-
-def _parse_with_zip_xml(content: bytes):
-    """Fallback para archivos con estilos corruptos (ListadoSolicitudes)."""
-    ns = {'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
-    with zipfile.ZipFile(io.BytesIO(content), 'r') as z:
-        shared = []
-        if 'xl/sharedStrings.xml' in z.namelist():
-            with z.open('xl/sharedStrings.xml') as f:
-                root = ET.parse(f).getroot()
-                for si in root.findall('main:si', ns):
-                    t_els = si.findall('.//main:t', ns)
-                    shared.append(''.join(t.text or '' for t in t_els))
-        sheet_files = sorted(n for n in z.namelist() if n.startswith('xl/worksheets/sheet'))
-        if not sheet_files:
-            return []
-        with z.open(sheet_files[0]) as f:
-            root = ET.parse(f).getroot()
-            rows_el = root.findall('.//main:sheetData/main:row', ns)
-
-            def col_idx(letter):
-                n = 0
-                for c in letter:
-                    n = n * 26 + (ord(c.upper()) - ord('A') + 1)
-                return n - 1
-
-            rows_out = []
-            for row in rows_el:
-                cells = row.findall('main:c', ns)
-                row_dict = {}
-                for c in cells:
-                    ref = c.get('r', '')
-                    m = re.match(r'([A-Z]+)\d+', ref)
-                    if not m:
-                        continue
-                    ci = col_idx(m.group(1))
-                    t = c.get('t')
-                    v_el = c.find('main:v', ns)
-                    if v_el is None:
-                        if t == 'inlineStr':
-                            is_el = c.find('main:is', ns)
-                            t_el = is_el.find('main:t', ns) if is_el is not None else None
-                            row_dict[ci] = t_el.text if t_el is not None else None
-                        continue
-                    v = v_el.text
-                    if t == 's' and v is not None:
-                        try:
-                            v = shared[int(v)]
-                        except (ValueError, IndexError):
-                            pass
-                    row_dict[ci] = v
-                if row_dict:
-                    max_c = max(row_dict.keys()) + 1
-                    rows_out.append(tuple(row_dict.get(i) for i in range(max_c)))
-            return rows_out
-
-
-def _read_excel(content: bytes):
-    """Intenta openpyxl primero, fallback a parser XML directo."""
-    try:
-        return _parse_with_openpyxl(content)
-    except Exception as e:
-        _log.warning("openpyxl falló (%s), usando parser XML directo", e)
-        return _parse_with_zip_xml(content)
-
-
-def _to_float(v):
-    if v is None or v == '':
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    s = str(v).strip().replace('%', '').replace(',', '').strip()
-    if not s:
-        return None
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _to_date(v):
-    """Normaliza a YYYY-MM-DD."""
-    if v is None or v == '':
-        return None
-    if isinstance(v, (datetime, date)):
-        return v.strftime('%Y-%m-%d')
-    s = str(v).strip()
-    if not s:
-        return None
-    for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%d/%m/%Y', '%Y-%m-%dT%H:%M:%S', '%Y/%m/%d %H:%M:%S'):
-        try:
-            return datetime.strptime(s[:19], fmt).strftime('%Y-%m-%d')
-        except ValueError:
-            continue
-    return None
-
-
-def _str_or_none(v):
-    if v is None:
-        return None
-    s = str(v).strip()
-    return s if s else None
-
-
-def _create_sync_log(uploaded_by: int, source: str) -> int:
-    with get_db() as conn:
-        conn.execute(
-            "INSERT INTO sync_logs (started_at, status, source, uploaded_by) VALUES (?, 'running', ?, ?)",
-            (datetime.utcnow().isoformat(), source, uploaded_by)
-        )
-        return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-
-
-def _finalize_sync(sync_id: int, status: str, fetched: int, inserted: int, error: str = ''):
-    with get_db() as conn:
-        conn.execute(
-            "UPDATE sync_logs SET status=?, completed_at=?, records_fetched=?, records_inserted=?, error_message=? WHERE id=?",
-            (status, datetime.utcnow().isoformat(), fetched, inserted, error[:400], sync_id)
-        )
 
 
 def _upload_status_for(sources: list[str]) -> dict:
@@ -179,14 +48,6 @@ def _upload_status_for(sources: list[str]) -> dict:
         return result
     finally:
         conn.close()
-
-
-def _check_upload(file: UploadFile, content: bytes):
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
-    size_mb = len(content) / (1024 * 1024)
-    if size_mb > MAX_UPLOAD_MB:
-        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_UPLOAD_MB} MB")
 
 
 # ============================================================
@@ -243,33 +104,23 @@ def _transform_pago_row(row: tuple) -> dict | None:
 
 @recaudo.post("/upload")
 async def recaudo_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
-    content = await file.read()
-    _check_upload(file, content)
-    ip = get_client_ip(request) or "unknown"
-    sync_id = _create_sync_log(user["user_id"], "recaudo_upload")
-    try:
-        rows = _read_excel(content)
+    async with upload_session(request, user, file, source="recaudo_upload",
+                              max_mb=MAX_UPLOAD_MB) as ctx:
+        rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
         records = [r for r in (_transform_pago_row(row) for row in rows[1:]) if r]
 
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
-            conn.execute("DELETE FROM pagos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='recaudo_upload' AND id < ?)", (sync_id,))
+            conn.execute("DELETE FROM pagos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='recaudo_upload' AND id < ?)", (ctx.sync_id,))
             placeholders = ', '.join(['?'] * (len(cols) + 1))
             cols_sql = ', '.join(cols + ['sync_batch_id'])
             for rec in records:
                 conn.execute(f"INSERT INTO pagos ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [sync_id])
-        _finalize_sync(sync_id, 'success', len(rows), len(records))
-        log_audit(user["user_id"], user["username"], "recaudo_upload",
-                  f"file={file.filename} records={len(records)}", ip)
+                             [rec.get(c) for c in cols] + [ctx.sync_id])
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
         return {"status": "success", "records": len(records)}
-    except Exception as e:
-        _log.exception("recaudo_upload failed")
-        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
-        log_audit(user["user_id"], user["username"], "recaudo_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @recaudo.get("")
@@ -392,16 +243,12 @@ def recaudo_status(_user=Depends(require_auth)):
 async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de pagos de la plataforma vieja.
     Agrupa por id_prestamo y reemplaza la tabla pagos_legacy completa."""
-    content = await file.read()
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
-    size_mb = len(content) / (1024 * 1024)
-    if size_mb > MAX_LEGACY_MB:
-        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_LEGACY_MB} MB")
-    ip = get_client_ip(request) or "unknown"
-    sync_id = _create_sync_log(user["user_id"], "recaudo_legacy_upload")
-    try:
-        rows = _read_excel(content)
+    async with upload_session(
+        request, user, file, source="recaudo_legacy_upload",
+        max_mb=MAX_LEGACY_MB,
+        generic_error_msg="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo."
+    ) as ctx:
+        rows = ctx.read_excel()
         if len(rows) > MAX_LEGACY_ROWS:
             raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
         records = _aggregate_pagos_legacy(rows)
@@ -414,16 +261,9 @@ async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmi
             cols_sql = ', '.join(cols + ['sync_batch_id'])
             for rec in records:
                 conn.execute(f"INSERT INTO pagos_legacy ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [sync_id])
-        _finalize_sync(sync_id, 'success', len(rows), len(records))
-        log_audit(user["user_id"], user["username"], "recaudo_legacy_upload",
-                  f"file={file.filename} prestamos={len(records)}", ip)
+                             [rec.get(c) for c in cols] + [ctx.sync_id])
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
         return {"status": "success", "prestamos": len(records), "filas_origen": len(rows) - 1}
-    except Exception as e:
-        _log.exception("recaudo_legacy_upload failed")
-        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
-        log_audit(user["user_id"], user["username"], "recaudo_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo.")
 
 
 @recaudo.get("/legacy")
@@ -512,32 +352,22 @@ def _transform_solic_row(row: tuple) -> dict | None:
 
 @solicitudes.post("/upload")
 async def solic_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
-    content = await file.read()
-    _check_upload(file, content)
-    ip = get_client_ip(request) or "unknown"
-    sync_id = _create_sync_log(user["user_id"], "solicitudes_upload")
-    try:
-        rows = _read_excel(content)
+    async with upload_session(request, user, file, source="solicitudes_upload",
+                              max_mb=MAX_UPLOAD_MB) as ctx:
+        rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
         records = [r for r in (_transform_solic_row(row) for row in rows[1:]) if r]
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
-            conn.execute("DELETE FROM solicitudes WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND id < ?)", (sync_id,))
+            conn.execute("DELETE FROM solicitudes WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND id < ?)", (ctx.sync_id,))
             placeholders = ', '.join(['?'] * (len(cols) + 1))
             cols_sql = ', '.join(cols + ['sync_batch_id'])
             for rec in records:
                 conn.execute(f"INSERT INTO solicitudes ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [sync_id])
-        _finalize_sync(sync_id, 'success', len(rows), len(records))
-        log_audit(user["user_id"], user["username"], "solicitudes_upload",
-                  f"file={file.filename} records={len(records)}", ip)
+                             [rec.get(c) for c in cols] + [ctx.sync_id])
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
         return {"status": "success", "records": len(records)}
-    except Exception as e:
-        _log.exception("solicitudes_upload failed")
-        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
-        log_audit(user["user_id"], user["username"], "solicitudes_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @solicitudes.get("")
@@ -633,16 +463,12 @@ def solic_status(_user=Depends(require_auth)):
 @solicitudes.post("/upload-legacy")
 async def solic_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de solicitudes de la plataforma vieja."""
-    content = await file.read()
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
-    size_mb = len(content) / (1024 * 1024)
-    if size_mb > MAX_LEGACY_MB:
-        raise HTTPException(status_code=413, detail=f"Archivo excede {MAX_LEGACY_MB} MB")
-    ip = get_client_ip(request) or "unknown"
-    sync_id = _create_sync_log(user["user_id"], "solicitudes_legacy_upload")
-    try:
-        rows = _read_excel(content)
+    async with upload_session(
+        request, user, file, source="solicitudes_legacy_upload",
+        max_mb=MAX_LEGACY_MB,
+        generic_error_msg="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo."
+    ) as ctx:
+        rows = ctx.read_excel()
         if len(rows) > MAX_LEGACY_ROWS:
             raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
         records = [r for r in (_transform_solic_legacy_row(row) for row in rows[1:]) if r]
@@ -653,16 +479,9 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
             cols_sql = ', '.join(cols + ['sync_batch_id'])
             for rec in records:
                 conn.execute(f"INSERT INTO solicitudes_legacy ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [sync_id])
-        _finalize_sync(sync_id, 'success', len(rows), len(records))
-        log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload",
-                  f"file={file.filename} records={len(records)}", ip)
+                             [rec.get(c) for c in cols] + [ctx.sync_id])
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
         return {"status": "success", "records": len(records)}
-    except Exception as e:
-        _log.exception("solicitudes_legacy_upload failed")
-        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
-        log_audit(user["user_id"], user["username"], "solicitudes_legacy_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo.")
 
 
 @solicitudes.get("/combined")
@@ -779,30 +598,20 @@ def _transform_juridico_row(row: tuple) -> dict | None:
 
 @juridico.post("/upload")
 async def jur_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
-    content = await file.read()
-    _check_upload(file, content)
-    ip = get_client_ip(request) or "unknown"
-    sync_id = _create_sync_log(user["user_id"], "juridico_upload")
-    try:
-        rows = _read_excel(content)
+    async with upload_session(request, user, file, source="juridico_upload",
+                              max_mb=MAX_UPLOAD_MB) as ctx:
+        rows = ctx.read_excel()
         records = [r for r in (_transform_juridico_row(row) for row in rows[2:]) if r]
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
-            conn.execute("DELETE FROM procesos_juridicos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='juridico_upload' AND id < ?)", (sync_id,))
+            conn.execute("DELETE FROM procesos_juridicos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='juridico_upload' AND id < ?)", (ctx.sync_id,))
             placeholders = ', '.join(['?'] * (len(cols) + 1))
             cols_sql = ', '.join(cols + ['sync_batch_id'])
             for rec in records:
                 conn.execute(f"INSERT INTO procesos_juridicos ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [sync_id])
-        _finalize_sync(sync_id, 'success', len(rows), len(records))
-        log_audit(user["user_id"], user["username"], "juridico_upload",
-                  f"file={file.filename} records={len(records)}", ip)
+                             [rec.get(c) for c in cols] + [ctx.sync_id])
+        ctx.set_counts(fetched=len(rows), inserted=len(records))
         return {"status": "success", "records": len(records)}
-    except Exception as e:
-        _log.exception("juridico_upload failed")
-        _finalize_sync(sync_id, 'failed', 0, 0, f"{type(e).__name__}: {e}")
-        log_audit(user["user_id"], user["username"], "juridico_upload_failed", str(e)[:200], ip)
-        raise HTTPException(status_code=500, detail="No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.")
 
 
 @juridico.get("")
