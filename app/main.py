@@ -2,6 +2,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.gzip import GZipMiddleware
 from pathlib import Path
 
 import os
@@ -11,6 +12,10 @@ from app.routes import auth, credits, sync, users, financieros
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
 
 app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
+
+# Comprime respuestas JSON > 500 bytes. Los endpoints de cartera/recaudo/
+# solicitudes devuelven listas grandes que se reducen 70-90% con gzip.
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 app.include_router(auth.router)
 app.include_router(credits.router)

@@ -63,6 +63,44 @@ body {
   line-height: 1.6;
 }
 
+/* =================== LOADER INICIAL =================== */
+.initial-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.92);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.initial-loader .loader-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 28px 36px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.08);
+}
+.initial-loader .loader-spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--fide-teal-tint);
+  border-top-color: var(--fide-teal);
+  border-radius: 50%;
+  animation: spinLoader 0.8s linear infinite;
+}
+.initial-loader .loader-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--fide-teal-deeper);
+  letter-spacing: 0.3px;
+}
+@keyframes spinLoader { to { transform: rotate(360deg); } }
+
 /* =================== HEADER =================== */
 .header {
   background: linear-gradient(90deg, var(--fide-teal-deeper) 0%, var(--fide-teal-dark) 100%);
@@ -1344,6 +1382,14 @@ body {
 </head>
 <body>
 
+<!-- Overlay de carga inicial. Se oculta cuando loadData() termina. -->
+<div id="initialLoader" class="initial-loader">
+  <div class="loader-card">
+    <div class="loader-spinner"></div>
+    <div class="loader-text">Cargando cartera&hellip;</div>
+  </div>
+</div>
+
 <div class="header">
   <div class="header-left">
     <img src="/static/fide-logo.png" alt="fide. Seguros" class="fide-logo">
@@ -2384,39 +2430,44 @@ async function apiGet(url) {
   return fetch(url, { credentials: 'same-origin' });
 }
 async function loadData() {
+  // Indicador visual durante la carga inicial
+  const loader = document.getElementById('initialLoader');
+  if (loader) loader.style.display = 'flex';
   try {
-    const res = await apiGet('/api/credits');
-    if (res.status === 401) {
+    // /api/credits y /api/sync/status en paralelo (ahorra un roundtrip)
+    const [credRes, syncRes] = await Promise.all([
+      apiGet('/api/credits'),
+      apiGet('/api/sync/status').catch(() => null)
+    ]);
+    if (credRes.status === 401) {
       sessionStorage.removeItem('fide_user');
       sessionStorage.removeItem('fide_role');
       window.location.href = '/login';
       return;
     }
-    RAW_DATA = await res.json();
+    RAW_DATA = await credRes.json();
     filteredData = [...RAW_DATA];
     populateFilters();
     updateAll();
-    loadSyncStatus();
+    // Pintar el lastSync con la data ya obtenida
+    if (syncRes && syncRes.ok) {
+      try {
+        const s = await syncRes.json();
+        const el = document.getElementById('lastSync');
+        if (el && s.completed_at) {
+          const dt = new Date(s.completed_at + 'Z');
+          const pad = n => String(n).padStart(2, '0');
+          el.textContent = `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+        } else if (el) {
+          el.textContent = 'Sin datos cargados';
+        }
+      } catch (e) {}
+    }
   } catch(e) {
     document.querySelector('.container').innerHTML = '<div style="text-align:center;padding:4rem;"><h2>Error de conexión</h2><p>No se pudo cargar los datos. <a href="/login">Reiniciar sesión</a></p></div>';
+  } finally {
+    if (loader) loader.style.display = 'none';
   }
-}
-async function loadSyncStatus() {
-  try {
-    const res = await apiGet('/api/sync/status');
-    if (res.ok) {
-      const s = await res.json();
-      const el = document.getElementById('lastSync');
-      if (el && s.completed_at) {
-        // Convert UTC ISO to local Colombian friendly format: 20/04/2026 17:13
-        const dt = new Date(s.completed_at + 'Z');
-        const pad = n => String(n).padStart(2, '0');
-        el.textContent = `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-      } else if (el) {
-        el.textContent = 'Sin datos cargados';
-      }
-    }
-  } catch(e) {}
 }
 let sortCol = null, sortDir = 1;
 let currentPage = 1;
