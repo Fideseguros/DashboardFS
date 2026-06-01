@@ -1575,7 +1575,7 @@ body {
       <div class="kpi-sub" id="kpiActivosSub"></div>
     </div>
     <div class="kpi-card blue">
-      <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor original desembolsado de todos los cr&eacute;ditos (activos + cancelados). El sub muestra solo el valor de activos.</span></div>
+      <div class="kpi-info">i<span class="kpi-tooltip">Suma del valor original desembolsado de todos los cr&eacute;ditos (activos + cancelados). El sub muestra el saldo capital pendiente de los cr&eacute;ditos activos &mdash; coincide con el KPI Saldo Capital.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9M12 7v2M12 15v2"/></svg></div>
       <div class="kpi-label">Valor Total Cartera</div>
       <div class="kpi-value" id="kpiValor">-</div>
@@ -3060,9 +3060,13 @@ function updateKPIs() {
   document.getElementById('kpiTotalSub').textContent = `${fmt(act.length)} activos / ${fmt(d.length-act.length)} cancelados`;
   document.getElementById('kpiActivos').textContent = fmt(act.length);
   document.getElementById('kpiActivosSub').textContent = pct(act.length, d.length) + ' del total';
+  // tValAct se mantiene para Ticket Promedio Activos (más abajo).
+  // El sub de 'Valor Total Cartera' muestra el SALDO CAPITAL ACTIVO (= lo que
+  // queda pendiente por cobrar de los créditos activos), no el valor original.
+  // Pedido explícito de la líder para que coincida con el KPI Saldo Capital.
   const tValAct = act.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
   document.getElementById('kpiValor').textContent = fmtM(tVal);
-  document.getElementById('kpiValorSub').textContent = `Activos: ${fmtM(tValAct)}`;
+  document.getElementById('kpiValorSub').textContent = `Saldo activos: ${fmtM(tSalActivo)}`;
   document.getElementById('kpiSaldo').textContent = fmtM(tSal);
   document.getElementById('kpiSaldoSub').textContent = pct(tSal, tVal) + ' del valor original';
   document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
