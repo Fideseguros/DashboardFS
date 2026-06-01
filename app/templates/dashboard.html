@@ -2449,6 +2449,10 @@ async function loadData() {
     filteredData = [...RAW_DATA];
     populateFilters();
     updateAll();
+    // Para superadmin: reemplazar Top Clientes con versión que muestra IDs
+    // completos (server-side, auditado). En otros roles este fetch da 403
+    // y la versión enmascarada de updateAggTables se queda visible.
+    loadTopClientesUnmasked();
     // Pintar el lastSync con la data ya obtenida
     if (syncRes && syncRes.ok) {
       try {
@@ -4894,7 +4898,57 @@ document.querySelectorAll('.data-table th').forEach(th=>{
 });
 
 // ---- INIT ----
-function updateAll() { updateKPIs(); updateCharts(); updateTable(); updateAggTables(); }
+function updateAll() {
+  updateKPIs();
+  updateCharts();
+  updateTable();
+  updateAggTables();
+  // Si Proyección está montada en el DOM (tab cargado al menos una vez),
+  // refrescarla — usa filteredData igual que los demás charts de Cartera.
+  if (document.getElementById('chartProyeccion')) {
+    try { renderProyeccion(); } catch (e) {}
+  }
+}
+
+// Carga Top Clientes con IDs completos para superadmin (server-side, auditado).
+// Si la API responde 403 (otro rol) o error, dejamos la versión enmascarada
+// que ya pintó updateAggTables() — fallback transparente.
+let _topClientesLoading = false;
+async function loadTopClientesUnmasked() {
+  if (_topClientesLoading) return;
+  _topClientesLoading = true;
+  try {
+    const res = await apiGet('/api/credits/top-clientes?n=20');
+    if (!res.ok) return;  // viewer/consulta verán la versión enmascarada
+    const top = await res.json();
+    const tbCli = document.querySelector('#tblTopClientes tbody');
+    if (!tbCli || !Array.isArray(top)) return;
+    if (!top.length) {
+      tbCli.innerHTML = '<tr><td colspan="8">Sin clientes activos en el batch actual.</td></tr>';
+      return;
+    }
+    tbCli.innerHTML = top.map((c, i) => {
+      const moraColor = (c.max_mora || 0) > 30 ? '#b8680f' : '#0f7b6c';
+      const saldoMora = c.saldo_mora_30 || 0;
+      return `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td>${c.cliente || '-'}</td>
+          <td>${c.identificacion || '-'}</td>
+          <td class="num">${fmt(c.n_creditos || 0)}</td>
+          <td class="num">${fmtCurrency(c.valor_credito)}</td>
+          <td class="num">${fmtCurrency(c.saldo_capital)}</td>
+          <td class="num" style="color:${moraColor};font-weight:800;">${fmt(c.max_mora || 0)}</td>
+          <td class="num">${saldoMora > 0 ? fmtCurrency(saldoMora) : '-'}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (e) {
+    // Silencioso — el fallback ya está en el DOM
+  } finally {
+    _topClientesLoading = false;
+  }
+}
 
 // ---- Tablas agregadas (Top Clientes / Aliados) ----
 function _moraColor(pct) {

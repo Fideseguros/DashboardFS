@@ -1,7 +1,8 @@
 """Credit data API routes with PII masking + audit logging."""
 import csv
 import io
-from fastapi import APIRouter, Depends, Query, Request
+import hashlib
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from app.database import get_connection
 from app.auth.middleware import require_auth, require_superadmin
@@ -139,6 +140,85 @@ def export_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=fide_cartera_export.csv"}
     )
+
+
+@router.get("/top-clientes")
+def top_clientes(
+    request: Request,
+    user=Depends(require_superadmin),
+    n: int = Query(20, ge=1, le=100),
+):
+    """Top N clientes por saldo capital ACTIVO con ID + nombre completos.
+
+    Habeas Data: solo superadmin. Se loguea un evento credit_reveal con el
+    listado de IDs revelados (o hash + count si N>50) para trazabilidad.
+    Trabaja solo sobre el batch activo (último upload exitoso de cartera).
+    """
+    ip = get_client_ip(request)
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT identificacion, cliente, saldo_capital, valor_credito, "
+            "       dias_mora, calificacion, linea, aliado "
+            "FROM credits WHERE estado='ACTIVO' AND sync_batch_id = "
+            "(SELECT id FROM sync_logs WHERE source='manual_upload' AND status='success' "
+            " ORDER BY id DESC LIMIT 1)"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    # Agregar por identificación (decifrada). Un cliente puede tener varios créditos.
+    by_ident = {}
+    for r in rows:
+        ident = decrypt(r["identificacion"])
+        cli = decrypt(r["cliente"])
+        if not ident:
+            continue
+        agg = by_ident.setdefault(ident, {
+            "identificacion": ident,
+            "cliente": cli or "—",
+            "n_creditos": 0,
+            "saldo_capital": 0.0,
+            "valor_credito": 0.0,
+            "saldo_mora_30": 0.0,
+            "max_mora": 0,
+            "lineas": set(),
+            "calificaciones": set(),
+        })
+        agg["n_creditos"] += 1
+        saldo = float(r["saldo_capital"] or 0)
+        agg["saldo_capital"] += saldo
+        agg["valor_credito"] += float(r["valor_credito"] or 0)
+        dm = int(r["dias_mora"] or 0)
+        if dm > 30:
+            agg["saldo_mora_30"] += saldo  # política Fideseguros
+        if dm > agg["max_mora"]:
+            agg["max_mora"] = dm
+        if r["linea"]:
+            agg["lineas"].add(r["linea"])
+        if r["calificacion"]:
+            agg["calificaciones"].add((r["calificacion"] or "").strip())
+
+    # Ordenar por saldo desc y tomar top N
+    top = sorted(by_ident.values(), key=lambda x: -x["saldo_capital"])[:n]
+
+    # Convertir sets a listas para serialización JSON
+    for t in top:
+        t["lineas"] = sorted(t["lineas"])
+        t["calificaciones"] = sorted(c for c in t["calificaciones"] if c)
+
+    # Audit: registrar los IDs revelados. Si son muchos, hash + count.
+    revealed_ids = [t["identificacion"] for t in top]
+    if len(revealed_ids) <= 50:
+        ids_str = ",".join(str(i) for i in revealed_ids)
+    else:
+        h = hashlib.sha256(",".join(str(i) for i in revealed_ids).encode()).hexdigest()[:16]
+        ids_str = f"hash={h} count={len(revealed_ids)}"
+    log_audit(
+        user["user_id"], user["username"], "credit_reveal",
+        f"top_clientes n={n} ids={ids_str}", ip
+    )
+    return top
 
 
 @router.get("/{credit_id}/reveal")
