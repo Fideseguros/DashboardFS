@@ -259,6 +259,16 @@ CREATE TABLE IF NOT EXISTS procesos_juridicos (
 );
 CREATE INDEX IF NOT EXISTS idx_juridico_prob ON procesos_juridicos(probabilidad);
 CREATE INDEX IF NOT EXISTS idx_juridico_sync ON procesos_juridicos(sync_batch_id);
+
+-- ============== Tracking de plataforma origen de cada cuenta ==============
+-- Se repuebla en cada incremental_update_from_excel con las cuentas presentes
+-- en el archivo de la plataforma NUEVA. Cualquier cuenta de credits que NO
+-- aparece aquí se considera de la plataforma VIEJA (base histórica).
+-- Sirve para split Nueva vs Histórica en el cuadro Desembolsado vs Recaudado.
+CREATE TABLE IF NOT EXISTS cartera_nueva_cuentas (
+    cuenta TEXT PRIMARY KEY,
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 CREDIT_FIELDS = [

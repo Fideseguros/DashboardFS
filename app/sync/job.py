@@ -77,6 +77,9 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
         with get_db() as conn:
             _insert_credits(conn, records, sync_id)
             _cleanup_old_batches(conn, sync_id)
+            # Reload base = perdemos tracking de plataforma nueva.
+            # El próximo incremental_update_from_excel lo repuebla.
+            conn.execute("DELETE FROM cartera_nueva_cuentas")
             duration = time.time() - start
             conn.execute("""
                 UPDATE sync_logs SET status='success', completed_at=?,
@@ -166,10 +169,12 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
             placeholders = ", ".join(["?"] * (len(CREDIT_FIELDS) + 1))
             cols_sql = ", ".join(CREDIT_FIELDS + ["sync_batch_id"])
 
+            touched_cuentas = []
             for rec in new_records:
                 cuenta = rec.get('cuenta')
                 if not cuenta:
                     continue
+                touched_cuentas.append(str(cuenta))
                 existing = conn.execute(
                     "SELECT id FROM credits WHERE cuenta=? AND sync_batch_id=?",
                     (str(cuenta), sync_id)
@@ -187,6 +192,17 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
                     values = [rec.get(k) for k in CREDIT_FIELDS] + [sync_id]
                     conn.execute(f"INSERT INTO credits ({cols_sql}) VALUES ({placeholders})", values)
                     inserted_count += 1
+
+            # Repoblar tabla de tracking de plataforma. Las cuentas que aparecen
+            # en este archivo se marcan como "nueva"; el resto que ya está en
+            # credits queda implícitamente como "vieja".
+            conn.execute("DELETE FROM cartera_nueva_cuentas")
+            for c in touched_cuentas:
+                conn.execute(
+                    "INSERT OR REPLACE INTO cartera_nueva_cuentas (cuenta, last_seen_at) "
+                    "VALUES (?, datetime('now'))",
+                    (c,)
+                )
 
             _cleanup_old_batches(conn, sync_id)
 

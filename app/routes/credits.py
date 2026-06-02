@@ -103,13 +103,20 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
         batch_rec  = ("(SELECT id FROM sync_logs WHERE source='recaudo_upload' "
                       "AND status='success' ORDER BY id DESC LIMIT 1)")
 
-        # Desembolsado por estado
+        # Desembolsado por estado + breakdown nueva/legacy via cartera_nueva_cuentas.
+        # Una cuenta es "nueva" si aparece en cartera_nueva_cuentas (= estaba en
+        # el último archivo de la plataforma nueva subido). De lo contrario, "legacy".
         desem = conn.execute(f"""
             SELECT
-                COALESCE(SUM(valor_credito), 0) as total,
-                COALESCE(SUM(CASE WHEN estado='CANCELADO' THEN valor_credito ELSE 0 END), 0) as cerrado,
-                COALESCE(SUM(CASE WHEN estado='ACTIVO'    THEN valor_credito ELSE 0 END), 0) as activos
-            FROM credits WHERE sync_batch_id = {batch_cart}
+                COALESCE(SUM(c.valor_credito), 0) as total,
+                COALESCE(SUM(CASE WHEN c.estado='CANCELADO' THEN c.valor_credito ELSE 0 END), 0) as cerrado,
+                COALESCE(SUM(CASE WHEN c.estado='ACTIVO'    THEN c.valor_credito ELSE 0 END), 0) as activos,
+                COALESCE(SUM(CASE WHEN n.cuenta IS NOT NULL                          THEN c.valor_credito ELSE 0 END), 0) as total_nueva,
+                COALESCE(SUM(CASE WHEN n.cuenta IS NOT NULL AND c.estado='CANCELADO' THEN c.valor_credito ELSE 0 END), 0) as cerrado_nueva,
+                COALESCE(SUM(CASE WHEN n.cuenta IS NOT NULL AND c.estado='ACTIVO'    THEN c.valor_credito ELSE 0 END), 0) as activos_nueva
+            FROM credits c
+            LEFT JOIN cartera_nueva_cuentas n ON n.cuenta = c.cuenta
+            WHERE c.sync_batch_id = {batch_cart}
         """).fetchone()
 
         # Recaudado plataforma NUEVA (tabla pagos, JOIN por cuenta).
@@ -153,11 +160,19 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
         des["cerrado"]["pct"] = (des["cerrado"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
         des["activos"]["pct"] = (des["activos"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
         # Desglose Nueva / Histórica para cada fila — la UI lo muestra debajo
-        # del Vr Recaudado para que la líder vea cómo se distribuye.
+        # del valor para que la líder vea cómo se distribuye.
         des["recaudado_breakdown"] = {
             "total":   {"nueva": float(rec_new["total"] or 0),   "legacy": float(rec_leg["total"] or 0)},
             "cerrado": {"nueva": float(rec_new["cerrado"] or 0), "legacy": float(rec_leg["cerrado"] or 0)},
             "activos": {"nueva": float(rec_new["activos"] or 0), "legacy": float(rec_leg["activos"] or 0)},
+        }
+        # Desglose Vr Desembolsado por plataforma.
+        # 'nueva' = cuentas marcadas en cartera_nueva_cuentas (último upload incremental).
+        # 'legacy' = resto = total - nueva.
+        des["desembolsado_breakdown"] = {
+            "total":   {"nueva": float(desem["total_nueva"] or 0),   "legacy": float(desem["total"] or 0)   - float(desem["total_nueva"] or 0)},
+            "cerrado": {"nueva": float(desem["cerrado_nueva"] or 0), "legacy": float(desem["cerrado"] or 0) - float(desem["cerrado_nueva"] or 0)},
+            "activos": {"nueva": float(desem["activos_nueva"] or 0), "legacy": float(desem["activos"] or 0) - float(desem["activos_nueva"] or 0)},
         }
         return des
     finally:

@@ -1634,18 +1634,20 @@ body {
     <div class="charts-grid">
       <div class="chart-card full">
         <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos &mdash; nueva + hist&oacute;rica)</span></h3>
-        <div class="table-wrapper" style="margin-bottom:1rem;">
-          <table class="data-table compact" id="tblDesemRec">
-            <thead><tr>
-              <th></th>
-              <th class="num">Vr Desembolsado</th>
-              <th class="num">%</th>
-              <th class="num">Vr Recaudado</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start;">
+          <div class="table-wrapper">
+            <table class="data-table compact" id="tblDesemRec">
+              <thead><tr>
+                <th></th>
+                <th class="num">Vr Desembolsado</th>
+                <th class="num">%</th>
+                <th class="num">Vr Recaudado</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="chart-container tall"><canvas id="chartDesemRec"></canvas></div>
         </div>
-        <div class="chart-container tall"><canvas id="chartDesemRec"></canvas></div>
       </div>
       <div class="chart-card">
         <h3><span class="dot"></span> Estado de Cr&eacute;ditos</h3>
@@ -4959,9 +4961,10 @@ async function loadDesembolsoVsRecaudo() {
     const tb = document.querySelector('#tblDesemRec tbody');
     if (tb) {
       const fmtDots = v => '$ ' + Math.round(v || 0).toLocaleString('es-CO');
-      const bd = d.recaudado_breakdown || {};
-      // Helper: genera el desglose Nueva/Hist. en DOS líneas (una debajo de la otra)
-      const subBd = (key) => {
+      const bdR = d.recaudado_breakdown || {};
+      const bdD = d.desembolsado_breakdown || {};
+      // Helper: genera el desglose Nueva/Hist. en DOS líneas
+      const subBd = (bd, key) => {
         const b = bd[key];
         if (!b || (!b.nueva && !b.legacy)) return '';
         return (
@@ -4974,21 +4977,21 @@ async function loadDesembolsoVsRecaudo() {
       tb.innerHTML = `
         <tr>
           <td><strong>Total Desembolsado</strong></td>
-          <td class="num"><strong>${fmtDots(d.total.desembolsado)}</strong></td>
+          <td class="num"><strong>${fmtDots(d.total.desembolsado)}</strong>${subBd(bdD, 'total')}</td>
           <td class="num">—</td>
-          <td class="num"><strong>${fmtDots(d.total.recaudado)}</strong>${subBd('total')}</td>
+          <td class="num"><strong>${fmtDots(d.total.recaudado)}</strong>${subBd(bdR, 'total')}</td>
         </tr>
         <tr>
           <td>Total Cerrado</td>
-          <td class="num">${fmtDots(d.cerrado.desembolsado)}</td>
+          <td class="num">${fmtDots(d.cerrado.desembolsado)}${subBd(bdD, 'cerrado')}</td>
           <td class="num">${(d.cerrado.pct || 0).toFixed(1)}%</td>
-          <td class="num">${fmtDots(d.cerrado.recaudado)}${subBd('cerrado')}</td>
+          <td class="num">${fmtDots(d.cerrado.recaudado)}${subBd(bdR, 'cerrado')}</td>
         </tr>
         <tr>
           <td>Total Desembolsos Activos</td>
-          <td class="num">${fmtDots(d.activos.desembolsado)}</td>
+          <td class="num">${fmtDots(d.activos.desembolsado)}${subBd(bdD, 'activos')}</td>
           <td class="num">${(d.activos.pct || 0).toFixed(1)}%</td>
-          <td class="num">${fmtDots(d.activos.recaudado)}${subBd('activos')}</td>
+          <td class="num">${fmtDots(d.activos.recaudado)}${subBd(bdR, 'activos')}</td>
         </tr>
       `;
     }
