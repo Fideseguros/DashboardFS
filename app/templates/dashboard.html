@@ -4961,12 +4961,16 @@ async function loadDesembolsoVsRecaudo() {
     const tb = document.querySelector('#tblDesemRec tbody');
     if (tb) {
       const fmtDots = v => '$ ' + Math.round(v || 0).toLocaleString('es-CO');
+      const breakdown = d.recaudado_breakdown || {};
+      const breakdownTxt = (breakdown.legacy > 0 || breakdown.nueva > 0)
+        ? `<div style="font-size:0.65rem;color:var(--text-secondary);font-weight:500;margin-top:2px;">Nueva: ${fmtDots(breakdown.nueva)} · Hist.: ${fmtDots(breakdown.legacy)}</div>`
+        : '';
       tb.innerHTML = `
         <tr>
           <td><strong>Total Desembolsado</strong></td>
           <td class="num"><strong>${fmtDots(d.total.desembolsado)}</strong></td>
           <td class="num">—</td>
-          <td class="num"><strong>${fmtDots(d.total.recaudado)}</strong></td>
+          <td class="num"><strong>${fmtDots(d.total.recaudado)}</strong>${breakdownTxt}</td>
         </tr>
         <tr>
           <td>Total Cerrado</td>

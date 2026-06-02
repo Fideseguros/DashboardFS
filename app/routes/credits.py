@@ -91,12 +91,10 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
     """Comparativo Valor Desembolsado vs Valor Recaudado por estado del crédito.
 
     - Desembolsado = SUM(valor_credito) de los créditos en el batch activo.
-    - Recaudado = SUM(pagos.total) de pagos del último batch de recaudo,
-      cruzados con créditos por 'cuenta'.
-
-    Devuelve 3 filas: total, cerrado (estado=CANCELADO), activos (estado=ACTIVO),
-    cada una con valor desembolsado, valor recaudado, y % sobre el total
-    desembolsado (para las dos últimas).
+    - Recaudado = SUM(pagos.total) de pagos del último batch de recaudo
+      (plataforma nueva) MÁS SUM(pagos_legacy.valor_pago_total) del histórico
+      de la plataforma vieja, ambos cruzados con créditos por 'cuenta' (o por
+      id_prestamo en el caso del legacy) para distribuirlos por estado.
     """
     conn = get_connection()
     try:
@@ -114,9 +112,8 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
             FROM credits WHERE sync_batch_id = {batch_cart}
         """).fetchone()
 
-        # Recaudado por estado del crédito asociado (JOIN por cuenta).
-        # Si no hay batch de recaudo o no coincide ninguna cuenta, devuelve ceros.
-        rec = conn.execute(f"""
+        # Recaudado plataforma NUEVA (tabla pagos, JOIN por cuenta).
+        rec_new = conn.execute(f"""
             SELECT
                 COALESCE(SUM(p.total), 0) as total,
                 COALESCE(SUM(CASE WHEN c.estado='CANCELADO' THEN p.total ELSE 0 END), 0) as cerrado,
@@ -128,14 +125,38 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
             WHERE p.sync_batch_id = {batch_rec}
         """).fetchone()
 
+        # Recaudado plataforma VIEJA (pagos_legacy, agregado por id_prestamo).
+        # Join por id_prestamo = credits.cuenta. Los que no matchean caen
+        # solo en 'total' (no en cerrado/activos), pero se cuentan al total.
+        rec_leg = conn.execute(f"""
+            SELECT
+                COALESCE(SUM(pl.valor_pago_total), 0) as total,
+                COALESCE(SUM(CASE WHEN c.estado='CANCELADO' THEN pl.valor_pago_total ELSE 0 END), 0) as cerrado,
+                COALESCE(SUM(CASE WHEN c.estado='ACTIVO'    THEN pl.valor_pago_total ELSE 0 END), 0) as activos
+            FROM pagos_legacy pl
+            LEFT JOIN credits c
+                ON c.cuenta = pl.id_prestamo
+                AND c.sync_batch_id = {batch_cart}
+        """).fetchone()
+
+        # Combinar recaudo nuevo + legacy
+        rec_total   = float(rec_new["total"] or 0)   + float(rec_leg["total"] or 0)
+        rec_cerrado = float(rec_new["cerrado"] or 0) + float(rec_leg["cerrado"] or 0)
+        rec_activos = float(rec_new["activos"] or 0) + float(rec_leg["activos"] or 0)
+
         total_des = float(desem["total"] or 0)
         des = {
-            "total":    {"desembolsado": float(desem["total"] or 0),    "recaudado": float(rec["total"] or 0),    "pct": None},
-            "cerrado":  {"desembolsado": float(desem["cerrado"] or 0),  "recaudado": float(rec["cerrado"] or 0)},
-            "activos":  {"desembolsado": float(desem["activos"] or 0),  "recaudado": float(rec["activos"] or 0)},
+            "total":    {"desembolsado": float(desem["total"] or 0),    "recaudado": rec_total,   "pct": None},
+            "cerrado":  {"desembolsado": float(desem["cerrado"] or 0),  "recaudado": rec_cerrado},
+            "activos":  {"desembolsado": float(desem["activos"] or 0),  "recaudado": rec_activos},
         }
         des["cerrado"]["pct"] = (des["cerrado"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
         des["activos"]["pct"] = (des["activos"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
+        # Desglose informativo para la UI (sub-label opcional)
+        des["recaudado_breakdown"] = {
+            "nueva":  float(rec_new["total"] or 0),
+            "legacy": float(rec_leg["total"] or 0),
+        }
         return des
     finally:
         conn.close()
