@@ -1632,6 +1632,21 @@ body {
   <!-- Tab: Resumen -->
   <div class="tab-content active" id="tab-resumen">
     <div class="charts-grid">
+      <div class="chart-card full">
+        <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos &mdash; nueva + hist&oacute;rica)</span></h3>
+        <div class="table-wrapper" style="margin-bottom:1rem;">
+          <table class="data-table compact" id="tblDesemRec">
+            <thead><tr>
+              <th></th>
+              <th class="num">Vr Desembolsado</th>
+              <th class="num">%</th>
+              <th class="num">Vr Recaudado</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="chart-container tall"><canvas id="chartDesemRec"></canvas></div>
+      </div>
       <div class="chart-card">
         <h3><span class="dot"></span> Estado de Cr&eacute;ditos</h3>
         <div class="chart-container"><canvas id="chartEstado"></canvas></div>
@@ -1719,23 +1734,6 @@ body {
           </div>
         </div>
         <div class="chart-container tall"><canvas id="chartCosecha"></canvas></div>
-      </div>
-      <div class="chart-card full">
-        <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos del batch activo)</span></h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start;">
-          <div class="table-wrapper" style="max-height:280px;">
-            <table class="data-table compact" id="tblDesemRec">
-              <thead><tr>
-                <th></th>
-                <th class="num">Vr Desembolsado</th>
-                <th class="num">%</th>
-                <th class="num">Vr Recaudado</th>
-              </tr></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="chart-container" style="height:280px;"><canvas id="chartDesemRec"></canvas></div>
-        </div>
       </div>
       <div class="chart-card full">
         <h3><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
