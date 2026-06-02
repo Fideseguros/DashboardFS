@@ -4960,11 +4960,16 @@ async function loadDesembolsoVsRecaudo() {
     if (tb) {
       const fmtDots = v => '$ ' + Math.round(v || 0).toLocaleString('es-CO');
       const bd = d.recaudado_breakdown || {};
-      // Helper: genera la línea 'Nueva: $X · Hist.: $Y' si hay datos
+      // Helper: genera el desglose Nueva/Hist. en DOS líneas (una debajo de la otra)
       const subBd = (key) => {
         const b = bd[key];
         if (!b || (!b.nueva && !b.legacy)) return '';
-        return `<div style="font-size:0.65rem;color:var(--text-secondary);font-weight:500;margin-top:2px;">Nueva: ${fmtDots(b.nueva)} &middot; Hist.: ${fmtDots(b.legacy)}</div>`;
+        return (
+          `<div style="font-size:0.65rem;color:var(--text-secondary);font-weight:500;margin-top:4px;line-height:1.4;">` +
+            `<div>Nueva: ${fmtDots(b.nueva)}</div>` +
+            `<div>Hist.: ${fmtDots(b.legacy)}</div>` +
+          `</div>`
+        );
       };
       tb.innerHTML = `
         <tr>
