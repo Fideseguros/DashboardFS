@@ -152,10 +152,12 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
         }
         des["cerrado"]["pct"] = (des["cerrado"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
         des["activos"]["pct"] = (des["activos"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
-        # Desglose informativo para la UI (sub-label opcional)
+        # Desglose Nueva / Histórica para cada fila — la UI lo muestra debajo
+        # del Vr Recaudado para que la líder vea cómo se distribuye.
         des["recaudado_breakdown"] = {
-            "nueva":  float(rec_new["total"] or 0),
-            "legacy": float(rec_leg["total"] or 0),
+            "total":   {"nueva": float(rec_new["total"] or 0),   "legacy": float(rec_leg["total"] or 0)},
+            "cerrado": {"nueva": float(rec_new["cerrado"] or 0), "legacy": float(rec_leg["cerrado"] or 0)},
+            "activos": {"nueva": float(rec_new["activos"] or 0), "legacy": float(rec_leg["activos"] or 0)},
         }
         return des
     finally:
