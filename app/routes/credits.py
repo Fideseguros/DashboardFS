@@ -86,6 +86,61 @@ def get_summary(_user=Depends(require_auth)):
         conn.close()
 
 
+@router.get("/desembolso-vs-recaudo")
+def desembolso_vs_recaudo(_user=Depends(require_auth)):
+    """Comparativo Valor Desembolsado vs Valor Recaudado por estado del crédito.
+
+    - Desembolsado = SUM(valor_credito) de los créditos en el batch activo.
+    - Recaudado = SUM(pagos.total) de pagos del último batch de recaudo,
+      cruzados con créditos por 'cuenta'.
+
+    Devuelve 3 filas: total, cerrado (estado=CANCELADO), activos (estado=ACTIVO),
+    cada una con valor desembolsado, valor recaudado, y % sobre el total
+    desembolsado (para las dos últimas).
+    """
+    conn = get_connection()
+    try:
+        batch_cart = ("(SELECT id FROM sync_logs WHERE source='manual_upload' "
+                      "AND status='success' ORDER BY id DESC LIMIT 1)")
+        batch_rec  = ("(SELECT id FROM sync_logs WHERE source='recaudo_upload' "
+                      "AND status='success' ORDER BY id DESC LIMIT 1)")
+
+        # Desembolsado por estado
+        desem = conn.execute(f"""
+            SELECT
+                COALESCE(SUM(valor_credito), 0) as total,
+                COALESCE(SUM(CASE WHEN estado='CANCELADO' THEN valor_credito ELSE 0 END), 0) as cerrado,
+                COALESCE(SUM(CASE WHEN estado='ACTIVO'    THEN valor_credito ELSE 0 END), 0) as activos
+            FROM credits WHERE sync_batch_id = {batch_cart}
+        """).fetchone()
+
+        # Recaudado por estado del crédito asociado (JOIN por cuenta).
+        # Si no hay batch de recaudo o no coincide ninguna cuenta, devuelve ceros.
+        rec = conn.execute(f"""
+            SELECT
+                COALESCE(SUM(p.total), 0) as total,
+                COALESCE(SUM(CASE WHEN c.estado='CANCELADO' THEN p.total ELSE 0 END), 0) as cerrado,
+                COALESCE(SUM(CASE WHEN c.estado='ACTIVO'    THEN p.total ELSE 0 END), 0) as activos
+            FROM pagos p
+            LEFT JOIN credits c
+                ON c.cuenta = p.cuenta
+                AND c.sync_batch_id = {batch_cart}
+            WHERE p.sync_batch_id = {batch_rec}
+        """).fetchone()
+
+        total_des = float(desem["total"] or 0)
+        des = {
+            "total":    {"desembolsado": float(desem["total"] or 0),    "recaudado": float(rec["total"] or 0),    "pct": None},
+            "cerrado":  {"desembolsado": float(desem["cerrado"] or 0),  "recaudado": float(rec["cerrado"] or 0)},
+            "activos":  {"desembolsado": float(desem["activos"] or 0),  "recaudado": float(rec["activos"] or 0)},
+        }
+        des["cerrado"]["pct"] = (des["cerrado"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
+        des["activos"]["pct"] = (des["activos"]["desembolsado"] / total_des * 100.0) if total_des > 0 else 0
+        return des
+    finally:
+        conn.close()
+
+
 @router.get("/export/csv")
 def export_csv(
     request: Request,

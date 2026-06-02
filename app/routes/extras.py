@@ -499,6 +499,8 @@ SOLIC_NUEVA_REMAP = {
 SOLIC_LEGACY_REMAP = {
     'APROBADA': 'DESEMBOLSADA',
     'BORRADA': 'ANULADA',
+    'NEGADA': 'ANULADA',     # pedido por la líder: unificar
+    'DESISTIDA': 'ANULADA',  # pedido por la líder: unificar
 }
 SOLIC_LEGACY_EXCLUDE = {'PENDIENTE'}
 

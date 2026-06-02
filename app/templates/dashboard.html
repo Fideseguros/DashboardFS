@@ -1721,6 +1721,23 @@ body {
         <div class="chart-container tall"><canvas id="chartCosecha"></canvas></div>
       </div>
       <div class="chart-card full">
+        <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos del batch activo)</span></h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start;">
+          <div class="table-wrapper" style="max-height:280px;">
+            <table class="data-table compact" id="tblDesemRec">
+              <thead><tr>
+                <th></th>
+                <th class="num">Vr Desembolsado</th>
+                <th class="num">%</th>
+                <th class="num">Vr Recaudado</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="chart-container" style="height:280px;"><canvas id="chartDesemRec"></canvas></div>
+        </div>
+      </div>
+      <div class="chart-card full">
         <h3><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
         <div class="table-wrapper" style="max-height:460px;">
           <table class="data-table compact" id="tblTopClientes">
@@ -1972,11 +1989,8 @@ body {
               <th>Cliente</th>
               <th class="num"># Pagos</th>
               <th class="num">Valor Total</th>
-              <th class="num">IVA</th>
               <th class="num">Mora</th>
               <th>Primer Pago</th>
-              <th>&Uacute;ltimo Pago</th>
-              <th>Cancelado</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -2453,6 +2467,8 @@ async function loadData() {
     // completos (server-side, auditado). En otros roles este fetch da 403
     // y la versión enmascarada de updateAggTables se queda visible.
     loadTopClientesUnmasked();
+    // Cuadro Desembolsado vs Recaudado (requiere JOIN cartera+pagos en server)
+    loadDesembolsoVsRecaudo();
     // Pintar el lastSync con la data ya obtenida
     if (syncRes && syncRes.ok) {
       try {
@@ -3771,15 +3787,12 @@ async function loadRecaudo() {
           <td>${p.nombre || '-'}</td>
           <td class="num">${fmt(p.num_pagos || 0)}</td>
           <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
-          <td class="num">${fmtCurrency(p.iva_pagado_total)}</td>
           <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
           <td>${p.fecha_primer_pago || '-'}</td>
-          <td>${p.fecha_ultimo_pago || '-'}</td>
-          <td>${p.prestamo_cancelado || '-'}</td>
         </tr>
       `).join('');
       if (!lLeg.length) {
-        tbLeg.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado en la base de datos.</td></tr>';
+        tbLeg.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado en la base de datos.</td></tr>';
       }
     }
   } catch(e) {
@@ -3792,6 +3805,23 @@ let _slCharts = {};
 let _slRawData = [];           // crudo del /combined endpoint
 let _slFilters = {};           // {estado: 'DESEMBOLSADA', linea: 'POLIZA PERSONAS', ...}
 const SL_FILTER_LABELS = { estado: 'Estado', linea: 'Línea' };
+
+// Consolida la línea de cualquier solicitud en una de las 4 categorías que
+// quiere la líder: CREDITO EMPRESAS, CREDITO PERSONAS, POLIZA EMPRESAS,
+// POLIZA PERSONAS. El resto se agrupa como 'OTROS'.
+function _normalizeLineaSolic(linea) {
+  if (!linea) return 'OTROS';
+  const u = String(linea).toUpperCase();
+  const isCred = /CR[EÉ]DITO/.test(u);
+  const isPol  = /P[OÓ]LIZA/.test(u);
+  const isEmp  = /EMPRESA/.test(u);
+  const isPer  = /PERSONA/.test(u);
+  if (isCred && isEmp) return 'CREDITO EMPRESAS';
+  if (isCred && isPer) return 'CREDITO PERSONAS';
+  if (isPol  && isEmp) return 'POLIZA EMPRESAS';
+  if (isPol  && isPer) return 'POLIZA PERSONAS';
+  return 'OTROS';
+}
 
 async function loadSolicitudes() {
   renderUploadStatus('solicitudes');
@@ -3807,7 +3837,13 @@ async function loadSolicitudes() {
 
 function _slMatchesFilters(r) {
   for (const k in _slFilters) {
-    if ((r[k] || '') !== _slFilters[k]) return false;
+    // Para 'linea' comparamos contra la línea NORMALIZADA porque el chart
+    // agrupa por las 4 categorías consolidadas.
+    if (k === 'linea') {
+      if (_normalizeLineaSolic(r.linea) !== _slFilters[k]) return false;
+    } else {
+      if ((r[k] || '') !== _slFilters[k]) return false;
+    }
   }
   return true;
 }
@@ -3926,10 +3962,15 @@ function renderSolicitudes() {
     plugins: [ChartDataLabels]
   });
 
-  // Líneas (bar horizontal)
+  // Líneas (bar horizontal) — consolidado en 4 categorías + OTROS por pedido de la líder.
   const lnMap = {};
-  filtered.forEach(x => { const k = x.linea || 'N/A'; lnMap[k] = (lnMap[k]||0) + 1; });
-  const lnLabels = Object.keys(lnMap).sort();
+  filtered.forEach(x => {
+    const k = _normalizeLineaSolic(x.linea);
+    lnMap[k] = (lnMap[k]||0) + 1;
+  });
+  // Orden fijo: las 4 categorías principales primero, OTROS al final si aplica.
+  const LN_ORDER = ['CREDITO EMPRESAS', 'CREDITO PERSONAS', 'POLIZA EMPRESAS', 'POLIZA PERSONAS', 'OTROS'];
+  const lnLabels = LN_ORDER.filter(k => lnMap[k] > 0);
   _slCharts.linea = new Chart(document.getElementById('chartSlLinea'), {
     type: 'bar',
     data: {
@@ -4908,6 +4949,65 @@ function updateAll() {
   if (document.getElementById('chartProyeccion')) {
     try { renderProyeccion(); } catch (e) {}
   }
+}
+
+// Comparativo Desembolsado vs Recaudado por estado (server-side, JOIN cartera+pagos).
+let _desemRecChart = null;
+async function loadDesembolsoVsRecaudo() {
+  try {
+    const res = await apiGet('/api/credits/desembolso-vs-recaudo');
+    if (!res.ok) return;
+    const d = await res.json();
+    const tb = document.querySelector('#tblDesemRec tbody');
+    if (tb) {
+      const fmtDots = v => '$ ' + Math.round(v || 0).toLocaleString('es-CO');
+      tb.innerHTML = `
+        <tr>
+          <td><strong>Total Desembolsado</strong></td>
+          <td class="num"><strong>${fmtDots(d.total.desembolsado)}</strong></td>
+          <td class="num">—</td>
+          <td class="num"><strong>${fmtDots(d.total.recaudado)}</strong></td>
+        </tr>
+        <tr>
+          <td>Total Cerrado</td>
+          <td class="num">${fmtDots(d.cerrado.desembolsado)}</td>
+          <td class="num">${(d.cerrado.pct || 0).toFixed(1)}%</td>
+          <td class="num">${fmtDots(d.cerrado.recaudado)}</td>
+        </tr>
+        <tr>
+          <td>Total Desembolsos Activos</td>
+          <td class="num">${fmtDots(d.activos.desembolsado)}</td>
+          <td class="num">${(d.activos.pct || 0).toFixed(1)}%</td>
+          <td class="num">${fmtDots(d.activos.recaudado)}</td>
+        </tr>
+      `;
+    }
+    const ctx = document.getElementById('chartDesemRec');
+    if (ctx) {
+      _desemRecChart?.destroy?.();
+      _desemRecChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: ['Total', 'Cerrado', 'Activos'],
+          datasets: [
+            { label: 'Vr Desembolsado', data: [d.total.desembolsado, d.cerrado.desembolsado, d.activos.desembolsado],
+              backgroundColor: FIDE.teal + 'cc', borderRadius: 4 },
+            { label: 'Vr Recaudado',    data: [d.total.recaudado,    d.cerrado.recaudado,    d.activos.recaudado],
+              backgroundColor: FIDE.blue + 'cc', borderRadius: 4 },
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' },
+            datalabels: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + fmtM(ctx.parsed.y) } }
+          },
+          scales: { y: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }, x: { grid: { display: false } } }
+        }
+      });
+    }
+  } catch (e) { /* silencioso */ }
 }
 
 // Carga Top Clientes con IDs completos para superadmin (server-side, auditado).
