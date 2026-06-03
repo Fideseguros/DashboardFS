@@ -122,6 +122,88 @@ def get_summary(_user=Depends(require_auth)):
         conn.close()
 
 
+@router.get("/kpis")
+def get_kpis(_user=Depends(require_auth)):
+    """KPIs del dashboard pre-calculados en SQL para la carga inicial sin filtros.
+
+    Mover el cómputo al servidor evita que el navegador itere ~3.5k filas en JS
+    en el primer paint. Cuando el usuario aplica un filtro, el frontend vuelve
+    a calcular los KPIs sobre filteredData (función updateKPIs).
+
+    Política Fideseguros aplicada:
+      - "mora real" = dias_mora > 30 sobre estado='ACTIVO'.
+      - "tasa_promedio_activos" = SUM(tasa*saldo)/SUM(saldo) para activos con
+        tasa > 0 y saldo > 0 (ponderada por saldo capital).
+      - "icv_pct" = saldo_mora_30 / saldo_capital_activo * 100.
+    """
+    conn = get_connection()
+    try:
+        batch = ("sync_batch_id = (SELECT id FROM sync_logs "
+                 "WHERE status='success' AND source='manual_upload' "
+                 "ORDER BY id DESC LIMIT 1)")
+        # Una sola query agregada: la fila vuelve con todas las métricas que
+        # consumen los KPI cards. Math.round en el cliente cuando hace falta.
+        row = conn.execute(f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN estado='ACTIVO' THEN 1 ELSE 0 END) AS activos,
+                SUM(CASE WHEN estado!='ACTIVO' THEN 1 ELSE 0 END) AS cancelados,
+                COALESCE(SUM(valor_credito), 0) AS valor_total,
+                COALESCE(SUM(CASE WHEN estado='ACTIVO' THEN valor_credito ELSE 0 END), 0) AS valor_total_activos,
+                COALESCE(SUM(saldo_capital), 0) AS saldo_capital,
+                COALESCE(SUM(CASE WHEN estado='ACTIVO' THEN saldo_capital ELSE 0 END), 0) AS saldo_capital_activos,
+                CAST(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 AND saldo_capital > 0
+                              THEN tasa_efectiva * saldo_capital ELSE 0 END) AS REAL) /
+                    NULLIF(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 AND saldo_capital > 0
+                                    THEN saldo_capital ELSE 0 END), 0) AS tasa_promedio_activos,
+                MIN(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN tasa_efectiva END) AS tasa_min_activos,
+                MAX(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN tasa_efectiva END) AS tasa_max_activos,
+                SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora, 0) > 30 THEN 1 ELSE 0 END) AS en_mora_count,
+                COALESCE(SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora, 0) > 30
+                                  THEN saldo_capital ELSE 0 END), 0) AS en_mora_saldo,
+                COUNT(CASE WHEN valor_credito > 0 THEN 1 END) AS n_valor_pos,
+                COALESCE(SUM(CASE WHEN valor_credito > 0 THEN valor_credito ELSE 0 END), 0) AS sum_valor_pos,
+                COUNT(CASE WHEN estado='ACTIVO' AND valor_credito > 0 THEN 1 END) AS n_valor_pos_activos,
+                COALESCE(SUM(CASE WHEN estado='ACTIVO' AND valor_credito > 0 THEN valor_credito ELSE 0 END), 0) AS sum_valor_pos_activos
+            FROM credits WHERE {batch}
+        """).fetchone()
+        if not row or not row["total"]:
+            return {
+                "total": 0, "activos": 0, "cancelados": 0,
+                "valor_total": 0, "valor_total_activos": 0,
+                "saldo_capital": 0, "saldo_capital_activos": 0,
+                "tasa_promedio_activos": 0, "tasa_min_activos": 0, "tasa_max_activos": 0,
+                "en_mora_count": 0, "en_mora_saldo": 0,
+                "ticket_promedio": 0, "ticket_promedio_activos": 0,
+                "icv_pct": 0,
+            }
+        d = dict(row)
+        saldo_act = float(d["saldo_capital_activos"] or 0)
+        en_mora_saldo = float(d["en_mora_saldo"] or 0)
+        icv_pct = (en_mora_saldo / saldo_act * 100.0) if saldo_act > 0 else 0.0
+        ticket = (float(d["sum_valor_pos"] or 0) / d["n_valor_pos"]) if d["n_valor_pos"] else 0.0
+        ticket_act = (float(d["sum_valor_pos_activos"] or 0) / d["n_valor_pos_activos"]) if d["n_valor_pos_activos"] else 0.0
+        return {
+            "total": int(d["total"] or 0),
+            "activos": int(d["activos"] or 0),
+            "cancelados": int(d["cancelados"] or 0),
+            "valor_total": float(d["valor_total"] or 0),
+            "valor_total_activos": float(d["valor_total_activos"] or 0),
+            "saldo_capital": float(d["saldo_capital"] or 0),
+            "saldo_capital_activos": saldo_act,
+            "tasa_promedio_activos": float(d["tasa_promedio_activos"] or 0),
+            "tasa_min_activos": float(d["tasa_min_activos"] or 0),
+            "tasa_max_activos": float(d["tasa_max_activos"] or 0),
+            "en_mora_count": int(d["en_mora_count"] or 0),
+            "en_mora_saldo": en_mora_saldo,
+            "ticket_promedio": ticket,
+            "ticket_promedio_activos": ticket_act,
+            "icv_pct": icv_pct,
+        }
+    finally:
+        conn.close()
+
+
 @router.get("/desembolso-vs-recaudo")
 def desembolso_vs_recaudo(_user=Depends(require_auth)):
     """Comparativo Valor Desembolsado vs Valor Recaudado por estado del crédito.

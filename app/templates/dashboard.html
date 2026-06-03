@@ -2451,21 +2451,66 @@ let filteredData = [];
 async function apiGet(url) {
   return fetch(url, { credentials: 'same-origin' });
 }
+// Setea los KPI cards con los valores pre-calculados por el servidor
+// (endpoint /api/credits/kpis). Aplica SOLO en la carga inicial sin filtros;
+// cuando el usuario filtra, updateKPIs() recalcula en cliente sobre filteredData.
+function populateKPIsFromServer(k) {
+  if (!k) return;
+  const cancelados = (k.cancelados != null) ? k.cancelados : ((k.total || 0) - (k.activos || 0));
+  document.getElementById('kpiTotal').textContent = fmt(k.total);
+  document.getElementById('kpiTotalSub').textContent = `${fmt(k.activos)} activos / ${fmt(cancelados)} cancelados`;
+  document.getElementById('kpiActivos').textContent = fmt(k.activos);
+  document.getElementById('kpiActivosSub').textContent = pct(k.activos, k.total) + ' del total';
+  document.getElementById('kpiValor').textContent = fmtM(k.valor_total);
+  document.getElementById('kpiValorSub').textContent = `Saldo activos: ${fmtM(k.saldo_capital_activos)}`;
+  document.getElementById('kpiSaldo').textContent = fmtM(k.saldo_capital);
+  document.getElementById('kpiSaldoSub').textContent = pct(k.saldo_capital, k.valor_total) + ' del valor original';
+  const tProm = parseFloat(k.tasa_promedio_activos) || 0;
+  const tMin = parseFloat(k.tasa_min_activos) || 0;
+  const tMax = parseFloat(k.tasa_max_activos) || 0;
+  document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
+  document.getElementById('kpiTasaSub').textContent = `Ponderada por saldo · Rango: ${tMin.toFixed(1)}% - ${tMax.toFixed(1)}%`;
+  document.getElementById('kpiMora').textContent = fmt(k.en_mora_count);
+  document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(k.en_mora_saldo)} (${pct(k.en_mora_saldo, k.saldo_capital_activos)} del activo) · mora > 30 días`;
+  document.getElementById('kpiTicket').textContent = fmtM(k.ticket_promedio);
+  document.getElementById('kpiTicketSub').textContent = (k.activos > 0)
+    ? `Activos: ${fmtM(k.ticket_promedio_activos)}`
+    : `Sobre ${fmt(k.total)} créditos`;
+  const icv = parseFloat(k.icv_pct) || 0;
+  const icvEl = document.getElementById('kpiICV');
+  icvEl.textContent = icv.toFixed(2) + '%';
+  let icvColor = '#00a79d';
+  if (icv > 8) icvColor = '#b8680f';
+  else if (icv > 5) icvColor = '#c29200';
+  icvEl.style.color = icvColor;
+  document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(k.en_mora_saldo)} / Activo: ${fmtM(k.saldo_capital_activos)}`;
+}
+
 async function loadData() {
   // Indicador visual durante la carga inicial
   const loader = document.getElementById('initialLoader');
   if (loader) loader.style.display = 'flex';
   try {
-    // /api/credits y /api/sync/status en paralelo (ahorra un roundtrip)
-    const [credRes, syncRes] = await Promise.all([
+    // /api/credits, /api/sync/status y /api/credits/kpis en paralelo.
+    // Los KPIs pre-calculados pintan los cards apenas llegan, sin esperar a que
+    // el navegador termine de procesar los 3.5k registros de /api/credits.
+    const [credRes, syncRes, kpisRes] = await Promise.all([
       apiGet('/api/credits'),
-      apiGet('/api/sync/status').catch(() => null)
+      apiGet('/api/sync/status').catch(() => null),
+      apiGet('/api/credits/kpis').catch(() => null)
     ]);
     if (credRes.status === 401) {
       sessionStorage.removeItem('fide_user');
       sessionStorage.removeItem('fide_role');
       window.location.href = '/login';
       return;
+    }
+    // Pintar KPIs ANTES de procesar las 3.5k filas — UX mucho más responsiva.
+    if (kpisRes && kpisRes.ok) {
+      try {
+        const kpis = await kpisRes.json();
+        populateKPIsFromServer(kpis);
+      } catch (e) { /* fallback: updateKPIs() abajo recalcula client-side */ }
     }
     RAW_DATA = await credRes.json();
     filteredData = [...RAW_DATA];
