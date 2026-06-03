@@ -2,12 +2,25 @@
 import csv
 import io
 import hashlib
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, Response, HTTPException, Header
 from fastapi.responses import StreamingResponse
 from app.database import get_connection
 from app.auth.middleware import require_auth, require_superadmin
 from app.crypto import decrypt, mask_identificacion, mask_cliente
 from app.audit import log_audit, get_client_ip
+
+
+def _active_batch_etag(conn) -> str:
+    """ETag basado en el último sync exitoso del batch activo de cartera.
+    Cuando admin sube una nueva cartera, el id sube → etag cambia → cache invalida."""
+    row = conn.execute(
+        "SELECT id, completed_at FROM sync_logs "
+        "WHERE source='manual_upload' AND status='success' "
+        "ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return '"no-batch"'
+    return f'"batch-{row["id"]}-{row["completed_at"] or ""}"'
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
 
@@ -47,15 +60,38 @@ def _row_masked(row: dict) -> dict:
 
 @router.get("")
 def get_credits(
+    response: Response,
     _user=Depends(require_auth),
     estado: str = Query(None), linea: str = Query(None),
     calificacion: str = Query(None), aliado: str = Query(None),
     ciudad: str = Query(None), mora_min: int = Query(None),
-    mora_max: int = Query(None)
+    mora_max: int = Query(None),
+    if_none_match: str | None = Header(default=None, alias="If-None-Match"),
 ):
-    where, params = _build_query(estado, linea, calificacion, aliado, ciudad, mora_min, mora_max)
+    """Lista de créditos del batch activo.
+
+    Cuando se llama SIN filtros (caso típico del dashboard), se devuelve
+    un ETag basado en el id del último sync. Si el cliente lo manda en
+    If-None-Match, respondemos 304 Not Modified sin re-serializar nada.
+    Resultado: cargas posteriores sin nueva carga de cartera = instantáneas.
+    """
     conn = get_connection()
     try:
+        # Caché solo cuando no hay filtros — el dashboard llama sin filtros.
+        no_filters = not any([estado, linea, calificacion, aliado, ciudad,
+                              mora_min is not None, mora_max is not None])
+        if no_filters:
+            etag = _active_batch_etag(conn)
+            if if_none_match and if_none_match == etag:
+                # No fue modificado desde la última vez que el cliente lo pidió
+                response.status_code = 304
+                response.headers["ETag"] = etag
+                response.headers["Cache-Control"] = "private, must-revalidate"
+                return Response(status_code=304)
+            response.headers["ETag"] = etag
+            response.headers["Cache-Control"] = "private, must-revalidate"
+
+        where, params = _build_query(estado, linea, calificacion, aliado, ciudad, mora_min, mora_max)
         rows = conn.execute(f"SELECT * FROM credits WHERE {where}", params).fetchall()
         return [_row_masked(dict(r)) for r in rows]
     finally:
