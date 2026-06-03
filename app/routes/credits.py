@@ -49,12 +49,23 @@ def _build_query(estado=None, linea=None, calificacion=None, aliado=None,
 
 
 def _row_masked(row: dict) -> dict:
-    """Return a dict safe for display: PII decrypted then masked."""
-    ident = decrypt(row.get("identificacion"))
-    cliente = decrypt(row.get("cliente"))
+    """Return a dict safe for display: PII enmascarada.
+
+    Prefiere la versión cacheada (identificacion_masked / cliente_masked)
+    para evitar el costo de decrypt+mask en cada request. Fallback al
+    decrypt para filas pre-migración (cuando aún no se ha hecho backfill).
+    """
     out = dict(row)
-    out["identificacion"] = mask_identificacion(ident)
-    out["cliente"] = mask_cliente(cliente)
+    im = out.pop("identificacion_masked", None)
+    cm = out.pop("cliente_masked", None)
+    if im is not None:
+        out["identificacion"] = im
+    else:
+        out["identificacion"] = mask_identificacion(decrypt(out.get("identificacion")))
+    if cm is not None:
+        out["cliente"] = cm
+    else:
+        out["cliente"] = mask_cliente(decrypt(out.get("cliente")))
     return out
 
 

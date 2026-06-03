@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS credits (
     maxima_mora INTEGER DEFAULT 0,
     ciudad TEXT,
     aliado TEXT,
+    -- Caché de PII enmascarada para acelerar /api/credits (evita 7000 decrypt/load)
+    identificacion_masked TEXT,
+    cliente_masked TEXT,
     sync_batch_id INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (sync_batch_id) REFERENCES sync_logs(id)
@@ -320,4 +323,49 @@ def _migrate_existing_schema(conn):
     log_cols = [r[1] for r in conn.execute("PRAGMA table_info(sync_logs)").fetchall()]
     if "uploaded_by" not in log_cols:
         conn.execute("ALTER TABLE sync_logs ADD COLUMN uploaded_by INTEGER")
+    # PII enmascarada cacheada (acelera /api/credits ~3s)
+    cred_cols = [r[1] for r in conn.execute("PRAGMA table_info(credits)").fetchall()]
+    if "identificacion_masked" not in cred_cols:
+        conn.execute("ALTER TABLE credits ADD COLUMN identificacion_masked TEXT")
+    if "cliente_masked" not in cred_cols:
+        conn.execute("ALTER TABLE credits ADD COLUMN cliente_masked TEXT")
     conn.commit()
+
+
+def backfill_masked_pii():
+    """Pobla identificacion_masked / cliente_masked para filas existentes.
+
+    Se ejecuta una vez al startup. Para 3500 filas tarda ~3s y solo corre
+    si quedan rows con masked NULL. Después de eso /api/credits no necesita
+    decifrar PII en cada request.
+    """
+    from app.crypto import decrypt, mask_identificacion, mask_cliente
+    import logging
+    log = logging.getLogger("fide.startup")
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        n = conn.execute(
+            "SELECT COUNT(*) AS n FROM credits "
+            "WHERE identificacion_masked IS NULL OR cliente_masked IS NULL"
+        ).fetchone()["n"]
+        if n == 0:
+            return
+        log.info("Backfill PII masks: %d filas pendientes", n)
+        rows = conn.execute(
+            "SELECT id, identificacion, cliente FROM credits "
+            "WHERE identificacion_masked IS NULL OR cliente_masked IS NULL"
+        ).fetchall()
+        for r in rows:
+            im = mask_identificacion(decrypt(r["identificacion"]))
+            cm = mask_cliente(decrypt(r["cliente"]))
+            conn.execute(
+                "UPDATE credits SET identificacion_masked=?, cliente_masked=? WHERE id=?",
+                (im, cm, r["id"])
+            )
+        conn.commit()
+        log.info("Backfill PII masks: %d filas actualizadas", len(rows))
+    except Exception as e:
+        log.exception("Backfill PII masks falló: %s", e)
+    finally:
+        conn.close()

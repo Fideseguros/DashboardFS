@@ -7,7 +7,7 @@ from pathlib import Path
 
 import os
 import logging
-from app.database import init_db, get_connection, get_db
+from app.database import init_db, get_connection, get_db, backfill_masked_pii
 from app.routes import auth, credits, sync, users, financieros
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
 
@@ -69,6 +69,9 @@ def _bootstrap_admin():
 def startup():
     init_db()
     _bootstrap_admin()
+    # Backfill de PII enmascarada para acelerar /api/credits.
+    # Solo corre si hay filas pendientes — idempotente.
+    backfill_masked_pii()
 
 
 @app.middleware("http")

@@ -15,10 +15,17 @@ ORANGE_FIELDS = (
 
 
 def _insert_credits(conn, records: list[dict], sync_id: int):
-    placeholders = ", ".join(["?"] * (len(CREDIT_FIELDS) + 1))
-    cols = ", ".join(CREDIT_FIELDS + ["sync_batch_id"])
+    """Inserta créditos con identificacion/cliente cifrados + sus masks
+    pre-calculadas (acelera /api/credits al no requerir decrypt cada lectura)."""
+    from app.crypto import decrypt, mask_identificacion, mask_cliente
+    extra_cols = ["sync_batch_id", "identificacion_masked", "cliente_masked"]
+    placeholders = ", ".join(["?"] * (len(CREDIT_FIELDS) + len(extra_cols)))
+    cols = ", ".join(CREDIT_FIELDS + extra_cols)
     for record in records:
-        values = [record.get(k) for k in CREDIT_FIELDS] + [sync_id]
+        # Las masks se computan desde el cifrado (no tenemos plaintext aquí)
+        im = mask_identificacion(decrypt(record.get("identificacion")))
+        cm = mask_cliente(decrypt(record.get("cliente")))
+        values = [record.get(k) for k in CREDIT_FIELDS] + [sync_id, im, cm]
         conn.execute(f"INSERT INTO credits ({cols}) VALUES ({placeholders})", values)
 
 
@@ -166,8 +173,11 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
                     (sync_id, prev_sync[0])
                 )
 
-            placeholders = ", ".join(["?"] * (len(CREDIT_FIELDS) + 1))
-            cols_sql = ", ".join(CREDIT_FIELDS + ["sync_batch_id"])
+            # INSERT también popula las masks pre-computadas (acelera /api/credits).
+            from app.crypto import decrypt as _dec, mask_identificacion as _mi, mask_cliente as _mc
+            extra_cols = ["sync_batch_id", "identificacion_masked", "cliente_masked"]
+            placeholders = ", ".join(["?"] * (len(CREDIT_FIELDS) + len(extra_cols)))
+            cols_sql = ", ".join(CREDIT_FIELDS + extra_cols)
 
             touched_cuentas = []
             for rec in new_records:
@@ -189,7 +199,9 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
                         conn.execute(f"UPDATE credits SET {set_clause} WHERE id=?", params)
                         updated_count += 1
                 else:
-                    values = [rec.get(k) for k in CREDIT_FIELDS] + [sync_id]
+                    im = _mi(_dec(rec.get("identificacion")))
+                    cm = _mc(_dec(rec.get("cliente")))
+                    values = [rec.get(k) for k in CREDIT_FIELDS] + [sync_id, im, cm]
                     conn.execute(f"INSERT INTO credits ({cols_sql}) VALUES ({placeholders})", values)
                     inserted_count += 1
 
