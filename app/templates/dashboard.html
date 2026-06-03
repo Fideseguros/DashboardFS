@@ -2436,6 +2436,14 @@ body {
 </div>
 
 <script>
+// Performance: reduce el tiempo de animación inicial de Chart.js para que el
+// dashboard se sienta más responsive (default 1000ms → 250ms). Reduce el FCP
+// percibido sin afectar la legibilidad de los charts.
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.animation.duration = 250;
+  Chart.defaults.responsiveAnimationDuration = 0;
+}
+
 let RAW_DATA = [];
 let filteredData = [];
 
