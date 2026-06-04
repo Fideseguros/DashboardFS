@@ -764,6 +764,22 @@ body {
   display: inline-block;
 }
 .chart-card.full { grid-column: 1 / -1; }
+
+/* Split tabla | chart usado en el card Desembolsado vs Recaudado.
+ * Desktop: 50/50 side-by-side. Móvil (≤768px): apilado (tabla arriba, chart abajo)
+ * para evitar scroll horizontal. */
+.desem-rec-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.2rem;
+  align-items: start;
+  min-width: 0;
+}
+.desem-rec-split > * { min-width: 0; max-width: 100%; }
+.desem-rec-split .table-wrapper { overflow-x: auto; max-width: 100%; }
+@media (max-width: 768px) {
+  .desem-rec-split { grid-template-columns: 1fr; gap: 1rem; }
+}
 .evo-mom-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1634,7 +1650,7 @@ body {
     <div class="charts-grid">
       <div class="chart-card full">
         <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos &mdash; nueva + hist&oacute;rica)</span></h3>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start;">
+        <div class="desem-rec-split">
           <div class="table-wrapper">
             <table class="data-table compact" id="tblDesemRec">
               <thead><tr>
