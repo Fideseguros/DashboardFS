@@ -497,10 +497,18 @@ SOLIC_NUEVA_REMAP = {
     'DEVUELTA HOJA RUTA': 'EN ESTUDIO',
 }
 SOLIC_LEGACY_REMAP = {
-    'APROBADA': 'DESEMBOLSADA',
-    'BORRADA': 'ANULADA',
-    'NEGADA': 'ANULADA',     # pedido por la líder: unificar
-    'DESISTIDA': 'ANULADA',  # pedido por la líder: unificar
+    'APROBADA':   'DESEMBOLSADA',
+    'BORRADA':    'ANULADA',
+    'NEGADA':     'ANULADA',
+    'DESISTIDA':  'ANULADA',
+    # Iter 2 (pedido líder): las que en legacy quedaron como "Iniciada" o
+    # "En Estudio" pasan también a ANULADA — no se considera pipeline activo
+    # en la plataforma nueva (la plataforma vieja se cerró).
+    # El 'EN ESTUDIO' del archivo NUEVO (que viene de DEVUELTA ATENDIDA /
+    # DEVUELTA HOJA RUTA) se conserva como EN ESTUDIO porque SOLIC_NUEVA_REMAP
+    # se aplica antes que esto — este map solo afecta source='legacy'.
+    'INICIADA':   'ANULADA',
+    'EN ESTUDIO': 'ANULADA',
 }
 SOLIC_LEGACY_EXCLUDE = {'PENDIENTE'}
 
