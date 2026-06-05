@@ -952,16 +952,25 @@ body {
 }
 .fin-chev:hover { color: var(--fide-teal-deeper); }
 .fin-chev-spacer { display: inline-block; width: 18px; }
-/* Filas Total — prominentes para que el usuario nunca pierda los subtotales
- * (la gerente reportó que parecían desaparecer entre los detalles). */
+/* Filas Total del Excel — sobrias pero visibles */
 .data-table tr.fin-total td {
   font-weight: 800 !important;
-  background: var(--fide-teal-tint);
-  border-top: 1px solid var(--border);
-  color: var(--fide-teal-deeper);
+  background: var(--neutral-50);
+  color: var(--neutral-900);
 }
-.data-table tr.fin-total:hover td { background: var(--fide-teal-tint); }
-.data-table tr.fin-group:hover td { background: rgba(0, 167, 157, 0.05); }
+.data-table tr.fin-total:hover td { background: var(--neutral-100); }
+.data-table tr.fin-group:hover td { background: rgba(0, 167, 157, 0.04); }
+/* Fila sintética 'UTILIDAD ANTES DE IMPUESTO DE RENTA' — destaca como
+ * conclusion line del Estado de Resultados, con accent corporativo. */
+.data-table tr.fin-utilidad td {
+  font-weight: 900 !important;
+  background: var(--fide-teal-tint);
+  color: var(--fide-teal-deeper);
+  border-top: 2px solid var(--fide-teal);
+  border-bottom: 1px solid var(--fide-teal);
+  font-size: 0.82rem;
+}
+.data-table tr.fin-utilidad:hover td { background: var(--fide-teal-tint); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -4344,8 +4353,46 @@ function renderFinTable(rows) {
     accounts[k].acum += r.valor;
   });
 
-  // Ordenar por código PUC (natural por string)
-  const ordered = Object.values(accounts).sort((a, b) => a.code.localeCompare(b.code));
+  // Calcular Utilidad ANTES DE IMPUESTO DE RENTA (fila sintética).
+  // El parser del Excel ignora la fila "UTILIDAD ANTES DE IMPUESTO..."
+  // porque no empieza con código numérico. La reconstruimos aquí con la
+  // misma fórmula que usa /api/estados-financieros/summary:
+  //   utilidad = SUM(codes starting with '4', detalle) - SUM(5) - SUM(6) - SUM(7)
+  const utilMeses = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
+  Object.values(accounts).forEach(a => {
+    if (a.is_total) return;  // solo cuentas detalle para evitar doble conteo
+    const firstChar = (a.code || '').charAt(0);
+    const sign = firstChar === '4' ? 1
+              : (firstChar === '5' || firstChar === '6' || firstChar === '7') ? -1
+              : 0;
+    if (sign === 0) return;
+    for (let m = 1; m <= 12; m++) {
+      utilMeses[m] += sign * (a.meses[m] || 0);
+    }
+  });
+  const utilAcum = Object.values(utilMeses).reduce((s, v) => s + v, 0);
+  // Solo inyectamos si hay al menos un mes con datos
+  const hayDatos = Object.values(utilMeses).some(v => v !== 0);
+  if (hayDatos) {
+    accounts['__UTIL_ANTES_IMPUESTO__'] = {
+      code: '__UTIL_ANTES_IMPUESTO__',
+      desc: 'UTILIDAD ANTES DE IMPUESTO DE RENTA',
+      nivel: 1,
+      parent: null,
+      is_total: 1,
+      meses: utilMeses,
+      acum: utilAcum,
+      _synthetic: true,  // marca para styling especial
+    };
+  }
+
+  // Ordenar por código PUC (natural por string).
+  // Las filas sintéticas (__...) van al final para no romper el orden PUC.
+  const ordered = Object.values(accounts).sort((a, b) => {
+    if (a._synthetic && !b._synthetic) return 1;
+    if (!a._synthetic && b._synthetic) return -1;
+    return a.code.localeCompare(b.code);
+  });
 
   // Identificar qué códigos son "padres" (tienen al menos un hijo en este dataset)
   const parentCodes = new Set();
@@ -4378,8 +4425,11 @@ function renderFinTable(rows) {
     const chevron = isParent
       ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
       : '<span class="fin-chev-spacer"></span>';
-    // Total rows prominentes con clase fin-total; grupos con fin-group (hover sutil).
-    const rowExtra = a.is_total ? ' class="fin-total"' : (isParent ? ' class="fin-group"' : '');
+    // Filas sintéticas (Utilidad calculada) tienen su propia clase para
+    // distinguirlas visualmente de los totales del Excel.
+    const rowExtra = a._synthetic ? ' class="fin-utilidad"'
+                  : (a.is_total ? ' class="fin-total"'
+                  : (isParent ? ' class="fin-group"' : ''));
     // Color de código según nivel PUC (tonos progresivos sin perder legibilidad)
     const codeColor = a.nivel <= 2 ? 'color:var(--fide-teal-dark);font-weight:800;'
                       : (a.nivel <= 4 ? 'color:var(--neutral-900);font-weight:700;'
@@ -4387,8 +4437,10 @@ function renderFinTable(rows) {
     // La descripción SIEMPRE muestra algo: si está vacía, fallback al código
     // para que el usuario no vea filas con la 2da columna en blanco.
     const descTxt = (a.desc && a.desc.trim()) || '(' + a.code + ')';
+    // La fila sintética no muestra el código interno (__UTIL_...) — solo la descripción
+    const codeDisplay = a._synthetic ? '=' : a.code;
     return `<tr${rowExtra}>
-      <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${chevron}${a.code}</td>
+      <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${chevron}${codeDisplay}</td>
       <td style="${codeColor}">${descTxt}</td>
       <td class="num">${fmt(a.meses[1])}</td>
       <td class="num">${fmt(a.meses[2])}</td>
