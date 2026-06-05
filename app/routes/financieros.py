@@ -216,12 +216,15 @@ def summary(year: int, _user=Depends(require_auth)):
     conn = get_connection()
     try:
         # Top-level: códigos PUC '4' (ingresos), '5' (gastos), '6' (costos), '7' (costos producción)
-        # Sumamos los valores de cuentas DETALLE (is_total=0) para evitar doble contabilización
+        # Sumamos cuentas DETALLE (is_total=0) para evitar doble contabilización.
+        # OJO: '5' incluye '54 IMPUESTO DE RENTA' que NO va antes de impuesto.
+        # Por eso lo separamos: gastos_op = '5' SIN '54xxxx', impuesto_renta = '54xxxx'.
         agg = conn.execute("""
             SELECT
                 month,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='4' AND is_total=0 THEN valor ELSE 0 END) as ingresos,
-                SUM(CASE WHEN substr(cuenta_code,1,1)='5' AND is_total=0 THEN valor ELSE 0 END) as gastos,
+                SUM(CASE WHEN substr(cuenta_code,1,1)='5' AND substr(cuenta_code,1,2)!='54' AND is_total=0 THEN valor ELSE 0 END) as gastos_op,
+                SUM(CASE WHEN substr(cuenta_code,1,2)='54' AND is_total=0 THEN valor ELSE 0 END) as impuesto_renta,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='6' AND is_total=0 THEN valor ELSE 0 END) as costos,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='7' AND is_total=0 THEN valor ELSE 0 END) as costos_prod
             FROM estados_financieros WHERE year = ?
@@ -229,28 +232,37 @@ def summary(year: int, _user=Depends(require_auth)):
         """, (year,)).fetchall()
 
         by_month = []
-        total_ingresos = total_gastos = total_costos = 0.0
+        total_ingresos = total_gastos_op = total_impuesto = total_costos = 0.0
         for r in agg:
             d = dict(r)
-            d['utilidad'] = (d['ingresos'] or 0) - (d['gastos'] or 0) - (d['costos'] or 0) - (d['costos_prod'] or 0)
+            # gastos = compatibilidad: gastos operacionales (51+52+53), sin impuesto de renta
+            d['gastos'] = d['gastos_op'] or 0
+            d['utilidad_antes_impuesto'] = (d['ingresos'] or 0) - d['gastos'] - (d['costos'] or 0) - (d['costos_prod'] or 0)
+            d['utilidad'] = d['utilidad_antes_impuesto'] - (d['impuesto_renta'] or 0)
             by_month.append(d)
             total_ingresos += d['ingresos'] or 0
-            total_gastos += d['gastos'] or 0
+            total_gastos_op += d['gastos']
+            total_impuesto += d['impuesto_renta'] or 0
             total_costos += (d['costos'] or 0) + (d['costos_prod'] or 0)
-        utilidad = total_ingresos - total_gastos - total_costos
-        margen = (utilidad / total_ingresos * 100) if total_ingresos > 0 else 0
+        utilidad_antes = total_ingresos - total_gastos_op - total_costos
+        utilidad_neta = utilidad_antes - total_impuesto
+        margen = (utilidad_neta / total_ingresos * 100) if total_ingresos > 0 else 0
+        margen_antes = (utilidad_antes / total_ingresos * 100) if total_ingresos > 0 else 0
         n_months = len(by_month)
         return {
             'year': year,
             'meses_con_datos': n_months,
             'ingresos_total': total_ingresos,
-            'gastos_total': total_gastos,
+            'gastos_total': total_gastos_op,
+            'impuesto_renta_total': total_impuesto,
             'costos_total': total_costos,
-            'utilidad_total': utilidad,
+            'utilidad_antes_impuesto_total': utilidad_antes,
+            'utilidad_total': utilidad_neta,
+            'margen_antes_impuesto_pct': margen_antes,
             'margen_pct': margen,
             'ingresos_promedio_mensual': total_ingresos / n_months if n_months else 0,
-            'gastos_promedio_mensual': total_gastos / n_months if n_months else 0,
-            'utilidad_promedio_mensual': utilidad / n_months if n_months else 0,
+            'gastos_promedio_mensual': total_gastos_op / n_months if n_months else 0,
+            'utilidad_promedio_mensual': utilidad_neta / n_months if n_months else 0,
             'by_month': by_month,
         }
     finally:

@@ -960,17 +960,27 @@ body {
 }
 .data-table tr.fin-total:hover td { background: var(--neutral-100); }
 .data-table tr.fin-group:hover td { background: rgba(0, 167, 157, 0.04); }
-/* Fila sintética 'UTILIDAD ANTES DE IMPUESTO DE RENTA' — destaca como
- * conclusion line del Estado de Resultados, con accent corporativo. */
+/* Filas sintéticas del Estado de Resultados:
+ *   .fin-utilidad         → 'UTILIDAD ANTES DE IMPUESTO' (subtotal intermedio)
+ *   .fin-utilidad-neta    → 'UTILIDAD DEL EJERCICIO'     (bottom line, más prominente) */
 .data-table tr.fin-utilidad td {
-  font-weight: 900 !important;
+  font-weight: 800 !important;
   background: var(--fide-teal-tint);
   color: var(--fide-teal-deeper);
-  border-top: 2px solid var(--fide-teal);
+  border-top: 1px solid var(--fide-teal);
   border-bottom: 1px solid var(--fide-teal);
   font-size: 0.82rem;
 }
 .data-table tr.fin-utilidad:hover td { background: var(--fide-teal-tint); }
+.data-table tr.fin-utilidad-neta td {
+  font-weight: 900 !important;
+  background: var(--fide-teal);
+  color: #fff;
+  border-top: 2px solid var(--fide-teal-deeper);
+  border-bottom: 2px double var(--fide-teal-deeper);
+  font-size: 0.85rem;
+}
+.data-table tr.fin-utilidad-neta:hover td { background: var(--fide-teal); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -4288,12 +4298,16 @@ async function loadFinancieros() {
     const utEl = document.getElementById('efUtilidad');
     utEl.textContent = fmtM(s.utilidad_total);
     utEl.style.color = s.utilidad_total >= 0 ? '#0f7b6c' : '#b8680f';
+    // Sub muestra: Antes de impuesto + Impuesto de renta, para ver el efecto fiscal
+    const antesImp = s.utilidad_antes_impuesto_total ?? s.utilidad_total;
+    const impRenta = s.impuesto_renta_total ?? 0;
     document.getElementById('efUtilidadSub').textContent =
-      `Prom: ${fmtM(s.utilidad_promedio_mensual)}`;
+      `Antes impto: ${fmtM(antesImp)} · Impto renta: ${fmtM(impRenta)}`;
     const mEl = document.getElementById('efMargen');
     mEl.textContent = `${(s.margen_pct || 0).toFixed(1)}%`;
     mEl.style.color = (s.margen_pct || 0) >= 0 ? '#0f7b6c' : '#b8680f';
-    document.getElementById('efMargenSub').textContent = 'Utilidad / Ingresos';
+    document.getElementById('efMargenSub').textContent =
+      `Antes impto: ${(s.margen_antes_impuesto_pct || 0).toFixed(1)}%`;
 
     // Chart evolución
     if (_efChart) { _efChart.destroy(); _efChart = null; }
@@ -4353,46 +4367,68 @@ function renderFinTable(rows) {
     accounts[k].acum += r.valor;
   });
 
-  // Calcular Utilidad ANTES DE IMPUESTO DE RENTA (fila sintética).
-  // El parser del Excel ignora la fila "UTILIDAD ANTES DE IMPUESTO..."
-  // porque no empieza con código numérico. La reconstruimos aquí con la
-  // misma fórmula que usa /api/estados-financieros/summary:
-  //   utilidad = SUM(codes starting with '4', detalle) - SUM(5) - SUM(6) - SUM(7)
-  const utilMeses = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
+  // Filas sintéticas faltantes del Excel:
+  //   - 'UTILIDAD ANTES DE IMPUESTO DE RENTA' (fila 221 del Excel, sin código)
+  //   - 'UTILIDAD (PERDIDA) DEL EJERCICIO'    (fila 233 del Excel, sin código)
+  // El parser financieros.py:_parse_cuenta solo reconoce filas que empiezan
+  // con código numérico, así que estas dos líneas se pierden silenciosamente.
+  // Las reconstruimos con la fórmula contable:
+  //   utilidad_antes = SUM(detalle '4') - SUM('51'+'52'+'53') - SUM('6') - SUM('7')
+  //   utilidad_neta  = utilidad_antes - SUM('54xxxx')   ← Impuesto de Renta
+  const utilAntesMeses    = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
+  const impuestoMeses     = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
   Object.values(accounts).forEach(a => {
-    if (a.is_total) return;  // solo cuentas detalle para evitar doble conteo
-    const firstChar = (a.code || '').charAt(0);
-    const sign = firstChar === '4' ? 1
-              : (firstChar === '5' || firstChar === '6' || firstChar === '7') ? -1
-              : 0;
-    if (sign === 0) return;
+    if (a.is_total) return;  // solo detalle para no doble-contar
+    const c = a.code || '';
+    const firstChar = c.charAt(0);
+    const isImpuesto = c.startsWith('54');
+    // 4 = ingresos (+) | 51/52/53 = gastos op (-) | 6 y 7 = costos (-) | 54 = impuesto (aparte)
+    let sign = 0;
+    if (firstChar === '4') sign = 1;
+    else if ((firstChar === '5' && !isImpuesto) || firstChar === '6' || firstChar === '7') sign = -1;
     for (let m = 1; m <= 12; m++) {
-      utilMeses[m] += sign * (a.meses[m] || 0);
+      const v = a.meses[m] || 0;
+      if (sign !== 0) utilAntesMeses[m] += sign * v;
+      if (isImpuesto) impuestoMeses[m] += v;
     }
   });
-  const utilAcum = Object.values(utilMeses).reduce((s, v) => s + v, 0);
-  // Solo inyectamos si hay al menos un mes con datos
-  const hayDatos = Object.values(utilMeses).some(v => v !== 0);
-  if (hayDatos) {
+  const utilNetaMeses = {};
+  for (let m = 1; m <= 12; m++) utilNetaMeses[m] = utilAntesMeses[m] - impuestoMeses[m];
+  const sumar = obj => Object.values(obj).reduce((s, v) => s + v, 0);
+  const utilAntesAcum = sumar(utilAntesMeses);
+  const utilNetaAcum  = sumar(utilNetaMeses);
+  const hayAlgunDato = Object.values(accounts).some(a => !a.is_total && Object.values(a.meses).some(v => v !== 0));
+  if (hayAlgunDato) {
     accounts['__UTIL_ANTES_IMPUESTO__'] = {
       code: '__UTIL_ANTES_IMPUESTO__',
       desc: 'UTILIDAD ANTES DE IMPUESTO DE RENTA',
-      nivel: 1,
-      parent: null,
-      is_total: 1,
-      meses: utilMeses,
-      acum: utilAcum,
-      _synthetic: true,  // marca para styling especial
+      nivel: 1, parent: null, is_total: 1,
+      meses: utilAntesMeses, acum: utilAntesAcum,
+      _synthetic: true, _syntheticOrder: 1,
+    };
+    accounts['__UTIL_NETA__'] = {
+      code: '__UTIL_NETA__',
+      desc: 'UTILIDAD (PERDIDA) DEL EJERCICIO',
+      nivel: 1, parent: null, is_total: 1,
+      meses: utilNetaMeses, acum: utilNetaAcum,
+      _synthetic: true, _syntheticOrder: 2, _isBottomLine: true,
     };
   }
 
-  // Ordenar por código PUC (natural por string).
-  // Las filas sintéticas (__...) van al final para no romper el orden PUC.
-  const ordered = Object.values(accounts).sort((a, b) => {
-    if (a._synthetic && !b._synthetic) return 1;
-    if (!a._synthetic && b._synthetic) return -1;
-    return a.code.localeCompare(b.code);
-  });
+  // Ordenar respetando la estructura contable correcta del Estado de Resultados:
+  //   4 INGRESOS → 51..53 GASTOS OPER → [= Utilidad antes impuesto] →
+  //   54 IMPUESTO RENTA → [= Utilidad del ejercicio]
+  // Para que la fila sintética 'Utilidad antes impuesto' caiga ANTES de '54',
+  // le asignamos un "código de orden" 53999 (después de 53 y antes de 54).
+  // 'Utilidad del ejercicio' va al final con 99999.
+  const sortKey = a => {
+    if (a.code === '__UTIL_ANTES_IMPUESTO__') return '539999';
+    if (a.code === '__UTIL_NETA__') return '99999999';
+    return a.code;
+  };
+  const ordered = Object.values(accounts).sort((a, b) =>
+    sortKey(a).localeCompare(sortKey(b))
+  );
 
   // Identificar qué códigos son "padres" (tienen al menos un hijo en este dataset)
   const parentCodes = new Set();
@@ -4425,11 +4461,12 @@ function renderFinTable(rows) {
     const chevron = isParent
       ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
       : '<span class="fin-chev-spacer"></span>';
-    // Filas sintéticas (Utilidad calculada) tienen su propia clase para
-    // distinguirlas visualmente de los totales del Excel.
-    const rowExtra = a._synthetic ? ' class="fin-utilidad"'
+    // Filas sintéticas (Utilidades calculadas): fin-utilidad-neta para el
+    // bottom line (UTILIDAD DEL EJERCICIO), fin-utilidad para el subtotal.
+    const rowExtra = a._isBottomLine ? ' class="fin-utilidad-neta"'
+                  : (a._synthetic ? ' class="fin-utilidad"'
                   : (a.is_total ? ' class="fin-total"'
-                  : (isParent ? ' class="fin-group"' : ''));
+                  : (isParent ? ' class="fin-group"' : '')));
     // Color de código según nivel PUC (tonos progresivos sin perder legibilidad)
     const codeColor = a.nivel <= 2 ? 'color:var(--fide-teal-dark);font-weight:800;'
                       : (a.nivel <= 4 ? 'color:var(--neutral-900);font-weight:700;'
