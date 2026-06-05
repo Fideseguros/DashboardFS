@@ -4341,7 +4341,7 @@ async function loadFinancieros() {
 
 // Estado persistente del expand/collapse de la tabla financieros.
 // Cuando se cambia de año, se mantiene la misma lógica de defaults.
-let _finCollapsed = null;   // Set<string> de códigos colapsados; null = no inicializado
+let _finExpanded = null;    // Set<string> de códigos expandidos (vista jerárquica); null = no inicializado
 let _finLastRows = null;    // cache para re-render al togglear sin re-fetch
 
 function renderFinTable(rows) {
@@ -4386,36 +4386,56 @@ function renderFinTable(rows) {
     a.code.localeCompare(b.code)
   );
 
-  // Identificar qué códigos son "padres" (tienen al menos un hijo en este dataset)
+  // Jerarquía REAL del dataset (no la teórica del PUC):
+  //   directParent[c] = código MÁS LARGO en accounts que es prefijo estricto de c
+  //   parentCodes     = códigos con al menos un descendiente (= muestran chevron)
+  const codeList = Object.keys(accounts);
+  const directParent = {};
   const parentCodes = new Set();
-  ordered.forEach(a => { if (a.parent) parentCodes.add(a.parent); });
-
-  // Default state: TODO expandido. La gerente reportó que el auto-collapse
-  // hacía desaparecer subtítulos de grupos legítimos. Mejor empezar mostrando
-  // todo y dejar que el usuario colapse manualmente lo que no necesita ver.
-  // collapseAllFin() le permite el atajo si quiere ver solo los grupos.
-  if (_finCollapsed === null) {
-    _finCollapsed = new Set();
+  for (const a of Object.values(accounts)) {
+    if (a._isBottomLine || a._utilidadAntes) {
+      directParent[a.code] = null;  // utilidades siempre top-level
+      continue;
+    }
+    let best = null;
+    for (const cand of codeList) {
+      if (cand === a.code) continue;
+      if (a.code.startsWith(cand) && cand.length < a.code.length) {
+        if (!best || cand.length > best.length) best = cand;
+        parentCodes.add(cand);
+      }
+    }
+    directParent[a.code] = best;
   }
 
-  // ¿Alguno de los ancestros de esta cuenta está colapsado?
-  function hasCollapsedAncestor(a) {
-    let p = a.parent;
+  // Default: NADA expandido → solo top-level visible (los grandes grupos
+  // del Estado de Resultados: 4 INGRESOS, 51..54, UTILIDAD ANTES, UTILIDAD
+  // DEL EJERCICIO). El usuario hace drill-down click a click.
+  if (_finExpanded === null) {
+    _finExpanded = new Set();
+  }
+
+  // Visibilidad: una cuenta se muestra solo si TODOS sus ancestros directos
+  // están en _finExpanded. Click en un padre lo añade a _finExpanded y revela
+  // sus hijos DIRECTOS (no nietos — para verlos hay que expandir el hijo).
+  function isVisible(a) {
+    if (a._isBottomLine || a._utilidadAntes) return true;
+    let p = directParent[a.code];
+    if (!p) return true;  // top-level (sin padre) siempre visible
     while (p) {
-      if (_finCollapsed.has(p)) return true;
-      const pa = accounts[p];
-      p = pa ? pa.parent : null;
+      if (!_finExpanded.has(p)) return false;
+      p = directParent[p];
     }
-    return false;
+    return true;
   }
 
   const fmt = v => v ? fmtCurrency(v) : '-';
   const padLeft = nivel => Math.max(0, (nivel - 1) * 12);  // sangría más generosa
-  tb.innerHTML = ordered.filter(a => !hasCollapsedAncestor(a)).map(a => {
+  tb.innerHTML = ordered.filter(isVisible).map(a => {
     const isParent = parentCodes.has(a.code);
-    const isCollapsed = _finCollapsed.has(a.code);
+    const isExpanded = _finExpanded.has(a.code);
     const chevron = isParent
-      ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
+      ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isExpanded ? 'Contraer' : 'Expandir'}">${isExpanded ? '▾' : '▸'}</span>`
       : '<span class="fin-chev-spacer"></span>';
     // Conclusion lines del Estado de Resultados (vienen del Excel del contador):
     //   fin-utilidad-neta = bottom line (UTILIDAD DEL EJERCICIO)
@@ -4454,25 +4474,33 @@ function renderFinTable(rows) {
 }
 
 function toggleFinGroup(code) {
-  if (!_finCollapsed) _finCollapsed = new Set();
-  if (_finCollapsed.has(code)) _finCollapsed.delete(code);
-  else _finCollapsed.add(code);
+  if (!_finExpanded) _finExpanded = new Set();
+  if (_finExpanded.has(code)) _finExpanded.delete(code);
+  else _finExpanded.add(code);
   if (_finLastRows) renderFinTable(_finLastRows);
 }
 
 function expandAllFin() {
-  if (_finCollapsed) _finCollapsed.clear();
-  if (_finLastRows) renderFinTable(_finLastRows);
+  // Expandir todos los códigos padre → vista detallada completa.
+  if (!_finLastRows) return;
+  const codes = new Set(_finLastRows.map(r => r.cuenta_code));
+  _finExpanded = new Set();
+  for (const c of codes) {
+    for (const cand of codes) {
+      if (cand !== c && cand.startsWith(c) && cand.length > c.length) {
+        _finExpanded.add(c);
+        break;
+      }
+    }
+  }
+  renderFinTable(_finLastRows);
 }
 
 function collapseAllFin() {
-  // Colapsar TODOS los grupos (no solo nivel >= 2). Re-render llena
-  // _finCollapsed con todos los parentCodes del dataset actual.
-  if (!_finLastRows) return;
-  _finCollapsed = new Set();
-  // Construir parentCodes desde los datos actuales y colapsarlos todos
-  _finLastRows.forEach(r => { if (r.parent_code) _finCollapsed.add(r.parent_code); });
-  renderFinTable(_finLastRows);
+  // Vista resumen: nada expandido → solo top-level visible (los grandes
+  // grupos del Estado de Resultados).
+  _finExpanded = new Set();
+  if (_finLastRows) renderFinTable(_finLastRows);
 }
 
 async function uploadFinancieros(file) {
