@@ -39,12 +39,25 @@ def _parse_cuenta(raw: str):
     """De '41502001 INTERESES FINANCIACION POLIZAS' devuelve (code, desc, nivel, is_total).
 
     Detecta filas 'Total xxxx' como is_total=True con code=xxxx.
+    También reconoce dos filas calculadas por el contador que NO tienen
+    código numérico en el Excel (filas 221 y 233 de la plantilla):
+      - 'UTILIDAD ANTES DE IMPUESTO DE RENTA' → code '539999' (entre 53 y 54)
+      - 'UTILIDAD DEL EJERCICIO'              → code '999999' (al final)
+    Estas filas llevan los valores REALES del contador (ya cuadrados, con
+    decimales y signos correctos), no algo que reconstruyamos en backend.
     """
     raw = (raw or '').strip()
     if not raw:
         return None
-    if raw.upper() == 'CUENTA':
+    upper = raw.upper()
+    if upper == 'CUENTA':
         return None
+    # Líneas conclusión del Estado de Resultados sin código numérico.
+    # Se les asigna un code sintético para que entren al pipeline normal.
+    if 'UTILIDAD' in upper and 'ANTES DE IMPUESTO' in upper:
+        return '539999', 'UTILIDAD ANTES DE IMPUESTO DE RENTA', 1, None, 1
+    if 'UTILIDAD' in upper and ('DEL EJERCICIO' in upper or 'PERDIDA' in upper and 'EJERCICIO' in upper):
+        return '999999', 'UTILIDAD (PERDIDA) DEL EJERCICIO', 1, None, 1
     # Detección de 'Total ...'
     is_total = raw.lower().startswith('total')
     if is_total:
@@ -215,37 +228,62 @@ def summary(year: int, _user=Depends(require_auth)):
     """KPIs del año: ingresos, gastos, costos, utilidad bruta/operacional/neta + por mes."""
     conn = get_connection()
     try:
-        # Top-level: códigos PUC '4' (ingresos), '5' (gastos), '6' (costos), '7' (costos producción)
-        # Sumamos cuentas DETALLE (is_total=0) para evitar doble contabilización.
-        # OJO: '5' incluye '54 IMPUESTO DE RENTA' que NO va antes de impuesto.
-        # Por eso lo separamos: gastos_op = '5' SIN '54xxxx', impuesto_renta = '54xxxx'.
+        # Agregados por mes a partir de la base. NO recalculamos la utilidad —
+        # usamos las filas REALES del Excel (códigos sintéticos 539999 y 999999),
+        # que el contador ya cuadró con sus decimales y signos.
+        # gastos_op excluye 54 (impuesto de renta) que aparece después en el ER.
         agg = conn.execute("""
             SELECT
                 month,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='4' AND is_total=0 THEN valor ELSE 0 END) as ingresos,
-                SUM(CASE WHEN substr(cuenta_code,1,1)='5' AND substr(cuenta_code,1,2)!='54' AND is_total=0 THEN valor ELSE 0 END) as gastos_op,
+                SUM(CASE WHEN substr(cuenta_code,1,1)='5'
+                          AND substr(cuenta_code,1,2)!='54'
+                          AND cuenta_code NOT IN ('539999','999999')
+                          AND is_total=0 THEN valor ELSE 0 END) as gastos_op,
                 SUM(CASE WHEN substr(cuenta_code,1,2)='54' AND is_total=0 THEN valor ELSE 0 END) as impuesto_renta,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='6' AND is_total=0 THEN valor ELSE 0 END) as costos,
-                SUM(CASE WHEN substr(cuenta_code,1,1)='7' AND is_total=0 THEN valor ELSE 0 END) as costos_prod
+                SUM(CASE WHEN substr(cuenta_code,1,1)='7' AND is_total=0 THEN valor ELSE 0 END) as costos_prod,
+                SUM(CASE WHEN cuenta_code='539999' THEN valor ELSE 0 END) as utilidad_antes_excel,
+                SUM(CASE WHEN cuenta_code='999999' THEN valor ELSE 0 END) as utilidad_neta_excel
             FROM estados_financieros WHERE year = ?
             GROUP BY month ORDER BY month
         """, (year,)).fetchall()
 
         by_month = []
         total_ingresos = total_gastos_op = total_impuesto = total_costos = 0.0
+        total_util_antes_excel = total_util_neta_excel = 0.0
         for r in agg:
             d = dict(r)
-            # gastos = compatibilidad: gastos operacionales (51+52+53), sin impuesto de renta
             d['gastos'] = d['gastos_op'] or 0
-            d['utilidad_antes_impuesto'] = (d['ingresos'] or 0) - d['gastos'] - (d['costos'] or 0) - (d['costos_prod'] or 0)
-            d['utilidad'] = d['utilidad_antes_impuesto'] - (d['impuesto_renta'] or 0)
+            # Si el Excel trae la fila calculada del contador, usar ESA. Si no
+            # (archivo viejo, o el contador no la diligenció), recalcular.
+            ua_excel = d.get('utilidad_antes_excel') or 0
+            un_excel = d.get('utilidad_neta_excel') or 0
+            if ua_excel != 0:
+                d['utilidad_antes_impuesto'] = ua_excel
+            else:
+                d['utilidad_antes_impuesto'] = (d['ingresos'] or 0) - d['gastos'] - (d['costos'] or 0) - (d['costos_prod'] or 0)
+            if un_excel != 0:
+                d['utilidad'] = un_excel
+            else:
+                d['utilidad'] = d['utilidad_antes_impuesto'] - (d['impuesto_renta'] or 0)
             by_month.append(d)
             total_ingresos += d['ingresos'] or 0
             total_gastos_op += d['gastos']
             total_impuesto += d['impuesto_renta'] or 0
             total_costos += (d['costos'] or 0) + (d['costos_prod'] or 0)
-        utilidad_antes = total_ingresos - total_gastos_op - total_costos
-        utilidad_neta = utilidad_antes - total_impuesto
+            total_util_antes_excel += ua_excel
+            total_util_neta_excel += un_excel
+        # Totales: si el Excel trae las filas, sumamos las del contador (cada mes).
+        # Si no, calculamos. Esto soporta archivos parciales o legacy.
+        if total_util_antes_excel != 0:
+            utilidad_antes = total_util_antes_excel
+        else:
+            utilidad_antes = total_ingresos - total_gastos_op - total_costos
+        if total_util_neta_excel != 0:
+            utilidad_neta = total_util_neta_excel
+        else:
+            utilidad_neta = utilidad_antes - total_impuesto
         margen = (utilidad_neta / total_ingresos * 100) if total_ingresos > 0 else 0
         margen_antes = (utilidad_antes / total_ingresos * 100) if total_ingresos > 0 else 0
         n_months = len(by_month)

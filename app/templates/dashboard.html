@@ -4367,67 +4367,23 @@ function renderFinTable(rows) {
     accounts[k].acum += r.valor;
   });
 
-  // Filas sintéticas faltantes del Excel:
-  //   - 'UTILIDAD ANTES DE IMPUESTO DE RENTA' (fila 221 del Excel, sin código)
-  //   - 'UTILIDAD (PERDIDA) DEL EJERCICIO'    (fila 233 del Excel, sin código)
-  // El parser financieros.py:_parse_cuenta solo reconoce filas que empiezan
-  // con código numérico, así que estas dos líneas se pierden silenciosamente.
-  // Las reconstruimos con la fórmula contable:
-  //   utilidad_antes = SUM(detalle '4') - SUM('51'+'52'+'53') - SUM('6') - SUM('7')
-  //   utilidad_neta  = utilidad_antes - SUM('54xxxx')   ← Impuesto de Renta
-  const utilAntesMeses    = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
-  const impuestoMeses     = {1:0,2:0,3:0,4:0,5:0,6:0,7:0,8:0,9:0,10:0,11:0,12:0};
-  Object.values(accounts).forEach(a => {
-    if (a.is_total) return;  // solo detalle para no doble-contar
-    const c = a.code || '';
-    const firstChar = c.charAt(0);
-    const isImpuesto = c.startsWith('54');
-    // 4 = ingresos (+) | 51/52/53 = gastos op (-) | 6 y 7 = costos (-) | 54 = impuesto (aparte)
-    let sign = 0;
-    if (firstChar === '4') sign = 1;
-    else if ((firstChar === '5' && !isImpuesto) || firstChar === '6' || firstChar === '7') sign = -1;
-    for (let m = 1; m <= 12; m++) {
-      const v = a.meses[m] || 0;
-      if (sign !== 0) utilAntesMeses[m] += sign * v;
-      if (isImpuesto) impuestoMeses[m] += v;
-    }
-  });
-  const utilNetaMeses = {};
-  for (let m = 1; m <= 12; m++) utilNetaMeses[m] = utilAntesMeses[m] - impuestoMeses[m];
-  const sumar = obj => Object.values(obj).reduce((s, v) => s + v, 0);
-  const utilAntesAcum = sumar(utilAntesMeses);
-  const utilNetaAcum  = sumar(utilNetaMeses);
-  const hayAlgunDato = Object.values(accounts).some(a => !a.is_total && Object.values(a.meses).some(v => v !== 0));
-  if (hayAlgunDato) {
-    accounts['__UTIL_ANTES_IMPUESTO__'] = {
-      code: '__UTIL_ANTES_IMPUESTO__',
-      desc: 'UTILIDAD ANTES DE IMPUESTO DE RENTA',
-      nivel: 1, parent: null, is_total: 1,
-      meses: utilAntesMeses, acum: utilAntesAcum,
-      _synthetic: true, _syntheticOrder: 1,
-    };
-    accounts['__UTIL_NETA__'] = {
-      code: '__UTIL_NETA__',
-      desc: 'UTILIDAD (PERDIDA) DEL EJERCICIO',
-      nivel: 1, parent: null, is_total: 1,
-      meses: utilNetaMeses, acum: utilNetaAcum,
-      _synthetic: true, _syntheticOrder: 2, _isBottomLine: true,
-    };
+  // Marcar filas conclusión del Estado de Resultados (vienen del Excel con
+  // los valores REALES del contador, ya cuadrados):
+  //   code '539999' → 'UTILIDAD ANTES DE IMPUESTO DE RENTA' (fila 221 Excel)
+  //   code '999999' → 'UTILIDAD (PERDIDA) DEL EJERCICIO'    (fila 233 Excel)
+  if (accounts['539999']) {
+    accounts['539999']._utilidadAntes = true;
+  }
+  if (accounts['999999']) {
+    accounts['999999']._isBottomLine = true;
   }
 
-  // Ordenar respetando la estructura contable correcta del Estado de Resultados:
-  //   4 INGRESOS → 51..53 GASTOS OPER → [= Utilidad antes impuesto] →
-  //   54 IMPUESTO RENTA → [= Utilidad del ejercicio]
-  // Para que la fila sintética 'Utilidad antes impuesto' caiga ANTES de '54',
-  // le asignamos un "código de orden" 53999 (después de 53 y antes de 54).
-  // 'Utilidad del ejercicio' va al final con 99999.
-  const sortKey = a => {
-    if (a.code === '__UTIL_ANTES_IMPUESTO__') return '539999';
-    if (a.code === '__UTIL_NETA__') return '99999999';
-    return a.code;
-  };
+  // Ordenar por código PUC (string natural). Los códigos '539999' y '999999'
+  // caen naturalmente en el orden contable correcto:
+  //   ... 53 NO OPER → 539999 (Utilidad antes impuesto) → 54 IMPTO RENTA →
+  //   55..7 (vacíos) → 999999 (Utilidad del ejercicio)
   const ordered = Object.values(accounts).sort((a, b) =>
-    sortKey(a).localeCompare(sortKey(b))
+    a.code.localeCompare(b.code)
   );
 
   // Identificar qué códigos son "padres" (tienen al menos un hijo en este dataset)
@@ -4461,10 +4417,11 @@ function renderFinTable(rows) {
     const chevron = isParent
       ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
       : '<span class="fin-chev-spacer"></span>';
-    // Filas sintéticas (Utilidades calculadas): fin-utilidad-neta para el
-    // bottom line (UTILIDAD DEL EJERCICIO), fin-utilidad para el subtotal.
+    // Conclusion lines del Estado de Resultados (vienen del Excel del contador):
+    //   fin-utilidad-neta = bottom line (UTILIDAD DEL EJERCICIO)
+    //   fin-utilidad      = subtotal intermedio (UTILIDAD ANTES DE IMPUESTO)
     const rowExtra = a._isBottomLine ? ' class="fin-utilidad-neta"'
-                  : (a._synthetic ? ' class="fin-utilidad"'
+                  : (a._utilidadAntes ? ' class="fin-utilidad"'
                   : (a.is_total ? ' class="fin-total"'
                   : (isParent ? ' class="fin-group"' : '')));
     // Color de código según nivel PUC (tonos progresivos sin perder legibilidad)
@@ -4474,8 +4431,8 @@ function renderFinTable(rows) {
     // La descripción SIEMPRE muestra algo: si está vacía, fallback al código
     // para que el usuario no vea filas con la 2da columna en blanco.
     const descTxt = (a.desc && a.desc.trim()) || '(' + a.code + ')';
-    // La fila sintética no muestra el código interno (__UTIL_...) — solo la descripción
-    const codeDisplay = a._synthetic ? '=' : a.code;
+    // Las dos filas conclusión muestran '=' en vez del código sintético interno
+    const codeDisplay = (a._isBottomLine || a._utilidadAntes) ? '=' : a.code;
     return `<tr${rowExtra}>
       <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${chevron}${codeDisplay}</td>
       <td style="${codeColor}">${descTxt}</td>
