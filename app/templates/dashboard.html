@@ -2040,6 +2040,10 @@ body {
       <button class="chip-clear" onclick="clearAllSlFilters()">Limpiar todo</button>
     </div>
 
+    <div class="cross-filter-hint">
+      <span>&#128161;</span> Haz clic en cualquier gr&aacute;fica para filtrar din&aacute;micamente. Vuelve a hacer clic para quitar el filtro.
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi-card teal">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de solicitudes registradas en el archivo cargado.</span></div>
@@ -3921,6 +3925,12 @@ function toggleSlChartFilter(dim, val) {
   if (_slFilters[dim] === val) delete _slFilters[dim];
   else _slFilters[dim] = val;
   renderSolicitudes();
+  // Mismo comportamiento que Cartera: ocultar el hint para siempre cuando
+  // el usuario descubre que las gráficas son interactivas.
+  try {
+    localStorage.setItem('fide_chart_hint_dismissed', '1');
+    document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
+  } catch (e) {}
 }
 
 function removeSlFilter(dim) {
