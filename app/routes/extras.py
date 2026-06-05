@@ -717,10 +717,15 @@ def jur_list(user=Depends(require_superadmin)):
             if not ident:
                 continue
             # Un cliente puede tener varios créditos: agregamos saldo, máx mora.
+            # IMPORTANTE: separamos saldo total vs saldo activo y vs saldo activo
+            # en mora — la auditoría detectó que jur_cartera_summary mezclaba
+            # saldo de cancelados en la cifra "saldo en mora".
             agg = cartera_idx.setdefault(ident, {
                 "creditos_total": 0,
                 "creditos_activos": 0,
-                "saldo_capital_total": 0.0,
+                "saldo_capital_total": 0.0,     # incluye cancelados (información)
+                "saldo_capital_activo": 0.0,    # solo ACTIVO — base para los KPIs
+                "saldo_activo_en_mora_30": 0.0, # solo ACTIVO + mora>30 (NPL parcial)
                 "valor_credito_total": 0.0,
                 "max_dias_mora": 0,
                 "estado_principal": None,
@@ -729,11 +734,15 @@ def jur_list(user=Depends(require_superadmin)):
                 "aliado_principal": None,
             })
             agg["creditos_total"] += 1
-            if c["estado"] == "ACTIVO":
-                agg["creditos_activos"] += 1
-            agg["saldo_capital_total"] += float(c["saldo_capital"] or 0)
+            saldo = float(c["saldo_capital"] or 0)
+            agg["saldo_capital_total"] += saldo
             agg["valor_credito_total"] += float(c["valor_credito"] or 0)
             dm = int(c["dias_mora"] or 0)
+            if c["estado"] == "ACTIVO":
+                agg["creditos_activos"] += 1
+                agg["saldo_capital_activo"] += saldo
+                if dm > 30:
+                    agg["saldo_activo_en_mora_30"] += saldo
             if dm > agg["max_dias_mora"]:
                 agg["max_dias_mora"] = dm
             if c["linea"]:
@@ -756,6 +765,8 @@ def jur_list(user=Depends(require_superadmin)):
                 d['cartera_creditos_total'] = cartera['creditos_total']
                 d['cartera_creditos_activos'] = cartera['creditos_activos']
                 d['cartera_saldo_capital'] = cartera['saldo_capital_total']
+                d['cartera_saldo_activo'] = cartera['saldo_capital_activo']
+                d['cartera_saldo_activo_mora30'] = cartera['saldo_activo_en_mora_30']
                 d['cartera_valor_credito'] = cartera['valor_credito_total']
                 d['cartera_dias_mora_max'] = cartera['max_dias_mora']
                 d['cartera_estado'] = cartera['estado_principal']
@@ -773,7 +784,16 @@ def jur_list(user=Depends(require_superadmin)):
 
 @juridico.get("/cartera-summary")
 def jur_cartera_summary(user=Depends(require_superadmin)):
-    """Resumen del cruce procesos jurídicos vs cartera."""
+    """Resumen del cruce procesos jurídicos vs cartera.
+
+    Política tras la auditoría (issue #7 y #8):
+      - 'saldo_total_cartera' = solo créditos ACTIVO de los clientes con
+        proceso jurídico. Antes incluía cancelados (saldo típicamente 0
+        pero conceptualmente incorrecto).
+      - 'saldo_en_mora' = solo el saldo del crédito ACTIVO con mora > 30,
+        no el saldo total del cliente. Antes sumaba todos los créditos del
+        cliente si CUALQUIERA de ellos tenía mora > 30.
+    """
     rows = jur_list(user)
     if not rows:
         return {"total": 0, "matched": 0, "saldo_total_cartera": 0, "saldo_en_mora": 0}
@@ -781,11 +801,8 @@ def jur_cartera_summary(user=Depends(require_superadmin)):
     return {
         "total": len(rows),
         "matched": len(matched),
-        "saldo_total_cartera": sum(r.get('cartera_saldo_capital') or 0 for r in matched),
-        "saldo_en_mora": sum(
-            r.get('cartera_saldo_capital') or 0 for r in matched
-            if (r.get('cartera_dias_mora_max') or 0) > 30
-        ),
+        "saldo_total_cartera": sum(r.get('cartera_saldo_activo') or 0 for r in matched),
+        "saldo_en_mora": sum(r.get('cartera_saldo_activo_mora30') or 0 for r in matched),
     }
 
 

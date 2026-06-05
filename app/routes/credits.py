@@ -262,16 +262,23 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
         """).fetchone()
 
         # Recaudado plataforma VIEJA (pagos_legacy, agregado por id_prestamo).
-        # Join por id_prestamo = credits.cuenta. Los que no matchean caen
-        # solo en 'total' (no en cerrado/activos), pero se cuentan al total.
+        # JOIN normalizado: TRIM + LTRIM leading zeros para evitar misses
+        # silenciosos por formatos distintos (ej. "00005" vs "5", " 2230" vs "2230").
+        # Devuelve también 'sin_match' = pagos que no encuentran credits.cuenta —
+        # estos NO entran en cerrado/activos pero sí en total, lo que evita la
+        # discrepancia silenciosa (total != cerrado + activos) que detectó la auditoría.
         rec_leg = conn.execute(f"""
             SELECT
                 COALESCE(SUM(pl.valor_pago_total), 0) as total,
                 COALESCE(SUM(CASE WHEN c.estado='CANCELADO' THEN pl.valor_pago_total ELSE 0 END), 0) as cerrado,
-                COALESCE(SUM(CASE WHEN c.estado='ACTIVO'    THEN pl.valor_pago_total ELSE 0 END), 0) as activos
+                COALESCE(SUM(CASE WHEN c.estado='ACTIVO'    THEN pl.valor_pago_total ELSE 0 END), 0) as activos,
+                COALESCE(SUM(CASE WHEN c.cuenta IS NULL     THEN pl.valor_pago_total ELSE 0 END), 0) as sin_match
             FROM pagos_legacy pl
             LEFT JOIN credits c
-                ON c.cuenta = pl.id_prestamo
+                ON (
+                    TRIM(c.cuenta) = TRIM(pl.id_prestamo)
+                    OR LTRIM(TRIM(c.cuenta), '0') = LTRIM(TRIM(pl.id_prestamo), '0')
+                )
                 AND c.sync_batch_id = {batch_cart}
         """).fetchone()
 
@@ -294,6 +301,11 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
             "total":   {"nueva": float(rec_new["total"] or 0),   "legacy": float(rec_leg["total"] or 0)},
             "cerrado": {"nueva": float(rec_new["cerrado"] or 0), "legacy": float(rec_leg["cerrado"] or 0)},
             "activos": {"nueva": float(rec_new["activos"] or 0), "legacy": float(rec_leg["activos"] or 0)},
+            # Diagnóstico: pagos legacy que no encuentran su crédito en cartera.
+            # Si este número es alto, las cuentas de pagos_legacy e id_prestamo
+            # vs credits.cuenta tienen un formato distinto que no detecta la
+            # normalización TRIM/LTRIM. La UI lo puede surfacar para acción.
+            "legacy_sin_match": float(rec_leg["sin_match"] or 0),
         }
         # Desglose Vr Desembolsado por plataforma.
         # 'nueva' = cuentas marcadas en cartera_nueva_cuentas (último upload incremental).

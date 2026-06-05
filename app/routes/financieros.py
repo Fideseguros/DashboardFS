@@ -103,6 +103,11 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         # repetidos (ej. 'Total 41 OPERACIONALES' aparece varias veces).
         # Sumamos los valores en lugar de fallar por UNIQUE constraint.
         agg = {}  # (code, month) -> {valor, desc, nivel, parent, is_total}
+        # Detectamos meses PRESENTES en el archivo independiente del valor (puede
+        # ser 0). Esto evita el bug detectado por la auditoría: si una cuenta cae
+        # a 0 entre re-uploads, el DELETE no la limpiaba porque construíamos
+        # months_in_file desde 'records' (que excluye valores 0).
+        months_present_in_file = set()
         for r in rows:
             if not r or len(r) < 2:
                 continue
@@ -113,7 +118,11 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             for month, col_idx in MONTH_COLS.items():
                 if col_idx >= len(r):
                     continue
-                val = _to_float(r[col_idx])
+                raw_cell = r[col_idx]
+                # Si la celda NO está vacía (incluye 0), el mes está presente en el archivo
+                if raw_cell is not None and str(raw_cell).strip() != '':
+                    months_present_in_file.add(month)
+                val = _to_float(raw_cell)
                 if val == 0:
                     continue
                 key = (code, month)
@@ -139,8 +148,10 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             for (code, m), v in agg.items()
         ]
 
-        # Identifica solo los meses con datos reales en este upload
-        months_in_file = sorted({rec['month'] for rec in records})
+        # Reemplazar meses presentes en el archivo (incluyendo aquellos con todas
+        # las celdas en 0 — el DELETE limpia el mes para que las cuentas que
+        # caían a 0 no queden con su valor anterior).
+        months_in_file = sorted(months_present_in_file)
 
         with get_db() as conn:
             # Reemplazar SOLO los meses presentes en el archivo. Si el usuario
