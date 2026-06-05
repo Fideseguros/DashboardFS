@@ -2312,7 +2312,7 @@ body {
         <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
         <div>
           <h2>Cosechas y Aging de Mora</h2>
-          <div class="module-meta">Calidad de cartera por per&iacute;odo de desembolso &middot; usa el batch activo de cartera</div>
+          <div class="module-meta">Calidad de cartera por per&iacute;odo de desembolso &middot; usa el batch activo y NO respeta los filtros de Cartera (su propio filtro de fecha aplica)</div>
         </div>
       </div>
       <div class="module-actions">
@@ -3173,20 +3173,31 @@ function updateKPIs() {
   const sMora = enMora.reduce((s,r) => s+(parseFloat(r.saldo_capital)||0), 0);
 
   document.getElementById('kpiTotal').textContent = fmt(d.length);
-  document.getElementById('kpiTotalSub').textContent = `${fmt(act.length)} activos / ${fmt(d.length-act.length)} cancelados`;
+  // Tras auditoría: cancelados = todo lo que NO sea ACTIVO (incluye CANCELADO
+  // y cualquier otro estado como SUSPENDIDO / JURÍDICO si existiera). El
+  // sub-label usa 'cerrados' (más genérico) en vez de 'cancelados' para no
+  // mislabelar estados no-ACTIVO no-CANCELADO.
+  const cerrados = d.length - act.length;
+  document.getElementById('kpiTotalSub').textContent = `${fmt(act.length)} activos / ${fmt(cerrados)} cerrados`;
   document.getElementById('kpiActivos').textContent = fmt(act.length);
   document.getElementById('kpiActivosSub').textContent = pct(act.length, d.length) + ' del total';
-  // tValAct se mantiene para Ticket Promedio Activos (más abajo).
   // El sub de 'Valor Total Cartera' muestra el SALDO CAPITAL ACTIVO (= lo que
   // queda pendiente por cobrar de los créditos activos), no el valor original.
   // Pedido explícito de la líder para que coincida con el KPI Saldo Capital.
-  const tValAct = act.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
   document.getElementById('kpiValor').textContent = fmtM(tVal);
-  document.getElementById('kpiValorSub').textContent = `Saldo activos: ${fmtM(tSalActivo)}`;
+  // Si el filtro fuerza tSalActivo a 0 (ej. filtro estado=CANCELADO),
+  // el sub explica que no hay activos en el subset filtrado.
+  document.getElementById('kpiValorSub').textContent = tSalActivo > 0
+    ? `Saldo activos: ${fmtM(tSalActivo)}`
+    : 'Sin créditos activos en el filtro';
   document.getElementById('kpiSaldo').textContent = fmtM(tSal);
   document.getElementById('kpiSaldoSub').textContent = pct(tSal, tVal) + ' del valor original';
   document.getElementById('kpiTasa').textContent = tProm.toFixed(1) + '%';
-  document.getElementById('kpiTasaSub').textContent = `Ponderada por saldo · Rango: ${tasasAct.length?Math.min(...tasasAct).toFixed(1):0}% - ${tasasAct.length?Math.max(...tasasAct).toFixed(1):0}%`;
+  // Texto honesto: el promedio sí es ponderado, pero el RANGO es simple
+  // (min/max de tasas), no ponderado. Aclaramos para no engañar.
+  const tasaMin = tasasAct.length ? Math.min(...tasasAct).toFixed(1) : 0;
+  const tasaMax = tasasAct.length ? Math.max(...tasasAct).toFixed(1) : 0;
+  document.getElementById('kpiTasaSub').textContent = `Promedio ponderado · Rango simple: ${tasaMin}%–${tasaMax}%`;
   document.getElementById('kpiMora').textContent = fmt(enMora.length);
   document.getElementById('kpiMoraSub').textContent = `Saldo: ${fmtM(sMora)} (${pct(sMora, tSalActivo)} del activo) · mora > 30 días`;
 
@@ -3985,10 +3996,15 @@ function renderSlFilterBar() {
 function renderSolicitudes() {
   // Filtered subset (cross-filters aplicados)
   const filtered = _slRawData.filter(_slMatchesFilters);
-  // Totales globales (sin filtro) para el sub-label de histórico precargado
+  // Totales globales (sin filtro) y filtrados (respetando cross-filter)
+  // Tras auditoría: cuando hay filtros activos, el sub-label de Total
+  // debería reflejar el subset filtrado, no los totales raw.
   const rawTotal = _slRawData.length;
   const legacyTotal = _slRawData.filter(r => r.source === 'legacy').length;
   const nuevaTotal = _slRawData.filter(r => r.source === 'nueva').length;
+  const legacyFiltered = filtered.filter(r => r.source === 'legacy').length;
+  const nuevaFiltered = filtered.filter(r => r.source === 'nueva').length;
+  const hasActiveFilters = Object.keys(_slFilters).length > 0;
 
   // ============ KPIs (recomputados desde filtered) ============
   const total = filtered.length;
@@ -3999,8 +4015,10 @@ function renderSolicitudes() {
     .reduce((s, r) => s + (parseFloat(r.valor) || 0), 0);
 
   document.getElementById('slTotal').textContent = fmt(total);
-  document.getElementById('slTotalSub').textContent =
-    `${fmt(nuevaTotal)} nueva plat. · ${fmt(legacyTotal)} hist. · ${fmtM(valorTotal)}`;
+  // Sub-label refleja el subset cuando hay cross-filter activo, sino los totales raw.
+  document.getElementById('slTotalSub').textContent = hasActiveFilters
+    ? `${fmt(nuevaFiltered)} nueva plat. · ${fmt(legacyFiltered)} hist. · ${fmtM(valorTotal)}`
+    : `${fmt(nuevaTotal)} nueva plat. · ${fmt(legacyTotal)} hist. · ${fmtM(valorTotal)}`;
 
   // Etiqueta histórico precargado
   const slHist = document.getElementById('slHistInfo');
@@ -4507,7 +4525,9 @@ const BUCKETS = [
 const BUCKET_COLORS = ['#00a79d', '#85ffaa', '#FFD86F', '#f0a350', '#e89a4c', '#c97a3a', '#8a4d2a'];
 
 function _bucketOf(dm) {
-  const d = parseInt(dm) || 0;
+  // Tras auditoría: días negativos (por datos sucios) los normalizamos a 0
+  // (Al día) explícitamente en vez de caer al fallback default que era ambiguo.
+  const d = Math.max(0, parseInt(dm) || 0);
   for (const b of BUCKETS) {
     if (d >= b.min && d <= b.max) return b.key;
   }
@@ -4635,9 +4655,11 @@ function renderAnalitica() {
   document.getElementById('anMoraPromSub').textContent =
     'Ponderado por saldo capital';
   document.getElementById('anCosechaPeor').textContent = peorYM ? peorPct.toFixed(1) + '%' : '–';
+  // Sub-label aclara el umbral $1M de filtrado de cosechas pequeñas
+  // (auditoría: antes era opaco; ahora la gerente sabe por qué se ignoran)
   document.getElementById('anCosechaPeorSub').textContent = peorYM
-    ? (peorYM + ' · saldo ' + fmtCurrency(peorSaldo))
-    : 'Sin datos suficientes';
+    ? (peorYM + ' · saldo ' + fmtCurrency(peorSaldo) + ' · cosechas con <$1M se ignoran')
+    : 'Sin cosechas con saldo > $1M en el rango';
 
   // ============ Chart: Aging bar (barras horizontales) ============
   Object.keys(_anCharts).forEach(k => { _anCharts[k]?.destroy?.(); });
