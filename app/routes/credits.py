@@ -122,8 +122,11 @@ def get_summary(_user=Depends(require_auth)):
                 SUM(valor_credito) as valor_total,
                 SUM(CASE WHEN estado='ACTIVO' THEN saldo_capital ELSE 0 END) as saldo_capital_activo,
                 SUM(saldo_capital) as saldo_capital,
-                CAST(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN tasa_efectiva * saldo_capital ELSE 0 END) AS REAL) /
-                    NULLIF(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 THEN saldo_capital ELSE 0 END), 0) as tasa_promedio,
+                -- Filtros consistentes con get_kpis.tasa_promedio_activos:
+                -- ACTIVO + tasa > 0 + saldo > 0 (evita registros con saldo 0 que
+                -- distorsionarían la ponderación).
+                CAST(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 AND saldo_capital > 0 THEN tasa_efectiva * saldo_capital ELSE 0 END) AS REAL) /
+                    NULLIF(SUM(CASE WHEN estado='ACTIVO' AND tasa_efectiva > 0 AND saldo_capital > 0 THEN saldo_capital ELSE 0 END), 0) as tasa_promedio,
                 SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 30 THEN 1 ELSE 0 END) as en_mora_count,
                 SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0) > 30 THEN saldo_capital ELSE 0 END) as en_mora_saldo
             FROM credits WHERE {batch}
@@ -402,7 +405,11 @@ def top_clientes(
         conn.close()
 
     # Agregar por identificación (decifrada). Un cliente puede tener varios créditos.
+    # Tras auditoría: en vez de quedarnos con el primer 'cliente' (setdefault),
+    # contamos cada grafía y elegimos la más frecuente. Si dos grafías
+    # empatan, gana la más larga (más completa).
     by_ident = {}
+    name_counts = {}  # {ident: {nombre: count}}
     for r in rows:
         ident = decrypt(r["identificacion"])
         cli = decrypt(r["cliente"])
@@ -419,6 +426,10 @@ def top_clientes(
             "lineas": set(),
             "calificaciones": set(),
         })
+        # Tracking de frecuencia de cada grafía del nombre
+        nc = name_counts.setdefault(ident, {})
+        if cli:
+            nc[cli] = nc.get(cli, 0) + 1
         agg["n_creditos"] += 1
         saldo = float(r["saldo_capital"] or 0)
         agg["saldo_capital"] += saldo
@@ -436,8 +447,15 @@ def top_clientes(
     # Ordenar por saldo desc y tomar top N
     top = sorted(by_ident.values(), key=lambda x: -x["saldo_capital"])[:n]
 
-    # Convertir sets a listas para serialización JSON
+    # Asignar a cada cliente el nombre más representativo: la grafía con
+    # mayor frecuencia entre sus créditos. Desempate: la más larga (más completa).
     for t in top:
+        nc = name_counts.get(t["identificacion"], {})
+        if nc:
+            # Ordenar por (count desc, len(name) desc, alfabético)
+            best = sorted(nc.items(), key=lambda kv: (-kv[1], -len(kv[0]), kv[0]))[0][0]
+            t["cliente"] = best
+        # Convertir sets a listas para serialización JSON
         t["lineas"] = sorted(t["lineas"])
         t["calificaciones"] = sorted(c for c in t["calificaciones"] if c)
 

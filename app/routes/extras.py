@@ -528,7 +528,16 @@ def _normalize_estado(estado, source: str) -> str | None:
 
 @solicitudes.get("/combined")
 def solic_combined(_user=Depends(require_auth)):
-    """UNION de legacy + nueva plataforma con estados normalizados."""
+    """UNION de legacy + nueva plataforma con estados normalizados.
+
+    Nota Habeas Data (auditoría): este endpoint sigue ejecutando decrypt()
+    sobre identificacion y solicitante/nombre_completo de TODAS las filas
+    aunque el output salga ENMASCARADO. El decrypt es necesario para que
+    mask_identificacion/mask_cliente produzcan máscaras útiles. Los logs
+    de errores podrían filtrar el plaintext si un decrypt falla — por eso
+    el bloque try/except en crypto.py ya retorna None silenciosamente sin
+    loguear el valor.
+    """
     conn = get_connection()
     try:
         new_rows = conn.execute(
@@ -811,12 +820,19 @@ def jur_summary(user=Depends(require_superadmin)):
     conn = get_connection()
     try:
         batch = "(SELECT id FROM sync_logs WHERE source='juridico_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
+        # Filtro 'sin medida cautelar' ampliado tras auditoría: antes solo
+        # excluía 'N/A', ahora también las variantes típicas que aparecen
+        # en archivos Excel (NA, No, NO, -, n/a, sin, ninguna, etc.).
         row = conn.execute(f"""
             SELECT COUNT(*) as total,
                 SUM(CASE WHEN LOWER(probabilidad) LIKE '%probable%' THEN 1 ELSE 0 END) as probables,
                 SUM(CASE WHEN LOWER(probabilidad) LIKE '%remot%' THEN 1 ELSE 0 END) as remotas,
                 COUNT(DISTINCT juzgado) as juzgados,
-                SUM(CASE WHEN medida_cautelar IS NOT NULL AND medida_cautelar <> '' AND medida_cautelar <> 'N/A' THEN 1 ELSE 0 END) as con_medida
+                SUM(CASE WHEN medida_cautelar IS NOT NULL
+                          AND TRIM(medida_cautelar) <> ''
+                          AND LOWER(TRIM(medida_cautelar)) NOT IN
+                              ('n/a', 'na', 'no', '-', 'sin', 'ninguna', 'ninguno', 'sin medida', 'n.a.')
+                     THEN 1 ELSE 0 END) as con_medida
             FROM procesos_juridicos WHERE sync_batch_id = {batch}
         """).fetchone()
         return dict(row) if row else {}
