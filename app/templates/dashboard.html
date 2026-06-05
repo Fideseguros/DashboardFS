@@ -938,6 +938,23 @@ body {
   background: transparent;
 }
 .data-table tbody tr:has(td[colspan]):hover td { background: transparent; }
+
+/* Chevron y filas tipo grupo en la tabla de Estados Financieros */
+.fin-chev {
+  display: inline-block;
+  width: 14px;
+  margin-right: 4px;
+  color: var(--fide-teal);
+  font-size: 0.7rem;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s;
+}
+.fin-chev:hover { color: var(--fide-teal-deeper); }
+.fin-chev-spacer { display: inline-block; width: 18px; }
+.data-table tr.fin-total td { font-weight: 800; background: var(--neutral-50); }
+.data-table tr.fin-group td { cursor: default; }
+.data-table tr.fin-group:hover td { background: var(--fide-teal-tint); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -2166,8 +2183,14 @@ body {
     </div>
 
     <div class="chart-card full">
-      <h3><span class="dot"></span> Detalle por Cuenta <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(haz clic en una fila para expandir/colapsar grupos)</span></h3>
-      <div class="table-wrapper" style="max-height:560px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;">
+        <h3 style="margin-bottom:0;"><span class="dot"></span> Detalle por Cuenta <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(haz clic en &#9656; / &#9662; para expandir o colapsar grupos PUC)</span></h3>
+        <div style="display:flex;gap:0.4rem;">
+          <button class="btn btn-reset" style="padding:0.25rem 0.7rem;font-size:0.7rem;" onclick="expandAllFin()">Expandir todo</button>
+          <button class="btn btn-reset" style="padding:0.25rem 0.7rem;font-size:0.7rem;" onclick="collapseAllFin()">Colapsar todo</button>
+        </div>
+      </div>
+      <div class="table-wrapper" style="max-height:560px;margin-top:0.7rem;">
         <table class="data-table compact" id="tblFinancieros">
           <thead><tr>
             <th>C&oacute;digo</th>
@@ -4268,9 +4291,15 @@ async function loadFinancieros() {
   } catch (e) { console.error('loadFinancieros', e); }
 }
 
+// Estado persistente del expand/collapse de la tabla financieros.
+// Cuando se cambia de año, se mantiene la misma lógica de defaults.
+let _finCollapsed = null;   // Set<string> de códigos colapsados; null = no inicializado
+let _finLastRows = null;    // cache para re-render al togglear sin re-fetch
+
 function renderFinTable(rows) {
+  _finLastRows = rows;
   const tb = document.querySelector('#tblFinancieros tbody');
-  if (!rows.length) {
+  if (!rows || !rows.length) {
     tb.innerHTML = '<tr><td colspan="15" style="text-align:center;padding:1rem;color:#5a6a6e;">Sin datos para este año</td></tr>';
     return;
   }
@@ -4290,20 +4319,47 @@ function renderFinTable(rows) {
     accounts[k].acum += r.valor;
   });
 
-  // Ordenar por código PUC
-  const ordered = Object.values(accounts).sort((a, b) => {
-    // Por código natural (string)
-    return a.code.localeCompare(b.code);
-  });
+  // Ordenar por código PUC (natural por string)
+  const ordered = Object.values(accounts).sort((a, b) => a.code.localeCompare(b.code));
+
+  // Identificar qué códigos son "padres" (tienen al menos un hijo en este dataset)
+  const parentCodes = new Set();
+  ordered.forEach(a => { if (a.parent) parentCodes.add(a.parent); });
+
+  // Default state: colapsar todos los códigos con hijos a partir del nivel 2.
+  // Resultado: el usuario ve nivel 1 + nivel 2 desplegado (grupos PUC) y debe
+  // hacer clic para drill down a cuentas detalle.
+  if (_finCollapsed === null) {
+    _finCollapsed = new Set();
+    ordered.forEach(a => {
+      if (parentCodes.has(a.code) && a.nivel >= 2) _finCollapsed.add(a.code);
+    });
+  }
+
+  // ¿Alguno de los ancestros de esta cuenta está colapsado?
+  function hasCollapsedAncestor(a) {
+    let p = a.parent;
+    while (p) {
+      if (_finCollapsed.has(p)) return true;
+      const pa = accounts[p];
+      p = pa ? pa.parent : null;
+    }
+    return false;
+  }
 
   const fmt = v => v ? fmtCurrency(v) : '-';
-  const padLeft = nivel => Math.max(0, (nivel - 1) * 8);  // sangría según profundidad
-  tb.innerHTML = ordered.map(a => {
-    const totalClass = a.is_total ? 'style="font-weight:800;background:var(--neutral-50);"' : '';
+  const padLeft = nivel => Math.max(0, (nivel - 1) * 12);  // sangría más generosa
+  tb.innerHTML = ordered.filter(a => !hasCollapsedAncestor(a)).map(a => {
+    const isParent = parentCodes.has(a.code);
+    const isCollapsed = _finCollapsed.has(a.code);
+    const chevron = isParent
+      ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
+      : '<span class="fin-chev-spacer"></span>';
+    const rowExtra = a.is_total ? ' class="fin-total"' : (isParent ? ' class="fin-group"' : '');
     const codeColor = a.nivel <= 2 ? 'color:var(--fide-teal-dark);font-weight:800;'
                       : (a.nivel <= 4 ? 'color:var(--neutral-700);font-weight:700;' : 'color:var(--neutral-500);');
-    return `<tr ${totalClass}>
-      <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${a.code}</td>
+    return `<tr${rowExtra}>
+      <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${chevron}${a.code}</td>
       <td style="${codeColor}">${a.desc || ''}</td>
       <td class="num">${fmt(a.meses[1])}</td>
       <td class="num">${fmt(a.meses[2])}</td>
@@ -4320,6 +4376,24 @@ function renderFinTable(rows) {
       <td class="num"><strong>${fmt(a.acum)}</strong></td>
     </tr>`;
   }).join('');
+}
+
+function toggleFinGroup(code) {
+  if (!_finCollapsed) _finCollapsed = new Set();
+  if (_finCollapsed.has(code)) _finCollapsed.delete(code);
+  else _finCollapsed.add(code);
+  if (_finLastRows) renderFinTable(_finLastRows);
+}
+
+function expandAllFin() {
+  if (_finCollapsed) _finCollapsed.clear();
+  if (_finLastRows) renderFinTable(_finLastRows);
+}
+
+function collapseAllFin() {
+  // Re-aplicar default: colapsar todo lo de nivel >= 2 que es parent.
+  _finCollapsed = null;
+  if (_finLastRows) renderFinTable(_finLastRows);
 }
 
 async function uploadFinancieros(file) {
