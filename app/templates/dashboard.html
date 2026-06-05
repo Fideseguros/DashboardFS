@@ -952,9 +952,16 @@ body {
 }
 .fin-chev:hover { color: var(--fide-teal-deeper); }
 .fin-chev-spacer { display: inline-block; width: 18px; }
-.data-table tr.fin-total td { font-weight: 800; background: var(--neutral-50); }
-.data-table tr.fin-group td { cursor: default; }
-.data-table tr.fin-group:hover td { background: var(--fide-teal-tint); }
+/* Filas Total — prominentes para que el usuario nunca pierda los subtotales
+ * (la gerente reportó que parecían desaparecer entre los detalles). */
+.data-table tr.fin-total td {
+  font-weight: 800 !important;
+  background: var(--fide-teal-tint);
+  border-top: 1px solid var(--border);
+  color: var(--fide-teal-deeper);
+}
+.data-table tr.fin-total:hover td { background: var(--fide-teal-tint); }
+.data-table tr.fin-group:hover td { background: rgba(0, 167, 157, 0.05); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -4344,14 +4351,12 @@ function renderFinTable(rows) {
   const parentCodes = new Set();
   ordered.forEach(a => { if (a.parent) parentCodes.add(a.parent); });
 
-  // Default state: colapsar todos los códigos con hijos a partir del nivel 2.
-  // Resultado: el usuario ve nivel 1 + nivel 2 desplegado (grupos PUC) y debe
-  // hacer clic para drill down a cuentas detalle.
+  // Default state: TODO expandido. La gerente reportó que el auto-collapse
+  // hacía desaparecer subtítulos de grupos legítimos. Mejor empezar mostrando
+  // todo y dejar que el usuario colapse manualmente lo que no necesita ver.
+  // collapseAllFin() le permite el atajo si quiere ver solo los grupos.
   if (_finCollapsed === null) {
     _finCollapsed = new Set();
-    ordered.forEach(a => {
-      if (parentCodes.has(a.code) && a.nivel >= 2) _finCollapsed.add(a.code);
-    });
   }
 
   // ¿Alguno de los ancestros de esta cuenta está colapsado?
@@ -4373,12 +4378,18 @@ function renderFinTable(rows) {
     const chevron = isParent
       ? `<span class="fin-chev" onclick="toggleFinGroup('${a.code}')" title="${isCollapsed ? 'Expandir' : 'Colapsar'}">${isCollapsed ? '▸' : '▾'}</span>`
       : '<span class="fin-chev-spacer"></span>';
+    // Total rows prominentes con clase fin-total; grupos con fin-group (hover sutil).
     const rowExtra = a.is_total ? ' class="fin-total"' : (isParent ? ' class="fin-group"' : '');
+    // Color de código según nivel PUC (tonos progresivos sin perder legibilidad)
     const codeColor = a.nivel <= 2 ? 'color:var(--fide-teal-dark);font-weight:800;'
-                      : (a.nivel <= 4 ? 'color:var(--neutral-700);font-weight:700;' : 'color:var(--neutral-500);');
+                      : (a.nivel <= 4 ? 'color:var(--neutral-900);font-weight:700;'
+                                       : 'color:var(--neutral-700);font-weight:600;');
+    // La descripción SIEMPRE muestra algo: si está vacía, fallback al código
+    // para que el usuario no vea filas con la 2da columna en blanco.
+    const descTxt = (a.desc && a.desc.trim()) || '(' + a.code + ')';
     return `<tr${rowExtra}>
       <td style="${codeColor}padding-left:${0.4 + padLeft(a.nivel)/16}rem;">${chevron}${a.code}</td>
-      <td style="${codeColor}">${a.desc || ''}</td>
+      <td style="${codeColor}">${descTxt}</td>
       <td class="num">${fmt(a.meses[1])}</td>
       <td class="num">${fmt(a.meses[2])}</td>
       <td class="num">${fmt(a.meses[3])}</td>
@@ -4409,9 +4420,13 @@ function expandAllFin() {
 }
 
 function collapseAllFin() {
-  // Re-aplicar default: colapsar todo lo de nivel >= 2 que es parent.
-  _finCollapsed = null;
-  if (_finLastRows) renderFinTable(_finLastRows);
+  // Colapsar TODOS los grupos (no solo nivel >= 2). Re-render llena
+  // _finCollapsed con todos los parentCodes del dataset actual.
+  if (!_finLastRows) return;
+  _finCollapsed = new Set();
+  // Construir parentCodes desde los datos actuales y colapsarlos todos
+  _finLastRows.forEach(r => { if (r.parent_code) _finCollapsed.add(r.parent_code); });
+  renderFinTable(_finLastRows);
 }
 
 async function uploadFinancieros(file) {
