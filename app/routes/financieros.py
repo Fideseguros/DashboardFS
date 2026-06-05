@@ -152,6 +152,38 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
                 else:
                     agg[key]['valor'] += val
 
+        # ROLLUP de categorías principales (códigos de 1 dígito) que aparecen
+        # como header en el Excel pero NO tienen 'Total X' explícito.
+        # Caso real: '5 GASTOS' en fila 61 es solo label; el contador no
+        # totalizó al nivel 1 (solo Total 51, 52, 53, 54). Sin este rollup,
+        # la cascada no muestra '5 GASTOS' como categoría principal del E.R.
+        nivel1_headers = {}
+        for r in rows:
+            if not r or len(r) < 2:
+                continue
+            raw = str(r[1]).strip() if r[1] else ''
+            if not raw or raw.lower().startswith('total'):
+                continue
+            m1 = re.match(r'^(\d)\s+(.+)', raw)
+            if m1 and m1.group(1) not in nivel1_headers:
+                nivel1_headers[m1.group(1)] = m1.group(2).strip()
+        for code1, desc1 in nivel1_headers.items():
+            # Si el contador YA totalizó este nivel (ej. 'Total 4 INGRESOS' →
+            # code '4' en agg), no sobrescribir.
+            if any(k[0] == code1 for k in agg.keys()):
+                continue
+            # Sumar descendientes detalle (is_total=0) cuyo código empiece con code1.
+            for month in months_present_in_file:
+                total = sum(
+                    v['valor'] for (c, mm), v in agg.items()
+                    if mm == month and not v['is_total'] and c.startswith(code1)
+                )
+                if total != 0:
+                    agg[(code1, month)] = {
+                        'descripcion': desc1, 'nivel': 1, 'parent': None,
+                        'is_total': 1, 'valor': total,
+                    }
+
         records = [
             {
                 'year': year, 'month': m, 'cuenta_code': code,
