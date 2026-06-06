@@ -52,12 +52,16 @@ def _parse_cuenta(raw: str):
     upper = raw.upper()
     if upper == 'CUENTA':
         return None
-    # Líneas conclusión del Estado de Resultados sin código numérico.
-    # Se les asigna un code sintético para que entren al pipeline normal.
-    if 'UTILIDAD' in upper and 'ANTES DE IMPUESTO' in upper:
-        return '539999', 'UTILIDAD ANTES DE IMPUESTO DE RENTA', 1, None, 1
-    if 'UTILIDAD' in upper and ('DEL EJERCICIO' in upper or 'PERDIDA' in upper and 'EJERCICIO' in upper):
-        return '999999', 'UTILIDAD (PERDIDA) DEL EJERCICIO', 1, None, 1
+    # Líneas conclusión del Estado de Resultados — SOLO filas SIN código numérico
+    # al inicio (las reales 221/233 del Excel del contador empiezan con 'UTILIDAD').
+    # Sin el guard `not raw[0].isdigit()` podríamos capturar filas detalle futuras
+    # que casualmente mencionen 'UTILIDAD' (ej. una cuenta '519999 PROVISION
+    # UTILIDAD DEL EJERCICIO ANTERIOR').
+    if not raw[0].isdigit():
+        if 'UTILIDAD' in upper and 'ANTES DE IMPUESTO' in upper:
+            return '539999', 'UTILIDAD ANTES DE IMPUESTO DE RENTA', 1, None, 1
+        if 'UTILIDAD' in upper and 'EJERCICIO' in upper:
+            return '999999', 'UTILIDAD (PERDIDA) DEL EJERCICIO', 1, None, 1
     # Detección de 'Total ...'
     is_total = raw.lower().startswith('total')
     if is_total:

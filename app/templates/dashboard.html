@@ -1409,6 +1409,71 @@ body {
   #tblAliados th:nth-child(4), #tblAliados td:nth-child(4),           /* Activos */
   #tblAliados th:nth-child(5), #tblAliados td:nth-child(5)            /* Valor Total */
     { display: none; }
+
+  /* Anti-zoom iOS: inputs y selects con font-size < 16px disparan zoom automático.
+   * Aplica a TODOS los selects/inputs visibles en pantallas táctiles. */
+  .filter-group select, .filter-group input,
+  .search-box, .module-meta select, select#efYear,
+  select#anFecha, input#anFechaFrom, input#anFechaTo {
+    font-size: 16px !important;
+  }
+
+  /* Estados Financieros: 15 columnas no caben → mostrar solo Código, Descripción
+   * y Acumulado. Los meses individuales requieren desktop. */
+  #tblFinancieros th:nth-child(n+3):nth-child(-n+14),
+  #tblFinancieros td:nth-child(n+3):nth-child(-n+14) { display: none; }
+  /* Y suavizar la fila de Utilidad neta que aún quedaba prominente */
+  .data-table tr.fin-utilidad td,
+  .data-table tr.fin-utilidad-neta td { font-size: 0.72rem !important; padding: 0.4rem 0.5rem !important; }
+
+  /* Tabla principal de Créditos (#dataTable, 13 columnas): mostrar solo lo crítico
+   * (Cliente · Estado · Saldo · Mora · Aliado). Resto requiere desktop. */
+  #dataTable th:nth-child(2), #dataTable td:nth-child(2),    /* ID */
+  #dataTable th:nth-child(4), #dataTable td:nth-child(4),    /* Línea */
+  #dataTable th:nth-child(5), #dataTable td:nth-child(5),    /* Valor */
+  #dataTable th:nth-child(7), #dataTable td:nth-child(7),    /* Calif */
+  #dataTable th:nth-child(9), #dataTable td:nth-child(9),    /* Tasa */
+  #dataTable th:nth-child(10), #dataTable td:nth-child(10),  /* Desembolso */
+  #dataTable th:nth-child(11), #dataTable td:nth-child(11),  /* Vencimiento */
+  #dataTable th:nth-child(13), #dataTable td:nth-child(13)   /* Ciudad */
+    { display: none; }
+
+  /* Cobro Jurídico (tblJuridico, 8 columnas): mantener Nombre · Probabilidad ·
+   * Saldo · Mora días. Ocultar ID · Cartera · Juzgado · Medida Cautelar. */
+  #tblJuridico th:nth-child(1), #tblJuridico td:nth-child(1),  /* ID */
+  #tblJuridico th:nth-child(4), #tblJuridico td:nth-child(4),  /* Cartera */
+  #tblJuridico th:nth-child(7), #tblJuridico td:nth-child(7),  /* Juzgado */
+  #tblJuridico th:nth-child(8), #tblJuridico td:nth-child(8)   /* Medida Cautelar */
+    { display: none; }
+
+  /* Botones de las module-actions: textos largos ("Subir Estado de Resultados")
+   * desbordan en mobile. Reducir padding y tamaño. */
+  .module-actions { gap: 0.4rem; }
+  .module-actions .btn { font-size: 0.72rem; padding: 0.4rem 0.7rem; }
+
+  /* Tooltips de KPI tappables en mobile: además de :hover (desktop), permitir
+   * :active y :focus-within (focus por tap si se hace tabindex=0 con JS). */
+  .kpi-info { width: 22px; height: 22px; cursor: pointer; }
+  .kpi-info:active .kpi-tooltip,
+  .kpi-info:focus-within .kpi-tooltip,
+  .kpi-info.tap-open .kpi-tooltip {
+    visibility: visible !important; opacity: 1 !important;
+  }
+
+  /* Saldo Cartera detalle: en pantallas muy estrechas el padding del wrapper
+   * recortaba demasiado el contenido. Suavizar. */
+  #saldoCarteraDetalle { padding: 0.85rem 0.9rem; }
+}
+@media (max-width: 480px) {
+  /* En móvil estrecho forzar 2 columnas en las mini-cards de Saldo Cartera
+   * (auto-fit con minmax(170px) solo daba 1 columna por el padding). */
+  #saldoCarteraDetalle > div[style*="auto-fit"] {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.4rem !important;
+  }
+  .sc-comp { padding: 0.4rem 0.5rem; }
+  .sc-comp-lbl { font-size: 0.58rem; }
+  .sc-comp-val { font-size: 0.78rem; }
 }
 @media (max-width: 480px) {
   /* Mantener 2 KPIs por línea siempre (nunca apilar en 1 columna) */
@@ -5454,6 +5519,34 @@ function registerChartClicks() {
 // Re-register clicks after charts are rebuilt
 const _origUpdateCharts = updateCharts;
 updateCharts = function() { _origUpdateCharts(); registerChartClicks(); };
+
+// Hacer los iconos de tooltip (.kpi-info) tappables en mobile: agrega
+// tabindex=0 para que reciban focus al tap, y un toggle de clase tap-open
+// como fallback adicional (focus se pierde al tap fuera, click cierra).
+function _enableKpiTooltipTaps() {
+  document.querySelectorAll('.kpi-info').forEach(el => {
+    if (el.dataset.tapEnabled) return;
+    el.dataset.tapEnabled = '1';
+    el.setAttribute('tabindex', '0');
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', 'Mostrar información');
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Cerrar cualquier otro tooltip abierto
+      document.querySelectorAll('.kpi-info.tap-open').forEach(o => {
+        if (o !== el) o.classList.remove('tap-open');
+      });
+      el.classList.toggle('tap-open');
+    });
+  });
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.kpi-info.tap-open').forEach(o => o.classList.remove('tap-open'));
+});
+_enableKpiTooltipTaps();
+// Re-aplicar tras cualquier render que pudiera añadir nuevos .kpi-info dinámicos
+const _origLoadData = loadData;
+loadData = async function() { await _origLoadData(); _enableKpiTooltipTaps(); };
 
 // Load data from API (replaces static embedded data)
 loadData();

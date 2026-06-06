@@ -16,8 +16,9 @@ Plantilla del archivo (`Resumen Estado Cuenta YYYYMMDD.xlsx`):
 """
 import re
 import logging
+import sqlite3
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, UploadFile, File, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Request, HTTPException
 from app.database import get_db, get_connection
 from app.auth.middleware import require_auth, require_superadmin
 from app.sync.upload_helpers import upload_session, to_float
@@ -83,21 +84,28 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
             total_general      += to_float(r[COL_TOTAL]) or 0
         saldo_cartera = total_general - total_int_mora
 
-        with get_db() as conn:
-            # Reemplazar snapshot de la misma fecha si ya existe (re-upload del mismo día).
-            conn.execute(
-                "DELETE FROM saldo_cartera_snapshots WHERE snapshot_date = ?",
-                (snapshot_date,)
+        try:
+            with get_db() as conn:
+                # Reemplazar snapshot de la misma fecha si ya existe (re-upload del mismo día).
+                conn.execute(
+                    "DELETE FROM saldo_cartera_snapshots WHERE snapshot_date = ?",
+                    (snapshot_date,)
+                )
+                conn.execute("""
+                    INSERT INTO saldo_cartera_snapshots
+                    (snapshot_date, n_cuentas, total_capital, total_int_corriente,
+                     total_int_mora, total_cargos_admin, total_deudores_varios,
+                     total_retencion_fuente, total_general, saldo_cartera, sync_batch_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (snapshot_date, n, total_capital, total_int_corr, total_int_mora,
+                      total_cargos, total_deudores, total_retencion, total_general,
+                      saldo_cartera, ctx.sync_id))
+        except sqlite3.IntegrityError:
+            # Race condition: otro upload del mismo snapshot_date ganó la carrera.
+            raise HTTPException(
+                status_code=409,
+                detail=f"Otra carga del {snapshot_date} ya está procesándose. Espera unos segundos y reintenta."
             )
-            conn.execute("""
-                INSERT INTO saldo_cartera_snapshots
-                (snapshot_date, n_cuentas, total_capital, total_int_corriente,
-                 total_int_mora, total_cargos_admin, total_deudores_varios,
-                 total_retencion_fuente, total_general, saldo_cartera, sync_batch_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (snapshot_date, n, total_capital, total_int_corr, total_int_mora,
-                  total_cargos, total_deudores, total_retencion, total_general,
-                  saldo_cartera, ctx.sync_id))
 
         ctx.set_counts(fetched=len(rows), inserted=n)
         ctx.set_audit_extra(f"snapshot_date={snapshot_date} n_cuentas={n} saldo={saldo_cartera:.0f}")
