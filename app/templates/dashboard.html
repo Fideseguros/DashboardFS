@@ -164,8 +164,6 @@ body {
   transition: background 0.15s;
 }
 .header-btn:hover { background: rgba(255,255,255,0.28); }
-#btnUpload { background: rgba(133,255,170,0.25); border-color: rgba(133,255,170,0.5); }
-#btnUpload:hover { background: rgba(133,255,170,0.4); }
 .cross-filter-hint {
   display: flex;
   align-items: center;
@@ -1555,12 +1553,6 @@ body {
       <!-- Acción primaria: actualizar diariamente con archivo de plataforma nueva -->
       <button id="btnUpdateCartera" onclick="document.getElementById('fileCarteraUpdate').click()" style="display:none;" class="btn btn-export admin-only" title="Actualiza solo las columnas naranja desde el archivo de la plataforma nueva. Las cuentas que no aparezcan se conservan.">Actualizar Cartera</button>
       <input type="file" id="fileCarteraUpdate" accept=".xlsx,.xls" style="display:none;" onchange="uploadCarteraUpdate(this.files[0])">
-
-      <!-- Acción secundaria: recargar la base completa (uso esporádico) -->
-      <button id="btnUpload" onclick="confirmReloadBase()" style="display:none;" class="btn btn-reset admin-only" title="Reemplaza TODA la cartera con el archivo base (plataforma vieja). Uso esporádico.">Recargar Base</button>
-      <input type="file" id="fileExcel" accept=".xlsx,.xls" style="display:none;" onchange="uploadExcel(this.files[0])">
-
-      <button class="btn btn-export" id="btnExport" onclick="exportCSV()">Exportar CSV</button>
     </div>
   </div>
 
@@ -3723,59 +3715,6 @@ function updateTable() {
 
 function goPage(p) { currentPage=p; updateTable(); }
 
-// ---- EXPORT CSV ----
-async function exportCSV() {
-  const role = sessionStorage.getItem('fide_role') || '';
-  // Rol "consulta": solo lectura, sin exportación.
-  if (role === 'consulta') {
-    alert('Tu rol es de consulta (solo lectura). No tienes permisos para exportar.');
-    return;
-  }
-  // Superadmin: hit backend to get decrypted PII. Viewer: export masked client-side.
-  if (role === 'superadmin') {
-    try {
-      const q = new URLSearchParams();
-      const mapping = { estado:'fEstado', linea:'fLinea', calificacion:'fCalif',
-                        aliado:'fAliado' };
-      for (const [k, id] of Object.entries(mapping)) {
-        const v = document.getElementById(id)?.value;
-        if (v) q.append(k, v);
-      }
-      const res = await fetch('/api/credits/export/csv' + (q.toString() ? '?' + q.toString() : ''),
-                              { credentials: 'same-origin' });
-      if (!res.ok) throw new Error('export failed');
-      const blob = await res.blob();
-      // Prepend UTF-8 BOM so Excel opens with tildes correctly.
-      const bom = new Blob(['\uFEFF'], { type: 'text/csv;charset=utf-8;' });
-      const finalBlob = new Blob([bom, blob], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(finalBlob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'fide_cartera_export.csv'; a.click();
-      URL.revokeObjectURL(url);
-      return;
-    } catch (e) {
-      alert('Error al exportar. Se descargará la versión enmascarada.');
-    }
-  }
-  // Fallback / viewer: masked client-side export
-  const data = getSearchFiltered();
-  const h = ['Cliente','Identificación','Estado','Línea','Valor_Crédito','Saldo_Capital','Calificación','Días_Mora','Tasa_Efectiva','Fecha_Desembolso','Fecha_Vencimiento','Aliado','Ciudad'];
-  const k = ['cliente','identificacion','estado','linea','valor_credito','saldo_capital','calificacion','dias_mora','tasa_efectiva','fecha_desembolso','fecha_vencimiento','aliado','ciudad'];
-  let csv = '\uFEFF' + h.join(',') + '\n';
-  data.forEach(r => {
-    csv += k.map(key => {
-      let v = r[key] == null ? '' : String(r[key]);
-      if (v.includes(',') || v.includes('"')) v = '"' + v.replace(/"/g, '""') + '"';
-      return v;
-    }).join(',') + '\n';
-  });
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'fide_cartera_export.csv'; a.click();
-  URL.revokeObjectURL(url);
-}
-
 // ---- SIDEBAR (mobile drawer) ----
 function toggleSidebar() {
   const sb = document.getElementById('sidebar');
@@ -5531,15 +5470,8 @@ const _u = sessionStorage.getItem('fide_user');
 if (_u) document.getElementById('userName').textContent = _u;
 const _role = sessionStorage.getItem('fide_role') || '';
 if (_role === 'superadmin') {
-  const btn = document.getElementById('btnUpload');
-  if (btn) btn.style.display = 'inline-block';
   // Revelar tabs admin-only y botones de upload para superadmin
   document.querySelectorAll('.nav-tab.admin-only, .nav-group.admin-only, .btn.admin-only').forEach(el => el.style.display = '');
-}
-// "consulta" role: solo lectura — ocultar cualquier acción de exportación
-if (_role === 'consulta') {
-  const exp = document.getElementById('btnExport');
-  if (exp) exp.style.display = 'none';
 }
 
 // Ocultar el hint de cross-filter si el usuario ya lo descubrió en sesiones previas
@@ -5548,43 +5480,6 @@ try {
     document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
   }
 } catch (e) {}
-
-function confirmReloadBase() {
-  const ok = confirm(
-    'Recargar Base reemplaza TODA la cartera con el contenido del archivo seleccionado.\n\n' +
-    'Las actualizaciones incrementales acumuladas se pierden.\n\n' +
-    '¿Continuar?'
-  );
-  if (ok) document.getElementById('fileExcel').click();
-}
-
-async function uploadExcel(file) {
-  if (!file) return;
-  const btn = document.getElementById('btnUpload');
-  const originalText = btn.textContent;
-  btn.textContent = 'Subiendo...';
-  btn.disabled = true;
-  try {
-    const fd = new FormData();
-    fd.append('file', file);
-    const res = await fetch('/api/sync/upload-excel', {
-      method: 'POST', body: fd, credentials: 'same-origin'
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
-    } else {
-      alert('Base recargada: ' + data.records + ' registros en ' + data.duration + 's');
-      location.reload();
-    }
-  } catch (e) {
-    alert('Error de conexión al subir el archivo. Verifica tu conexión.');
-  } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
-    document.getElementById('fileExcel').value = '';
-  }
-}
 
 async function uploadCarteraUpdate(file) {
   if (!file) return;
