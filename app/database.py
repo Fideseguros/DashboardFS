@@ -263,6 +263,27 @@ CREATE TABLE IF NOT EXISTS procesos_juridicos (
 CREATE INDEX IF NOT EXISTS idx_juridico_prob ON procesos_juridicos(probabilidad);
 CREATE INDEX IF NOT EXISTS idx_juridico_sync ON procesos_juridicos(sync_batch_id);
 
+-- ============== Saldo de Cartera (snapshots agregados) ==============
+-- Datos del archivo 'Resumen Estado Cuenta YYYYMMDD.xlsx' (Loggro export).
+-- Guardamos SOLO agregados — no detalle por cuenta, no PII.
+-- saldo_cartera = total_general - total_int_mora (la mora se muestra pero NO suma).
+CREATE TABLE IF NOT EXISTS saldo_cartera_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_date TEXT NOT NULL,            -- YYYY-MM-DD (del nombre del archivo o hoy)
+    n_cuentas INTEGER NOT NULL,
+    total_capital REAL DEFAULT 0,
+    total_int_corriente REAL DEFAULT 0,
+    total_int_mora REAL DEFAULT 0,          -- se muestra pero NO entra al saldo_cartera
+    total_cargos_admin REAL DEFAULT 0,
+    total_deudores_varios REAL DEFAULT 0,
+    total_retencion_fuente REAL DEFAULT 0,
+    total_general REAL DEFAULT 0,           -- suma cruda de la col 'Total' del Excel
+    saldo_cartera REAL DEFAULT 0,           -- = total_general - total_int_mora
+    sync_batch_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_cartera_date ON saldo_cartera_snapshots(snapshot_date);
+
 -- ============== Tracking de plataforma origen de cada cuenta ==============
 -- Se repuebla en cada incremental_update_from_excel con las cuentas presentes
 -- en el archivo de la plataforma NUEVA. Cualquier cuenta de credits que NO

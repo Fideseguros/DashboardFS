@@ -981,6 +981,13 @@ body {
   font-size: 0.85rem;
 }
 .data-table tr.fin-utilidad-neta:hover td { background: var(--fide-teal); }
+
+/* Mini-cards de desagregación de Saldo Cartera */
+.sc-comp { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.7rem; }
+.sc-comp-lbl { font-size: 0.65rem; font-weight: 700; color: var(--neutral-600); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 0.25rem; }
+.sc-comp-val { font-size: 0.95rem; font-weight: 700; color: var(--neutral-900); }
+.sc-comp-excluded { background: var(--neutral-100); border-style: dashed; }
+.sc-comp-excluded .sc-comp-val { color: var(--neutral-700); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -1675,12 +1682,38 @@ body {
       <div class="kpi-value" id="kpiTicket">-</div>
       <div class="kpi-sub" id="kpiTicketSub"></div>
     </div>
-    <div class="kpi-card magenta">
-      <div class="kpi-info">i<span class="kpi-tooltip">Cantidad y monto de cr&eacute;ditos desembolsados en el mes corriente. &Uacute;til para monitorear el ritmo de colocaci&oacute;n del comercial.</span></div>
-      <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 15l0-5M9 12l3-3 3 3"/></svg></div>
-      <div class="kpi-label">Desembolsos del Mes</div>
-      <div class="kpi-value" id="kpiMesAct">-</div>
-      <div class="kpi-sub" id="kpiMesActSub"></div>
+    <div class="kpi-card magenta" id="kpiSaldoCarteraCard" style="cursor:pointer;" onclick="toggleSaldoCarteraDetalle()" title="Click para ver desagregaci&oacute;n por componente">
+      <div class="kpi-info">i<span class="kpi-tooltip">Saldo total de cartera por cobrar = Total bruto del Resumen Estado Cuenta &minus; Intereses de Mora. La mora se muestra en la desagregaci&oacute;n pero no suma al saldo. Click en la card para ver componentes.</span></div>
+      <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 12h18M3 6h18M3 18h18M7 9v6M17 9v6"/></svg></div>
+      <div class="kpi-label">Saldo Cartera <span id="kpiSaldoChev" style="font-size:0.7rem;color:var(--neutral-500);margin-left:0.3rem;">&#9656;</span></div>
+      <div class="kpi-value" id="kpiSaldoCartera">-</div>
+      <div class="kpi-sub" id="kpiSaldoCarteraSub"></div>
+    </div>
+  </div>
+
+  <!-- Desagregaci&oacute;n del Saldo de Cartera (oculta por defecto, se muestra al hacer click) -->
+  <div id="saldoCarteraDetalle" class="cartera-scope" style="display:none;margin-top:1rem;background:var(--neutral-50);border-radius:8px;padding:1rem 1.25rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;gap:1rem;flex-wrap:wrap;">
+      <div>
+        <div style="font-size:0.85rem;font-weight:700;color:var(--neutral-900);">Composici&oacute;n del Saldo de Cartera</div>
+        <div style="font-size:0.7rem;color:var(--neutral-600);margin-top:0.15rem;">Snapshot: <span id="scFecha">&mdash;</span> &middot; <span id="scNCuentas">&mdash;</span> cuentas</div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button class="btn btn-export admin-only" id="btnUploadSaldoCartera" style="display:none;padding:0.3rem 0.8rem;font-size:0.72rem;" onclick="document.getElementById('fileSaldoCartera').click()" title="Sube el archivo Resumen Estado Cuenta YYYYMMDD.xlsx descargado de Loggro">Actualizar Saldo</button>
+        <input type="file" id="fileSaldoCartera" accept=".xlsx" style="display:none;" onchange="uploadSaldoCartera(this.files[0])">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
+      <div class="sc-comp"><div class="sc-comp-lbl">Capital Pr&eacute;stamos</div><div class="sc-comp-val" id="scCapital">&mdash;</div></div>
+      <div class="sc-comp"><div class="sc-comp-lbl">Inter&eacute;s Corriente</div><div class="sc-comp-val" id="scIntCorr">&mdash;</div></div>
+      <div class="sc-comp"><div class="sc-comp-lbl">Cargos Administrativos</div><div class="sc-comp-val" id="scCargos">&mdash;</div></div>
+      <div class="sc-comp"><div class="sc-comp-lbl">Deudores Varios</div><div class="sc-comp-val" id="scDeudores">&mdash;</div></div>
+      <div class="sc-comp"><div class="sc-comp-lbl">Retenci&oacute;n en la Fuente</div><div class="sc-comp-val" id="scRetencion">&mdash;</div></div>
+      <div class="sc-comp sc-comp-excluded"><div class="sc-comp-lbl">Inter&eacute;s de Mora <span style="color:var(--neutral-500);font-weight:400;">(no suma)</span></div><div class="sc-comp-val" id="scMora">&mdash;</div></div>
+    </div>
+    <div style="margin-top:0.7rem;padding-top:0.6rem;border-top:1px dashed var(--border);display:flex;justify-content:space-between;font-size:0.74rem;color:var(--neutral-700);">
+      <span>Total bruto Excel: <strong id="scTotalBruto">&mdash;</strong></span>
+      <span>= Saldo Cartera: <strong style="color:var(--fide-teal-deeper);" id="scSaldoCalc">&mdash;</strong> (Total &minus; Mora)</span>
     </div>
   </div>
 
@@ -2591,6 +2624,8 @@ async function loadData() {
     loadTopClientesUnmasked();
     // Cuadro Desembolsado vs Recaudado (requiere JOIN cartera+pagos en server)
     loadDesembolsoVsRecaudo();
+    // KPI Saldo Cartera (snapshot agregado del Resumen Estado Cuenta Loggro)
+    loadSaldoCartera();
     // Pintar el lastSync con la data ya obtenida
     if (syncRes && syncRes.ok) {
       try {
@@ -3250,30 +3285,76 @@ function updateKPIs() {
   icvEl.style.color = icvColor;
   document.getElementById('kpiICVSub').textContent = `Saldo en mora +30: ${fmtM(saldoMora30)} / Activo: ${fmtM(tSalActivo)}`;
 
-  // Desembolsos del Mes Actual (basados en fecha_desembolso del mes corriente)
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const currentMonthKey = `${yyyy}-${mm}`;
-  const mesActCredits = d.filter(r => r.fecha_desembolso && r.fecha_desembolso.startsWith(currentMonthKey));
-  const mesActValor = mesActCredits.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
-  // Mes anterior para comparación MoM
-  const prevDate = new Date(yyyy, now.getMonth() - 1, 1);
-  const prevKey = `${prevDate.getFullYear()}-${String(prevDate.getMonth()+1).padStart(2,'0')}`;
-  const prevMesCredits = d.filter(r => r.fecha_desembolso && r.fecha_desembolso.startsWith(prevKey));
-  const prevMesValor = prevMesCredits.reduce((s,r) => s+(parseFloat(r.valor_credito)||0), 0);
-  document.getElementById('kpiMesAct').textContent = fmt(mesActCredits.length);
-  let momText = `Monto: ${fmtM(mesActValor)}`;
-  if (prevMesValor > 0 && mesActValor > 0) {
-    const momPct = ((mesActValor - prevMesValor) / prevMesValor) * 100;
-    const arrow = momPct >= 0 ? '▲' : '▼';
-    momText += ` · ${arrow} ${Math.abs(momPct).toFixed(1)}% vs mes anterior`;
-  } else if (mesActCredits.length === 0) {
-    momText = 'Sin desembolsos en el mes';
-  }
-  document.getElementById('kpiMesActSub').textContent = momText;
+  // Saldo Cartera viene de su propio archivo (Resumen Estado Cuenta) — se
+  // carga independientemente en loadSaldoCartera(), no depende de filtros.
 
   document.getElementById('totalRecords').textContent = fmt(d.length);
+}
+
+// ============== Saldo de Cartera (KPI desde snapshot agregado) ==============
+async function loadSaldoCartera() {
+  try {
+    const r = await fetch('/api/saldo-cartera/latest', { credentials: 'same-origin' });
+    if (!r.ok) return;
+    const s = await r.json();
+    const elKpi = document.getElementById('kpiSaldoCartera');
+    const elSub = document.getElementById('kpiSaldoCarteraSub');
+    if (!s) {
+      elKpi.textContent = '-';
+      elSub.textContent = 'Sin datos. Sube el archivo Resumen Estado Cuenta.';
+      return;
+    }
+    elKpi.textContent = fmtM(s.saldo_cartera);
+    const fecha = s.snapshot_date ? new Date(s.snapshot_date + 'T00:00:00').toLocaleDateString('es-CO',
+      { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+    elSub.textContent = `${fecha} · ${fmt(s.n_cuentas)} cuentas`;
+    // Popular panel de desagregación
+    document.getElementById('scFecha').textContent = fecha;
+    document.getElementById('scNCuentas').textContent = fmt(s.n_cuentas);
+    document.getElementById('scCapital').textContent = fmtM(s.total_capital);
+    document.getElementById('scIntCorr').textContent = fmtM(s.total_int_corriente);
+    document.getElementById('scCargos').textContent = fmtM(s.total_cargos_admin);
+    document.getElementById('scDeudores').textContent = fmtM(s.total_deudores_varios);
+    document.getElementById('scRetencion').textContent = fmtM(s.total_retencion_fuente);
+    document.getElementById('scMora').textContent = fmtM(s.total_int_mora);
+    document.getElementById('scTotalBruto').textContent = fmtM(s.total_general);
+    document.getElementById('scSaldoCalc').textContent = fmtM(s.saldo_cartera);
+  } catch (e) {
+    console.error('loadSaldoCartera', e);
+  }
+}
+
+function toggleSaldoCarteraDetalle() {
+  const panel = document.getElementById('saldoCarteraDetalle');
+  const chev = document.getElementById('kpiSaldoChev');
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  chev.innerHTML = open ? '&#9656;' : '&#9662;';
+}
+
+async function uploadSaldoCartera(file) {
+  if (!file) return;
+  const btn = document.getElementById('btnUploadSaldoCartera');
+  const orig = btn.textContent;
+  btn.textContent = 'Subiendo...'; btn.disabled = true;
+  try {
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch('/api/saldo-cartera/upload', {
+      method: 'POST', body: fd, credentials: 'same-origin'
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(data.detail || 'Error al subir el archivo');
+    } else {
+      await loadSaldoCartera();
+      alert(`Saldo actualizado: ${data.n_cuentas} cuentas · snapshot ${data.snapshot_date}`);
+    }
+  } catch (e) {
+    alert('Error de red: ' + e.message);
+  } finally {
+    btn.textContent = orig; btn.disabled = false;
+    document.getElementById('fileSaldoCartera').value = '';
+  }
 }
 
 // ---- CHARTS ----
