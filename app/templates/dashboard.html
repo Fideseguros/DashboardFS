@@ -1507,6 +1507,137 @@ body {
   .chart-card, .kpi-card { break-inside:avoid; }
   .header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* ============================================================
+ *   UX HARDENING — Auditoría visual (sesión 2026-06)
+ * ============================================================ */
+
+/* Fix 7: Focus visible para navegación con teclado (accesibilidad).
+ * Antes solo .btn:focus-visible tenía outline. Cualquier elemento
+ * interactivo (tabs, sort headers, chips, KPIs clickables, paginación)
+ * ahora muestra un anillo teal al recibir foco por teclado. */
+.nav-tab:focus-visible,
+.pagination button:focus-visible,
+.chip:focus-visible,
+.fin-chev:focus-visible,
+.kpi-info:focus-visible,
+.data-table th[data-col]:focus-visible,
+#kpiSaldoCarteraCard:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--fide-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Fix 5: Diferenciación visual btn primario (acción frecuente) vs
+ * secundario (acción esporádica). Antes todos los uploads usaban el
+ * mismo .btn-export teal sólido — la gerente no distinguía. */
+.btn.btn-primary-action {
+  background: var(--fide-teal);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 167, 157, 0.25);
+}
+.btn.btn-primary-action:hover {
+  background: var(--fide-teal-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 167, 157, 0.35);
+}
+.btn.btn-secondary-upload {
+  background: transparent;
+  color: var(--fide-teal-dark);
+  border: 1px solid var(--fide-teal);
+  font-weight: 600;
+}
+.btn.btn-secondary-upload:hover {
+  background: var(--fide-teal-tint);
+}
+
+/* Fix 9: Affordance "click para ver composición" del KPI Saldo Cartera.
+ * Antes solo había un chevron ▸ minúsculo al lado del label. Ahora la
+ * card tiene un subtítulo "Ver composición ›" que aparece más fuerte
+ * en hover. */
+#kpiSaldoCarteraCard {
+  position: relative;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+#kpiSaldoCarteraCard::after {
+  content: 'Ver composición ›';
+  position: absolute;
+  bottom: 8px;
+  right: 14px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--fide-teal-dark);
+  letter-spacing: 0.3px;
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+#kpiSaldoCarteraCard:hover {
+  background: linear-gradient(180deg, #fff 0%, var(--fide-teal-tint) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 167, 157, 0.15);
+}
+#kpiSaldoCarteraCard:hover::after { opacity: 1; }
+#kpiSaldoCarteraCard.expanded::after { content: 'Ocultar composición ‹'; opacity: 1; }
+
+/* Fix 3: Toast notification — reemplaza alert() nativo con feedback
+ * de marca FIDE. Llamar showToast(msg, kind='ok'|'warn'|'err'). */
+.fide-toast-stack {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+.fide-toast {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--fide-teal);
+  border-radius: 6px;
+  padding: 12px 14px 12px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--neutral-900);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.2s, transform 0.2s;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.4;
+}
+.fide-toast.show { opacity: 1; transform: translateX(0); }
+.fide-toast.kind-warn { border-left-color: #c29200; background: #fffbf0; }
+.fide-toast.kind-err { border-left-color: #b8680f; background: #fcf0dd; }
+.fide-toast .toast-icon {
+  font-size: 1.1rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--fide-teal);
+}
+.fide-toast.kind-warn .toast-icon { color: #c29200; }
+.fide-toast.kind-err .toast-icon { color: #b8680f; }
+.fide-toast .toast-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--neutral-500);
+  padding: 0 4px;
+}
+.fide-toast .toast-close:hover { color: var(--neutral-900); }
+
 </style>
 </head>
 <body>
@@ -1616,7 +1747,7 @@ body {
     </div>
     <div class="module-actions">
       <!-- Acción primaria: actualizar diariamente con archivo de plataforma nueva -->
-      <button id="btnUpdateCartera" onclick="document.getElementById('fileCarteraUpdate').click()" style="display:none;" class="btn btn-export admin-only" title="Actualiza solo las columnas naranja desde el archivo de la plataforma nueva. Las cuentas que no aparezcan se conservan.">Actualizar Cartera</button>
+      <button id="btnUpdateCartera" onclick="document.getElementById('fileCarteraUpdate').click()" style="display:none;" class="btn btn-primary-action admin-only" title="Actualiza solo las columnas naranja desde el archivo de la plataforma nueva. Las cuentas que no aparezcan se conservan.">⟳ Actualizar Cartera</button>
       <input type="file" id="fileCarteraUpdate" accept=".xlsx,.xls" style="display:none;" onchange="uploadCarteraUpdate(this.files[0])">
     </div>
   </div>
@@ -2059,7 +2190,7 @@ body {
       </div>
       <div class="module-actions">
         <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
-        <button class="btn btn-export admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
+        <button class="btn btn-secondary-upload admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
         <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
       </div>
     </div>
@@ -2162,7 +2293,7 @@ body {
       </div>
       <div class="module-actions">
         <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
-        <button class="btn btn-export admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
+        <button class="btn btn-secondary-upload admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
         <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
       </div>
     </div>
@@ -2257,7 +2388,7 @@ body {
       </div>
       <div class="module-actions">
         <span id="efStatusBadge" class="upload-status-badge" style="display:none;"></span>
-        <button class="btn btn-export admin-only" id="btnUploadFin" style="display:none;" onclick="document.getElementById('fileFinancieros').click()">Subir Estado de Resultados</button>
+        <button class="btn btn-secondary-upload admin-only" id="btnUploadFin" style="display:none;" onclick="document.getElementById('fileFinancieros').click()">Subir Estado de Resultados</button>
         <input type="file" id="fileFinancieros" accept=".xlsx" style="display:none;" onchange="uploadFinancieros(this.files[0])">
       </div>
     </div>
@@ -2342,7 +2473,7 @@ body {
         </div>
       </div>
       <div class="module-actions">
-        <button class="btn btn-export admin-only" id="btnUploadJuridico" style="display:none;" onclick="document.getElementById('fileJuridico').click()">Subir Informe Conexi&oacute;n</button>
+        <button class="btn btn-secondary-upload admin-only" id="btnUploadJuridico" style="display:none;" onclick="document.getElementById('fileJuridico').click()">Subir Informe Conexi&oacute;n</button>
         <input type="file" id="fileJuridico" accept=".xlsx" style="display:none;" onchange="uploadExtra('juridico', this.files[0])">
       </div>
     </div>
@@ -2674,6 +2805,8 @@ async function loadData() {
     RAW_DATA = await credRes.json();
     filteredData = [...RAW_DATA];
     populateFilters();
+    // Aplicar filtros restaurados desde localStorage (si los hay)
+    if (typeof applyFilters === 'function') applyFilters();
     updateAll();
     // Para superadmin: reemplazar Top Clientes con versión que muestra IDs
     // completos (server-side, auditado). En otros roles este fetch da 403
@@ -2771,6 +2904,37 @@ Chart.defaults.plugins.legend.labels.padding = 14;
 Chart.defaults.plugins.legend.labels.boxWidth = 10;
 Chart.defaults.plugins.legend.labels.boxHeight = 10;
 Chart.defaults.plugins.legend.labels.font = { weight: 600, size: 11 };
+
+// Toast component — reemplaza alert() nativo con feedback de marca FIDE.
+// Uso: showToast('Saldo actualizado: 765 cuentas');
+//      showToast('Error al subir el archivo', 'err');
+//      showToast('Verifica tu conexión', 'warn', 6000);
+function showToast(message, kind = 'ok', duration = 4500) {
+  let stack = document.querySelector('.fide-toast-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.className = 'fide-toast-stack';
+    stack.setAttribute('role', 'status');
+    stack.setAttribute('aria-live', 'polite');
+    document.body.appendChild(stack);
+  }
+  const t = document.createElement('div');
+  t.className = `fide-toast kind-${kind}`;
+  const icon = kind === 'err' ? '!' : kind === 'warn' ? '!' : '✓';
+  t.innerHTML = `<span class="toast-icon">${icon}</span>` +
+                `<span class="toast-msg"></span>` +
+                `<button class="toast-close" aria-label="Cerrar">×</button>`;
+  t.querySelector('.toast-msg').textContent = message;  // textContent = XSS-safe
+  t.querySelector('.toast-close').addEventListener('click', () => _hideToast(t));
+  stack.appendChild(t);
+  // Trigger animación tras append
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => _hideToast(t), duration);
+}
+function _hideToast(t) {
+  t.classList.remove('show');
+  setTimeout(() => t.remove(), 250);
+}
 
 // Escape de HTML: defensa contra XSS persistente desde celdas del Excel.
 // Un atacante con superadmin que suba un Excel con '<script>...</script>' en
@@ -3190,6 +3354,32 @@ function addChartClick(chartId, dimension, labelExtractor) {
 }
 
 // ---- FILTERS ----
+// Fix 4: persistir filtros de Cartera en localStorage entre sesiones.
+// La gerente perdía el contexto al cambiar de tab o recargar.
+const _FILTER_IDS = ['fPeriodo','fEstado','fLinea','fCalif','fAliado','fMora','fFrom','fTo'];
+const _FILTER_STORAGE_KEY = 'fide_filters_cartera_v1';
+function _saveFilters() {
+  try {
+    const state = {};
+    _FILTER_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) state[id] = el.value;
+    });
+    localStorage.setItem(_FILTER_STORAGE_KEY, JSON.stringify(state));
+  } catch (e) { /* localStorage lleno o privado — silencioso */ }
+}
+function _restoreFilters() {
+  try {
+    const raw = localStorage.getItem(_FILTER_STORAGE_KEY);
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    _FILTER_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && state[id] !== undefined) el.value = state[id];
+    });
+  } catch (e) {}
+}
+
 function populateFilters() {
   const add = (id, vals) => {
     const sel = document.getElementById(id);
@@ -3198,6 +3388,16 @@ function populateFilters() {
     });
   };
   add('fLinea','linea'); add('fAliado','aliado');
+  // Restaurar valores guardados DESPUÉS de poblar las opciones dinámicas.
+  _restoreFilters();
+  // Auto-save en cada cambio
+  _FILTER_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.persistWired) {
+      el.dataset.persistWired = '1';
+      el.addEventListener('change', _saveFilters);
+    }
+  });
 }
 
 function _periodoRange() {
@@ -3275,6 +3475,8 @@ function resetFilters() {
   document.getElementById('tableSearch').value = '';
   Object.keys(chartFilters).forEach(k => delete chartFilters[k]);
   renderChartFilterBar();
+  // Borrar también el snapshot de localStorage (sino se restaura al recargar)
+  try { localStorage.removeItem(_FILTER_STORAGE_KEY); } catch (e) {}
   applyFilters();
 }
 
@@ -3414,13 +3616,13 @@ async function uploadSaldoCartera(file) {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert(data.detail || 'Error al subir el archivo');
+      showToast(data.detail || 'Error al subir el archivo', 'err');
     } else {
       await loadSaldoCartera();
-      alert(`Saldo actualizado: ${data.n_cuentas} cuentas · snapshot ${data.snapshot_date}`);
+      showToast(`Saldo actualizado: ${data.n_cuentas} cuentas · snapshot ${data.snapshot_date}`, 'ok');
     }
   } catch (e) {
-    alert('Error de red: ' + e.message);
+    showToast('Error de red. Verifica tu conexión y reintenta.', 'err');
   } finally {
     btn.textContent = orig; btn.disabled = false;
     document.getElementById('fileSaldoCartera').value = '';
@@ -3860,15 +4062,15 @@ async function uploadExtra(modulo, file) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert('Error: ' + (data.detail || 'No se pudo subir el archivo'));
+      showToast(data.detail || 'No se pudo subir el archivo', 'err');
       return;
     }
-    alert(`Carga exitosa: ${data.records} registros`);
+    showToast(`Carga exitosa: ${data.records} registros importados`, 'ok');
     if (modulo === 'recaudo') loadRecaudo();
     else if (modulo === 'solicitudes') loadSolicitudes();
     else if (modulo === 'juridico') loadJuridico();
   } catch(e) {
-    alert('Error de conexión al subir el archivo');
+    showToast('Error de conexión. Verifica tu internet y reintenta.', 'err');
   }
 }
 
@@ -4613,13 +4815,16 @@ async function uploadFinancieros(file) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert('Error: ' + (data.detail || 'no se pudo subir'));
+      showToast(data.detail || 'No se pudo subir el archivo', 'err');
     } else {
-      alert(`Carga exitosa para ${data.year}\nMeses actualizados: ${data.meses_cargados || data.n_meses + ' mes(es)'}\nRegistros importados: ${data.records}\n\n(Los meses no presentes en el archivo conservan sus datos previos.)`);
+      showToast(
+        `Año ${data.year}: ${data.meses_cargados || data.n_meses + ' mes(es)'} · ${data.records} cuentas importadas`,
+        'ok', 6000
+      );
       loadFinancierosInit();
     }
   } catch (e) {
-    alert('Error de conexión: ' + e.message);
+    showToast('Error de conexión. Verifica tu internet y reintenta.', 'err');
   } finally {
     btn.textContent = origTxt; btn.disabled = false;
     document.getElementById('fileFinancieros').value = '';
@@ -5147,7 +5352,7 @@ function renderProyeccion() {
         <td class="num" style="color:${dm > 0 ? '#c29200' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</td>
       </tr>`;
     }).join('');
-    if (!sorted.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin cuotas proyectadas en el período. Verifica que haya créditos ACTIVO con fecha_inicio, fecha_vencimiento, valor_cuota > 0 y dias_mora < 20.</td></tr>';
+    if (!sorted.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text-secondary);font-style:italic;">No hay pagos esperados en este período. Solo se proyectan créditos activos con mora menor a 20 días.</td></tr>';
   }
 }
 
@@ -5281,11 +5486,12 @@ async function deactivateUser(id, username) {
   try {
     const res = await fetch('/api/users/' + id, { method: 'DELETE', credentials: 'same-origin' });
     const data = await res.json();
-    if (!res.ok) { alert(data.detail || 'Error'); return; }
+    if (!res.ok) { showToast(data.detail || 'No se pudo desactivar', 'err'); return; }
     _userCache = [];
     loadUsers();
+    showToast(`Usuario "${username}" desactivado`, 'ok');
   } catch(e) {
-    alert('Error de conexión');
+    showToast('Error de conexión.', 'err');
   }
 }
 
@@ -5601,18 +5807,16 @@ async function uploadCarteraUpdate(file) {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert('Error: ' + (data.detail || 'No se pudo aplicar la actualización'));
+      showToast(data.detail || 'No se pudo aplicar la actualización', 'err');
     } else {
-      alert(
-        'Cartera actualizada en ' + data.duration + 's:\n' +
-        '  • ' + data.actualizados + ' cuentas existentes actualizadas\n' +
-        '  • ' + data.nuevos + ' cuentas nuevas insertadas\n' +
-        '  • Filas procesadas del archivo: ' + data.filas_archivo
+      showToast(
+        `Cartera actualizada · ${data.actualizados} actualizadas · ${data.nuevos} nuevas (${data.duration}s)`,
+        'ok', 6000
       );
-      location.reload();
+      setTimeout(() => location.reload(), 1500);
     }
   } catch (e) {
-    alert('Error de conexión al subir el archivo. Verifica tu conexión.');
+    showToast('Error de conexión. Verifica tu internet y reintenta.', 'err');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
