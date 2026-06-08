@@ -1638,6 +1638,60 @@ select:focus-visible {
 }
 .fide-toast .toast-close:hover { color: var(--neutral-900); }
 
+/* Fix 6: Agrupación visual de KPIs por tema (Volumen / Saldo / Riesgo).
+ * Sub-labels ocupan toda la fila del grid auto-fit. */
+.kpi-group-label {
+  grid-column: 1 / -1;
+  font-size: 0.66rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--fide-teal-dark);
+  margin: 8px 0 -2px 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kpi-group-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(0, 167, 157, 0.25) 0%, transparent 100%);
+}
+.kpi-group-label:first-of-type { margin-top: 0; }
+
+/* Fix 2 (parcial): tokens tipográficos — la escala "oficial" propuesta.
+ * No reemplazamos los 110+ uses inline en una sola sesión, pero quien
+ * agregue UI nueva debe usar var(--fs-*) en vez de hardcoded rem. */
+:root {
+  --fs-xs: 0.7rem;     /* labels uppercase pequeñitas, footnotes */
+  --fs-sm: 0.78rem;    /* sub-labels, badges, descripciones cortas */
+  --fs-base: 0.85rem;  /* body text, tabla data */
+  --fs-md: 0.95rem;    /* títulos de card, headers de tabla */
+  --fs-lg: 1.15rem;    /* títulos de sección */
+  --fs-xl: 1.5rem;     /* KPI value, hero numbers */
+}
+
+/* Fix 8: Empty state para charts sin datos.
+ * Marcar el .chart-container con atributo data-empty="true" cuando el
+ * dataset esté vacío y mostrar un mensaje en lugar de canvas blanco. */
+.chart-container { position: relative; }
+.chart-container[data-empty="true"] canvas { opacity: 0.15; }
+.chart-container[data-empty="true"]::after {
+  content: attr(data-empty-msg);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 1rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  pointer-events: none;
+}
+
 </style>
 </head>
 <body>
@@ -1814,6 +1868,8 @@ select:focus-visible {
 
   <!-- KPIs -->
   <div class="kpi-grid cartera-scope cartera-main-only">
+    <!-- GRUPO 1: VOLUMEN -->
+    <div class="kpi-group-label">Volumen</div>
     <div class="kpi-card teal">
       <div class="kpi-info">i<span class="kpi-tooltip">Cantidad total de cr&eacute;ditos registrados en el per&iacute;odo filtrado (activos + cancelados).</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 14h3M7 18h1"/></svg></div>
@@ -1835,6 +1891,9 @@ select:focus-visible {
       <div class="kpi-value" id="kpiValor">-</div>
       <div class="kpi-sub" id="kpiValorSub"></div>
     </div>
+
+    <!-- GRUPO 2: SALDO Y RENDIMIENTO -->
+    <div class="kpi-group-label">Saldo y Rendimiento</div>
     <div class="kpi-card teal">
       <div class="kpi-info">i<span class="kpi-tooltip">Suma del saldo de capital pendiente en todos los cr&eacute;ditos. Es el dinero que a&uacute;n est&aacute; por recuperar.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18M21 12a3 3 0 0 1-3-3V5a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1z"/></svg></div>
@@ -1849,6 +1908,16 @@ select:focus-visible {
       <div class="kpi-value" id="kpiTasa">-</div>
       <div class="kpi-sub" id="kpiTasaSub"></div>
     </div>
+    <div class="kpi-card blue">
+      <div class="kpi-info">i<span class="kpi-tooltip">Valor promedio por cr&eacute;dito. Muestra el tama&ntilde;o t&iacute;pico de las colocaciones. El sub muestra el ticket de la cartera activa.</span></div>
+      <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></div>
+      <div class="kpi-label">Cr&eacute;dito Promedio</div>
+      <div class="kpi-value" id="kpiTicket">-</div>
+      <div class="kpi-sub" id="kpiTicketSub"></div>
+    </div>
+
+    <!-- GRUPO 3: RIESGO Y CARTERA POR COBRAR -->
+    <div class="kpi-group-label">Riesgo y Cartera por Cobrar</div>
     <div class="kpi-card coral">
       <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de mora (la pol&iacute;tica Fideseguros considera 1-30 d&iacute;as como al d&iacute;a). El sub muestra el saldo total en mora y su % sobre el saldo activo.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
@@ -1862,13 +1931,6 @@ select:focus-visible {
       <div class="kpi-label">ICV (Mora &gt; 30)</div>
       <div class="kpi-value" id="kpiICV">-</div>
       <div class="kpi-sub" id="kpiICVSub"></div>
-    </div>
-    <div class="kpi-card blue">
-      <div class="kpi-info">i<span class="kpi-tooltip">Valor promedio por cr&eacute;dito. Muestra el tama&ntilde;o t&iacute;pico de las colocaciones. El sub muestra el ticket de la cartera activa.</span></div>
-      <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></div>
-      <div class="kpi-label">Ticket Promedio</div>
-      <div class="kpi-value" id="kpiTicket">-</div>
-      <div class="kpi-sub" id="kpiTicketSub"></div>
     </div>
     <div class="kpi-card magenta" id="kpiSaldoCarteraCard" style="cursor:pointer;" onclick="toggleSaldoCarteraDetalle()" title="Click para ver desagregaci&oacute;n por componente">
       <div class="kpi-info">i<span class="kpi-tooltip">Saldo total de cartera por cobrar = Total bruto del Resumen Estado Cuenta &minus; Intereses de Mora. La mora se muestra en la desagregaci&oacute;n pero no suma al saldo. Click en la card para ver componentes.</span></div>
@@ -4198,11 +4260,11 @@ async function loadRecaudo() {
     const tb = document.querySelector('#tblRecaudo tbody');
     tb.innerHTML = l.slice(0, 200).map(p => `
       <tr>
-        <td>${p.fecha_movimiento || '-'}</td>
-        <td>${p.cliente || '-'}</td>
-        <td>${p.cuenta || '-'}</td>
-        <td>${p.aliado || '-'}</td>
-        <td>${p.tipo_mvto || '-'}</td>
+        <td>${esc(p.fecha_movimiento) || '-'}</td>
+        <td>${esc(p.cliente) || '-'}</td>
+        <td>${esc(p.cuenta) || '-'}</td>
+        <td>${esc(p.aliado) || '-'}</td>
+        <td>${esc(p.tipo_mvto) || '-'}</td>
         <td class="num">${fmtCurrency(p.capital)}</td>
         <td class="num">${fmtCurrency(p.interes_corriente)}</td>
         <td class="num">${fmtCurrency(p.interes_mora)}</td>
@@ -4216,12 +4278,12 @@ async function loadRecaudo() {
     if (tbLeg) {
       tbLeg.innerHTML = lLeg.slice(0, 500).map(p => `
         <tr>
-          <td><strong>${p.id_prestamo || '-'}</strong></td>
-          <td>${p.nombre || '-'}</td>
+          <td><strong>${esc(p.id_prestamo) || '-'}</strong></td>
+          <td>${esc(p.nombre) || '-'}</td>
           <td class="num">${fmt(p.num_pagos || 0)}</td>
           <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
           <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
-          <td>${p.fecha_primer_pago || '-'}</td>
+          <td>${esc(p.fecha_primer_pago) || '-'}</td>
         </tr>
       `).join('');
       if (!lLeg.length) {
@@ -5700,7 +5762,7 @@ function updateAggTables() {
       return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td>${g.name}</td>
+          <td>${esc(g.name)}</td>
           <td class="num">${fmt(g.count)}</td>
           <td class="num">${fmt(g.activos)}</td>
           <td class="num">${fmtCurrency(g.valor)}</td>
