@@ -520,16 +520,39 @@ SOLIC_LEGACY_EXCLUDE = {'PENDIENTE'}
 
 
 def _normalize_estado(estado, source: str) -> str | None:
-    """Normaliza el estado según la plataforma. Devuelve None si se debe excluir la fila."""
+    """Normaliza el estado según la plataforma. Devuelve None si se debe excluir la fila.
+
+    Normalización defensiva (gerente reportó que TRATAMIENTO DE DATOS
+    ACEPTADO no se mapeaba): además de strip+upper, colapsamos espacios
+    múltiples y quitamos tildes. Si el match exacto falla, aplicamos
+    fuzzy contains para los estados intermedios del pipeline nuevo.
+    """
+    import unicodedata
     if not estado:
         return estado
     key = str(estado).strip().upper()
+    key = ' '.join(key.split())  # colapsa espacios múltiples
+    # Sin tildes para tolerar variantes de capturación del Excel
+    key = ''.join(c for c in unicodedata.normalize('NFD', key)
+                  if unicodedata.category(c) != 'Mn')
     if source == 'legacy':
         if key in SOLIC_LEGACY_EXCLUDE:
             return None
         return SOLIC_LEGACY_REMAP.get(key, key)
-    # Nueva plataforma
-    return SOLIC_NUEVA_REMAP.get(key, key)
+    # Nueva plataforma — match exacto primero
+    if key in SOLIC_NUEVA_REMAP:
+        return SOLIC_NUEVA_REMAP[key]
+    # Fuzzy fallback: cualquier estado del pipeline que NO sea final
+    # (DESEMBOLSADA/ANULADA/RECHAZADA) cuenta como EN ESTUDIO.
+    if 'TRATAMIENTO' in key and 'DATOS' in key:
+        return 'EN ESTUDIO'
+    if 'DEVUELTA' in key:
+        return 'EN ESTUDIO'
+    if 'ESTUDIO' in key or 'PROCESO' in key or 'ANALISIS' in key:
+        return 'EN ESTUDIO'
+    if 'PENDIENTE' in key or 'CENTRAL' in key:  # centrales de riesgo
+        return 'EN ESTUDIO'
+    return key
 
 
 @solicitudes.get("/combined")
@@ -588,6 +611,56 @@ def solic_combined(_user=Depends(require_auth)):
                 'asesor_comercial': d.get('asesor_comercial'),
             })
         return out
+    finally:
+        conn.close()
+
+
+@solicitudes.get("/diagnose")
+def solic_diagnose(_user=Depends(require_auth)):
+    """Diagnóstico: muestra qué estados crudos hay en la BD y cómo los
+    normaliza _normalize_estado. Permite verificar desde el navegador
+    (sin DevTools) si el mapeo funciona después de un upload.
+
+    Abrir: https://<dashboard>/api/solicitudes/diagnose
+    """
+    from collections import Counter
+    conn = get_connection()
+    try:
+        # Plataforma nueva: último batch exitoso
+        new_rows = conn.execute(
+            "SELECT estado FROM solicitudes WHERE sync_batch_id = "
+            "(SELECT id FROM sync_logs WHERE source='solicitudes_upload' "
+            "AND status='success' ORDER BY id DESC LIMIT 1)"
+        ).fetchall()
+        # Legacy: todo
+        legacy_rows = conn.execute("SELECT estado FROM solicitudes_legacy").fetchall()
+
+        def _audit_estados(rows, source):
+            raw = Counter()
+            normalized = Counter()
+            mapping_trace = {}  # raw → set of normalized
+            for r in rows:
+                e = r['estado']
+                raw[e or '(vacío)'] += 1
+                n = _normalize_estado(e, source)
+                normalized[n or '(excluido)'] += 1
+                if e:
+                    mapping_trace.setdefault(e, set()).add(n or '(excluido)')
+            return {
+                'total': len(rows),
+                'crudos': dict(raw.most_common()),
+                'normalizados': dict(normalized.most_common()),
+                'mapeo': {k: list(v) for k, v in mapping_trace.items()},
+            }
+
+        return {
+            'nueva_plataforma': _audit_estados(new_rows, 'nueva'),
+            'legacy': _audit_estados(legacy_rows, 'legacy'),
+            'nota': (
+                "Si 'crudos' tiene un estado que NO aparece como 'EN ESTUDIO' "
+                "en 'normalizados', agregar al mapeo en SOLIC_NUEVA_REMAP."
+            ),
+        }
     finally:
         conn.close()
 
