@@ -87,6 +87,20 @@ def login(req: LoginRequest, request: Request, response: Response):
         token = secrets.token_urlsafe(32)
         expires = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
 
+        # Auditoría A5: invalidar sesiones previas del mismo usuario.
+        # Si un laptop quedó comprometido con sesión viva, un re-login
+        # desde el equipo legítimo cierra la sesión hostil al instante.
+        # Política: single-session por usuario. Si necesita multi-device,
+        # cambiar a 'cerrar todas las sesiones de hace >X horas'.
+        old_sessions = conn.execute(
+            "SELECT COUNT(*) as cnt FROM sessions WHERE user_id = ?",
+            (user["id"],)
+        ).fetchone()
+        if old_sessions and old_sessions["cnt"] > 0:
+            conn.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+            log_audit(user["id"], user["username"], "session_invalidated",
+                      f"sesiones previas cerradas: {old_sessions['cnt']}", ip)
+
         conn.execute(
             "INSERT INTO sessions (token, user_id, ip, expires_at) VALUES (?, ?, ?, ?)",
             (token, user["id"], ip, expires.isoformat())

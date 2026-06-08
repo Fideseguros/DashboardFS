@@ -284,6 +284,15 @@ CREATE TABLE IF NOT EXISTS saldo_cartera_snapshots (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_saldo_cartera_date ON saldo_cartera_snapshots(snapshot_date);
 
+-- ============== Key-Value store para flags de sistema ==============
+-- Usado para: bootstrap_done (evita re-uso accidental del bootstrap si la
+-- env var BOOTSTRAP_ADMIN_* queda colgada en Railway), feature flags futuros.
+CREATE TABLE IF NOT EXISTS kv_store (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ============== Tracking de plataforma origen de cada cuenta ==============
 -- Se repuebla en cada incremental_update_from_excel con las cuentas presentes
 -- en el archivo de la plataforma NUEVA. Cualquier cuenta de credits que NO

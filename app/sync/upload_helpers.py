@@ -185,12 +185,54 @@ class UploadContext:
 
 
 def _check_upload_file(file: UploadFile, content: bytes, max_mb: int):
-    """Valida tipo y tamaño del archivo. Raises HTTPException si falla."""
+    """Valida tipo, tamaño, magic bytes y ratio de descompresión del archivo.
+
+    Defensas (auditoría M4):
+      - extensión .xlsx/.xls
+      - tamaño máximo
+      - magic bytes 'PK\\x03\\x04' (xlsx es zip) o 'D0CF11E0' (xls compound)
+        — previene archivos renombrados (ej. .exe → .xlsx)
+      - zip-bomb: ratio uncompressed/compressed >100x es señal de bomba
+        (un xlsx normal está entre 3-15x). Si excede, rechazar antes de
+        que openpyxl intente parsearlo y consuma toda la RAM.
+    """
     if not file.filename or not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Solo archivos .xlsx o .xls")
     size_mb = len(content) / (1024 * 1024)
     if size_mb > max_mb:
         raise HTTPException(status_code=413, detail=f"Archivo excede {max_mb} MB")
+    # Magic bytes
+    if len(content) < 8:
+        raise HTTPException(status_code=400, detail="Archivo demasiado pequeño o corrupto")
+    head = content[:8]
+    is_zip = head[:4] == b'PK\x03\x04'   # xlsx (Office Open XML, es un zip)
+    is_ole = head[:4] == b'\xD0\xCF\x11\xE0'  # xls legacy (Compound File Binary)
+    if not (is_zip or is_ole):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo no parece un Excel válido (magic bytes incorrectos)."
+        )
+    # Zip-bomb check (solo aplica a .xlsx que es zip)
+    if is_zip:
+        import zipfile, io as _io
+        try:
+            with zipfile.ZipFile(_io.BytesIO(content)) as zf:
+                total_uncompressed = sum(zi.file_size for zi in zf.infolist())
+                # Ratio razonable para xlsx: 3-15x. >100x es bomba.
+                # Cap absoluto: 500 MB descomprimido (un xlsx legítimo de
+                # 25 MB raramente excede 200 MB en disco).
+                if total_uncompressed > 500 * 1024 * 1024:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Archivo descomprimido excede 500 MB — posible bomba zip."
+                    )
+                if len(content) > 0 and total_uncompressed / len(content) > 100:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Ratio de compresión sospechoso — posible bomba zip."
+                    )
+        except zipfile.BadZipFile:
+            raise HTTPException(status_code=400, detail="Archivo .xlsx corrupto o malformado.")
 
 
 def _create_sync_log(uploaded_by: int, source: str) -> int:
