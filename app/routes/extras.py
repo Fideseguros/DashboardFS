@@ -495,6 +495,12 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
 SOLIC_NUEVA_REMAP = {
     'DEVUELTA ATENDIDA': 'EN ESTUDIO',
     'DEVUELTA HOJA RUTA': 'EN ESTUDIO',
+    # 'TRATAMIENTO DE DATOS ACEPTADO' es el estado intermedio del pipeline
+    # nuevo: la solicitud aceptó Habeas Data y está en estudio crediticio
+    # (paso ruta = Decisión Solicitud, Centrales de Riesgo, Cargar documentos).
+    # Sin este mapeo, ~15% de las solicitudes del archivo quedaban con un
+    # nombre técnico que la gerente no reconocía como "En estudio".
+    'TRATAMIENTO DE DATOS ACEPTADO': 'EN ESTUDIO',
 }
 SOLIC_LEGACY_REMAP = {
     'APROBADA':   'DESEMBOLSADA',
