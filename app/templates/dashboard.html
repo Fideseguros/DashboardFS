@@ -2999,11 +2999,13 @@ function _hideToast(t) {
 }
 
 // Escape de HTML: defensa contra XSS persistente desde celdas del Excel.
-// Un atacante con superadmin que suba un Excel con '<script>...</script>' en
-// una celda (aliado, ciudad, juzgado, medida_cautelar, observaciones, etc.)
-// podría ejecutar JS en el navegador de quien abra el dashboard tras el
-// upload. esc() debe envolver TODA variable interpolada en innerHTML que
-// venga del backend o de inputs del usuario.
+// IMPORTANTE: NO escribir el tag de cierre script literalmente en ningún
+// comentario o string de este archivo — el parser HTML lo interpreta como
+// cierre del bloque <script> y corta TODO el JS posterior. Bug encontrado
+// en producción: dashboard quedaba cargando para siempre. Si necesitas
+// referirte al tag, escribe "<\/script>" o "<\\/script>" en literal.
+// esc() debe envolver TODA variable interpolada en innerHTML que venga
+// del backend o de inputs del usuario.
 function esc(s) {
   if (s == null) return '';
   return String(s).replace(/[&<>"']/g, c => ({
