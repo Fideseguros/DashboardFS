@@ -84,6 +84,26 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
     # Strict-Transport-Security is only meaningful over HTTPS (Railway serves HTTPS by default).
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # CSP defensiva contra XSS (issue auditoría A2). Permite 'unsafe-inline'
+    # porque dashboard.html tiene ~3000 líneas de JS+CSS inline; refactor a
+    # archivos externos es trabajo grande. Lo que SÍ bloqueamos:
+    #   - connect-src 'self': fetch() solo al propio dominio → un XSS no
+    #     puede exfiltrar a un dominio atacante.
+    #   - frame-ancestors 'none': nadie puede embeber en iframe (clickjacking).
+    #   - object-src 'none': sin Flash/applet/PDF embebido.
+    # Se permiten CDNs específicos para Chart.js y fonts.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
     return response
 
 

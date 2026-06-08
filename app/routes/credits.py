@@ -323,67 +323,22 @@ def desembolso_vs_recaudo(_user=Depends(require_auth)):
         conn.close()
 
 
-@router.get("/export/csv")
-def export_csv(
-    request: Request,
-    user=Depends(require_superadmin),
-    estado: str = Query(None), linea: str = Query(None),
-    calificacion: str = Query(None), aliado: str = Query(None),
-    ciudad: str = Query(None), mora_min: int = Query(None),
-    mora_max: int = Query(None)
-):
-    where, params = _build_query(estado, linea, calificacion, aliado, ciudad, mora_min, mora_max)
-    conn = get_connection()
-    try:
-        rows = conn.execute(f"SELECT * FROM credits WHERE {where}", params).fetchall()
-    finally:
-        conn.close()
-
-    ip = get_client_ip(request)
-    # Para trazabilidad bajo Habeas Data, registramos los IDs de los créditos
-    # exportados. Si son muchos, truncamos el listado y guardamos hash + rango
-    # para permitir reconstruir el set sin saturar audit_logs.
-    ids = [r['id'] for r in rows]
-    if len(ids) <= 200:
-        ids_str = ','.join(str(i) for i in ids)
-    else:
-        import hashlib
-        h = hashlib.sha256(','.join(str(i) for i in ids).encode()).hexdigest()[:16]
-        ids_str = f"hash={h} count={len(ids)} ids[0:20]={','.join(str(i) for i in ids[:20])}"
-    log_audit(user["user_id"], user["username"], "csv_export",
-              f"filas={len(rows)} filtros={dict(request.query_params)} ids={ids_str}", ip)
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    headers = ['Cliente', 'Identificacion', 'Estado', 'Linea', 'Valor_Credito',
-               'Saldo_Capital', 'Calificacion', 'Dias_Mora', 'Tasa_Efectiva',
-               'Fecha_Desembolso', 'Fecha_Vencimiento', 'Aliado', 'Ciudad']
-    writer.writerow(headers)
-    for r in rows:
-        d = dict(r)
-        writer.writerow([
-            decrypt(d.get('cliente')),
-            decrypt(d.get('identificacion')),
-            d.get('estado', ''), d.get('linea', ''),
-            d.get('valor_credito', ''), d.get('saldo_capital', ''),
-            d.get('calificacion', ''), d.get('dias_mora', ''),
-            d.get('tasa_efectiva', ''), d.get('fecha_desembolso', ''),
-            d.get('fecha_vencimiento', ''), d.get('aliado', ''),
-            d.get('ciudad', ''),
-        ])
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=fide_cartera_export.csv"}
-    )
+# Endpoint /export/csv removido por auditoría de seguridad (2026-06).
+# Permitía descargar TODA la cartera con PII descifrada en un solo GET. La UI
+# que lo invocaba ya fue removida; mantenerlo vivo es superficie de ataque
+# innecesaria (un superadmin comprometido se llevaba 3500 cédulas en un click).
+# Si la gerencia necesita exportar PII por razones legales, hacerlo manualmente
+# desde la BD con audit explícito o reactivar con justificación obligatoria.
 
 
 @router.get("/top-clientes")
 def top_clientes(
     request: Request,
     user=Depends(require_superadmin),
-    n: int = Query(20, ge=1, le=100),
+    # Cap reducido de 100 → 20 por auditoría de seguridad (2026-06). Permitir
+    # 100 facilitaba dumps masivos de PII; 20 cubre el caso de uso ejecutivo
+    # (ver top deudores) sin habilitar bulk reveal.
+    n: int = Query(20, ge=1, le=20),
 ):
     """Top N clientes por saldo capital ACTIVO con ID + nombre completos.
 
@@ -459,13 +414,10 @@ def top_clientes(
         t["lineas"] = sorted(t["lineas"])
         t["calificaciones"] = sorted(c for c in t["calificaciones"] if c)
 
-    # Audit: registrar los IDs revelados. Si son muchos, hash + count.
+    # Audit completo: con cap n<=20, SIEMPRE registramos los IDs concretos.
+    # Antes había rama hash para n>50; ya no aplica porque el cap impide >20.
     revealed_ids = [t["identificacion"] for t in top]
-    if len(revealed_ids) <= 50:
-        ids_str = ",".join(str(i) for i in revealed_ids)
-    else:
-        h = hashlib.sha256(",".join(str(i) for i in revealed_ids).encode()).hexdigest()[:16]
-        ids_str = f"hash={h} count={len(revealed_ids)}"
+    ids_str = ",".join(str(i) for i in revealed_ids)
     log_audit(
         user["user_id"], user["username"], "credit_reveal",
         f"top_clientes n={n} ids={ids_str}", ip

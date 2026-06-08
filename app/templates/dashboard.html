@@ -2772,6 +2772,19 @@ Chart.defaults.plugins.legend.labels.boxWidth = 10;
 Chart.defaults.plugins.legend.labels.boxHeight = 10;
 Chart.defaults.plugins.legend.labels.font = { weight: 600, size: 11 };
 
+// Escape de HTML: defensa contra XSS persistente desde celdas del Excel.
+// Un atacante con superadmin que suba un Excel con '<script>...</script>' en
+// una celda (aliado, ciudad, juzgado, medida_cautelar, observaciones, etc.)
+// podría ejecutar JS en el navegador de quien abra el dashboard tras el
+// upload. esc() debe envolver TODA variable interpolada en innerHTML que
+// venga del backend o de inputs del usuario.
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function fmt(n) {
   if (n == null || isNaN(n)) return '-';
   return new Intl.NumberFormat('es-CO').format(Math.round(n));
@@ -3750,19 +3763,19 @@ function updateTable() {
 
   document.getElementById('tableBody').innerHTML = pd.map(r => `
     <tr>
-      <td>${r.cliente||'-'}</td>
-      <td>${r.identificacion||'-'}</td>
-      <td><span class="badge badge-${(r.estado||'').toLowerCase()}">${r.estado||'-'}</span></td>
-      <td>${r.linea||'-'}</td>
+      <td>${esc(r.cliente) || '-'}</td>
+      <td>${esc(r.identificacion) || '-'}</td>
+      <td><span class="badge badge-${esc((r.estado||'').toLowerCase())}">${esc(r.estado) || '-'}</span></td>
+      <td>${esc(r.linea) || '-'}</td>
       <td class="num">${fmtCurrency(r.valor_credito)}</td>
       <td class="num">${fmtCurrency(r.saldo_capital)}</td>
-      <td><span class="badge badge-${(r.calificacion||'').trim().toLowerCase()}">${(r.calificacion||'-').trim()}</span></td>
+      <td><span class="badge badge-${esc((r.calificacion||'').trim().toLowerCase())}">${esc((r.calificacion||'-').trim())}</span></td>
       <td class="num" style="color:${(parseInt(r.dias_mora)||0)>0?'#b8680f':'#0f7b6c'}; font-weight:700">${fmt(r.dias_mora)}</td>
-      <td class="num">${r.tasa_efectiva ? r.tasa_efectiva+'%':'-'}</td>
-      <td>${r.fecha_desembolso||'-'}</td>
-      <td>${r.fecha_vencimiento||'-'}</td>
-      <td>${r.aliado||'-'}</td>
-      <td>${r.ciudad||'-'}</td>
+      <td class="num">${r.tasa_efectiva ? esc(r.tasa_efectiva)+'%':'-'}</td>
+      <td>${esc(r.fecha_desembolso) || '-'}</td>
+      <td>${esc(r.fecha_vencimiento) || '-'}</td>
+      <td>${esc(r.aliado) || '-'}</td>
+      <td>${esc(r.ciudad) || '-'}</td>
     </tr>
   `).join('');
 
@@ -4237,14 +4250,14 @@ function renderSolicitudes() {
   } else {
     tb.innerHTML = filtered.slice(0, 200).map(x => `
       <tr>
-        <td><strong>${x.solicitud || '-'}</strong></td>
-        <td>${x.solicitante || '-'}</td>
-        <td>${x.linea || '-'}</td>
+        <td><strong>${esc(x.solicitud) || '-'}</strong></td>
+        <td>${esc(x.solicitante) || '-'}</td>
+        <td>${esc(x.linea) || '-'}</td>
         <td class="num">${fmtCurrency(x.valor)}</td>
-        <td>${x.estado || '-'}</td>
-        <td>${x.paso_ruta || '-'}</td>
-        <td>${x.oficina || '-'}</td>
-        <td>${x.fecha_solicitud || '-'}</td>
+        <td>${esc(x.estado) || '-'}</td>
+        <td>${esc(x.paso_ruta) || '-'}</td>
+        <td>${esc(x.oficina) || '-'}</td>
+        <td>${esc(x.fecha_solicitud) || '-'}</td>
       </tr>
     `).join('');
   }
@@ -4316,14 +4329,14 @@ async function loadJuridico() {
         `<span style="color:${dm > 30 ? '#b8680f' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</span>`;
       return `
         <tr>
-          <td>${x.identificacion || '-'}</td>
-          <td title="${(x.nombre||'').replace(/"/g,'&quot;')}">${x.nombre || '-'}</td>
-          <td><span class="role-pill" style="${probColor};">${x.probabilidad || '-'}</span></td>
+          <td>${esc(x.identificacion) || '-'}</td>
+          <td title="${esc(x.nombre)}">${esc(x.nombre) || '-'}</td>
+          <td><span class="role-pill" style="${probColor};">${esc(x.probabilidad) || '-'}</span></td>
           <td>${carteraPill}</td>
           <td class="num">${saldo}</td>
           <td class="num">${moraCell}</td>
-          <td title="${(x.juzgado||'').replace(/"/g,'&quot;')}">${(x.juzgado||'-').substring(0,30)}…</td>
-          <td title="${(x.medida_cautelar||'').replace(/"/g,'&quot;')}">${(x.medida_cautelar||'-').substring(0,30)}…</td>
+          <td title="${esc(x.juzgado)}">${esc((x.juzgado||'-').substring(0,30))}…</td>
+          <td title="${esc(x.medida_cautelar)}">${esc((x.medida_cautelar||'-').substring(0,30))}…</td>
         </tr>
       `;
     }).join('');
@@ -5126,9 +5139,9 @@ function renderProyeccion() {
       return `<tr>
         <td>${fmtDate(r._venc_date)}</td>
         <td>${estadoPill}</td>
-        <td>${r.cliente || '-'}</td>
-        <td>${r.linea || '-'}</td>
-        <td>${r.aliado || '-'}</td>
+        <td>${esc(r.cliente) || '-'}</td>
+        <td>${esc(r.linea) || '-'}</td>
+        <td>${esc(r.aliado) || '-'}</td>
         <td class="num">${fmtCurrency(r._valor_cuota_num)}</td>
         <td class="num">${fmtCurrency(r.saldo_capital)}</td>
         <td class="num" style="color:${dm > 0 ? '#c29200' : '#0f7b6c'};font-weight:700;">${fmt(dm)}</td>
@@ -5395,8 +5408,8 @@ async function loadTopClientesUnmasked() {
       return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td>${c.cliente || '-'}</td>
-          <td>${c.identificacion || '-'}</td>
+          <td>${esc(c.cliente) || '-'}</td>
+          <td>${esc(c.identificacion) || '-'}</td>
           <td class="num">${fmt(c.n_creditos || 0)}</td>
           <td class="num">${fmtCurrency(c.valor_credito)}</td>
           <td class="num">${fmtCurrency(c.saldo_capital)}</td>
@@ -5445,8 +5458,8 @@ function updateAggTables() {
     tbCli.innerHTML = topCli.map((c, i) => `
       <tr>
         <td class="rank">${i + 1}</td>
-        <td>${c.cliente}</td>
-        <td>${c.ident}</td>
+        <td>${esc(c.cliente)}</td>
+        <td>${esc(c.ident)}</td>
         <td class="num">${fmt(c.count)}</td>
         <td class="num">${fmtCurrency(c.valor)}</td>
         <td class="num">${fmtCurrency(c.saldo)}</td>

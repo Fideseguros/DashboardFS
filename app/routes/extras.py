@@ -766,10 +766,14 @@ def jur_list(user=Depends(require_superadmin)):
         out = []
         for r in rows:
             d = dict(r)
-            d['identificacion'] = decrypt(d.get('identificacion'))
-            d['nombre'] = decrypt(d.get('nombre'))
+            # PII enmascarada por defecto (Habeas Data). Para ver plaintext,
+            # usar el endpoint /api/juridico/{id}/reveal con audit granular.
+            ident_plain = decrypt(d.get('identificacion'))
+            nombre_plain = decrypt(d.get('nombre'))
+            d['identificacion'] = mask_identificacion(ident_plain)
+            d['nombre'] = mask_cliente(nombre_plain)
             # Cruce con identificación normalizada (lstrip ceros, sin guiones/puntos)
-            cartera = cartera_idx.get(_norm_id(d.get('identificacion')))
+            cartera = cartera_idx.get(_norm_id(ident_plain))
             if cartera:
                 d['cartera_creditos_total'] = cartera['creditos_total']
                 d['cartera_creditos_activos'] = cartera['creditos_activos']
