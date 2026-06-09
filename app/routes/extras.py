@@ -128,7 +128,10 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
 
 
 @recaudo.get("")
-def recaudo_list(_user=Depends(require_auth)):
+def recaudo_list(user=Depends(require_auth)):
+    """Para superadmin: identificación + cliente en plaintext (buscar por
+    cédula). Para otros roles: enmascarado."""
+    is_super = user.get("role") == "superadmin"
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -137,10 +140,14 @@ def recaudo_list(_user=Depends(require_auth)):
         out = []
         for r in rows:
             d = dict(r)
-            ident = decrypt(d.get('identificacion'))
-            cli = decrypt(d.get('cliente'))
-            d['identificacion'] = mask_identificacion(ident)
-            d['cliente'] = mask_cliente(cli)
+            ident = decrypt(d.get('identificacion')) or ""
+            cli = decrypt(d.get('cliente')) or ""
+            if is_super:
+                d['identificacion'] = ident
+                d['cliente'] = cli
+            else:
+                d['identificacion'] = mask_identificacion(ident)
+                d['cliente'] = mask_cliente(cli)
             out.append(d)
         return out
     finally:
@@ -267,22 +274,27 @@ async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmi
 
 
 @recaudo.get("/legacy")
-def recaudo_legacy_list(_user=Depends(require_auth)):
+def recaudo_legacy_list(user=Depends(require_auth)):
     """Devuelve los pagos legacy agregados por id_prestamo.
 
-    Acceso: cualquier rol autenticado. PII (identificación, nombre) viene
-    enmascarada con mask_identificacion/mask_cliente. No existe endpoint
-    de reveal para datos legacy, por lo cual no hay riesgo de fuga PII
-    completo desde este endpoint.
+    Para superadmin: identificación + nombre en plaintext (gerente necesita
+    buscar por cédula). Otros roles: enmascarado.
     """
+    is_super = user.get("role") == "superadmin"
     conn = get_connection()
     try:
         rows = conn.execute("SELECT * FROM pagos_legacy ORDER BY valor_pago_total DESC").fetchall()
         out = []
         for r in rows:
             d = dict(r)
-            d['identificacion'] = mask_identificacion(decrypt(d.get('identificacion')))
-            d['nombre'] = mask_cliente(decrypt(d.get('nombre')))
+            ident = decrypt(d.get('identificacion')) or ""
+            nombre = decrypt(d.get('nombre')) or ""
+            if is_super:
+                d['identificacion'] = ident
+                d['nombre'] = nombre
+            else:
+                d['identificacion'] = mask_identificacion(ident)
+                d['nombre'] = mask_cliente(nombre)
             out.append(d)
         return out
     finally:
@@ -371,7 +383,8 @@ async def solic_upload(request: Request, user=Depends(require_superadmin), file:
 
 
 @solicitudes.get("")
-def solic_list(_user=Depends(require_auth)):
+def solic_list(user=Depends(require_auth)):
+    is_super = user.get("role") == "superadmin"
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -380,10 +393,14 @@ def solic_list(_user=Depends(require_auth)):
         out = []
         for r in rows:
             d = dict(r)
-            ident = decrypt(d.get('identificacion'))
-            sol = decrypt(d.get('solicitante'))
-            d['identificacion'] = mask_identificacion(ident)
-            d['solicitante'] = mask_cliente(sol)
+            ident = decrypt(d.get('identificacion')) or ""
+            sol = decrypt(d.get('solicitante')) or ""
+            if is_super:
+                d['identificacion'] = ident
+                d['solicitante'] = sol
+            else:
+                d['identificacion'] = mask_identificacion(ident)
+                d['solicitante'] = mask_cliente(sol)
             out.append(d)
         return out
     finally:
@@ -556,17 +573,17 @@ def _normalize_estado(estado, source: str) -> str | None:
 
 
 @solicitudes.get("/combined")
-def solic_combined(_user=Depends(require_auth)):
+def solic_combined(user=Depends(require_auth)):
     """UNION de legacy + nueva plataforma con estados normalizados.
 
-    Nota Habeas Data (auditoría): este endpoint sigue ejecutando decrypt()
-    sobre identificacion y solicitante/nombre_completo de TODAS las filas
-    aunque el output salga ENMASCARADO. El decrypt es necesario para que
-    mask_identificacion/mask_cliente produzcan máscaras útiles. Los logs
-    de errores podrían filtrar el plaintext si un decrypt falla — por eso
-    el bloque try/except en crypto.py ya retorna None silenciosamente sin
-    loguear el valor.
+    Para superadmin: identificación + nombre en plaintext (gerente requiere
+    buscar por cédula). Otros roles: enmascarado.
     """
+    is_super = user.get("role") == "superadmin"
+    def _id(plain):
+        return plain if is_super else mask_identificacion(plain)
+    def _nom(plain):
+        return plain if is_super else mask_cliente(plain)
     conn = get_connection()
     try:
         new_rows = conn.execute(
@@ -581,8 +598,8 @@ def solic_combined(_user=Depends(require_auth)):
             if normalized is None:
                 continue
             d['estado'] = normalized
-            d['identificacion'] = mask_identificacion(decrypt(d.get('identificacion')))
-            d['solicitante'] = mask_cliente(decrypt(d.get('solicitante')))
+            d['identificacion'] = _id(decrypt(d.get('identificacion')) or "")
+            d['solicitante'] = _nom(decrypt(d.get('solicitante')) or "")
             d['source'] = 'nueva'
             out.append(d)
         for r in legacy_rows:
@@ -595,8 +612,8 @@ def solic_combined(_user=Depends(require_auth)):
                 'source': 'legacy',
                 'solicitud': d.get('id_solicitud'),
                 'linea': d.get('producto'),
-                'identificacion': mask_identificacion(decrypt(d.get('identificacion'))),
-                'solicitante': mask_cliente(decrypt(d.get('nombre_completo'))),
+                'identificacion': _id(decrypt(d.get('identificacion')) or ""),
+                'solicitante': _nom(decrypt(d.get('nombre_completo')) or ""),
                 'valor': d.get('monto'),
                 'estado': normalized,
                 'paso_ruta': d.get('estado_precalif'),
@@ -843,14 +860,15 @@ def jur_list(user=Depends(require_superadmin)):
                 agg["aliado_principal"] = c["aliado"]
 
         out = []
+        # El endpoint ya requiere superadmin (require_superadmin), así que
+        # devolvemos plaintext directo. La gerente lo necesita para buscar
+        # por cédula en cobro jurídico.
         for r in rows:
             d = dict(r)
-            # PII enmascarada por defecto (Habeas Data). Para ver plaintext,
-            # usar el endpoint /api/juridico/{id}/reveal con audit granular.
-            ident_plain = decrypt(d.get('identificacion'))
-            nombre_plain = decrypt(d.get('nombre'))
-            d['identificacion'] = mask_identificacion(ident_plain)
-            d['nombre'] = mask_cliente(nombre_plain)
+            ident_plain = decrypt(d.get('identificacion')) or ""
+            nombre_plain = decrypt(d.get('nombre')) or ""
+            d['identificacion'] = ident_plain
+            d['nombre'] = nombre_plain
             # Cruce con identificación normalizada (lstrip ceros, sin guiones/puntos)
             cartera = cartera_idx.get(_norm_id(ident_plain))
             if cartera:

@@ -48,16 +48,26 @@ def _build_query(estado=None, linea=None, calificacion=None, aliado=None,
     return " AND ".join(conditions), params
 
 
-def _row_masked(row: dict) -> dict:
-    """Return a dict safe for display: PII enmascarada.
+def _row_for_role(row: dict, role: str) -> dict:
+    """Return a dict safe for display.
 
-    Prefiere la versión cacheada (identificacion_masked / cliente_masked)
-    para evitar el costo de decrypt+mask en cada request. Fallback al
-    decrypt para filas pre-migración (cuando aún no se ha hecho backfill).
+    Para superadmin: identificación en PLAINTEXT + cliente en plaintext
+    (la gerente necesita buscar por cédula). Toda la lectura se hace bajo
+    require_auth → sesión válida + audit por endpoint.
+
+    Para viewer/consulta: enmascarado con cache (identificacion_masked /
+    cliente_masked) para evitar decrypt+mask en cada request. Fallback al
+    decrypt para filas pre-migración (sin backfill).
     """
     out = dict(row)
     im = out.pop("identificacion_masked", None)
     cm = out.pop("cliente_masked", None)
+    if role == "superadmin":
+        # Plaintext desde Fernet (ciphertext en BD)
+        out["identificacion"] = decrypt(out.get("identificacion")) or ""
+        out["cliente"] = decrypt(out.get("cliente")) or ""
+        return out
+    # No-superadmin: enmascarado
     if im is not None:
         out["identificacion"] = im
     else:
@@ -69,10 +79,15 @@ def _row_masked(row: dict) -> dict:
     return out
 
 
+# Alias por compatibilidad
+def _row_masked(row: dict) -> dict:
+    return _row_for_role(row, "viewer")
+
+
 @router.get("")
 def get_credits(
     response: Response,
-    _user=Depends(require_auth),
+    user=Depends(require_auth),
     estado: str = Query(None), linea: str = Query(None),
     calificacion: str = Query(None), aliado: str = Query(None),
     ciudad: str = Query(None), mora_min: int = Query(None),
@@ -88,11 +103,14 @@ def get_credits(
     """
     conn = get_connection()
     try:
-        # Caché solo cuando no hay filtros — el dashboard llama sin filtros.
+        # ETag SOLO con filtros vacíos Y rol no-superadmin: el plaintext
+        # cambia por rol, así que el ETag debe incluir el rol para evitar
+        # servir cache de viewer (masked) al superadmin (unmasked).
+        role = user.get("role", "viewer")
         no_filters = not any([estado, linea, calificacion, aliado, ciudad,
                               mora_min is not None, mora_max is not None])
         if no_filters:
-            etag = _active_batch_etag(conn)
+            etag = _active_batch_etag(conn) + f'-{role}'
             if if_none_match and if_none_match == etag:
                 # No fue modificado desde la última vez que el cliente lo pidió
                 response.status_code = 304
@@ -104,7 +122,7 @@ def get_credits(
 
         where, params = _build_query(estado, linea, calificacion, aliado, ciudad, mora_min, mora_max)
         rows = conn.execute(f"SELECT * FROM credits WHERE {where}", params).fetchall()
-        return [_row_masked(dict(r)) for r in rows]
+        return [_row_for_role(dict(r), role) for r in rows]
     finally:
         conn.close()
 

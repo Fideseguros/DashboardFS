@@ -958,27 +958,27 @@ body {
 }
 .data-table tr.fin-total:hover td { background: var(--neutral-100); }
 .data-table tr.fin-group:hover td { background: rgba(0, 167, 157, 0.04); }
-/* Filas sintéticas del Estado de Resultados:
- *   .fin-utilidad         → 'UTILIDAD ANTES DE IMPUESTO' (subtotal intermedio)
- *   .fin-utilidad-neta    → 'UTILIDAD DEL EJERCICIO'     (bottom line, más prominente) */
+/* Filas sintéticas del Estado de Resultados — pedido gerencia: utilidad
+ * antes de impuestos como conclusión sutilmente destacada; utilidad del
+ * ejercicio neutral (no resaltada con fondo de color). */
 .data-table tr.fin-utilidad td {
   font-weight: 800 !important;
-  background: var(--fide-teal-tint);
+  background: var(--neutral-50);
   color: var(--fide-teal-deeper);
   border-top: 1px solid var(--fide-teal);
-  border-bottom: 1px solid var(--fide-teal);
+  border-bottom: 1px solid var(--fide-teal-tint);
   font-size: 0.82rem;
 }
-.data-table tr.fin-utilidad:hover td { background: var(--fide-teal-tint); }
+.data-table tr.fin-utilidad:hover td { background: var(--neutral-100); }
 .data-table tr.fin-utilidad-neta td {
-  font-weight: 900 !important;
-  background: var(--fide-teal);
-  color: #fff;
-  border-top: 2px solid var(--fide-teal-deeper);
-  border-bottom: 2px double var(--fide-teal-deeper);
-  font-size: 0.85rem;
+  font-weight: 800 !important;
+  background: transparent;
+  color: var(--neutral-900);
+  border-top: 1px solid var(--neutral-200, var(--border));
+  border-bottom: 2px double var(--neutral-400, var(--border));
+  font-size: 0.82rem;
 }
-.data-table tr.fin-utilidad-neta:hover td { background: var(--fide-teal); }
+.data-table tr.fin-utilidad-neta:hover td { background: var(--neutral-50); }
 
 /* Mini-cards de desagregación de Saldo Cartera */
 .sc-comp { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.7rem; }
@@ -1563,6 +1563,8 @@ select:focus-visible {
 #kpiSaldoCarteraCard {
   position: relative;
   transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+  /* Padding extra abajo para dar lugar a la etiqueta "Ver composición" */
+  padding-bottom: 28px;
 }
 #kpiSaldoCarteraCard::after {
   content: 'Ver composición ›';
@@ -1575,6 +1577,7 @@ select:focus-visible {
   letter-spacing: 0.3px;
   opacity: 0.55;
   transition: opacity 0.15s;
+  pointer-events: none;
 }
 #kpiSaldoCarteraCard:hover {
   background: linear-gradient(180deg, #fff 0%, var(--fide-teal-tint) 100%);
@@ -1583,6 +1586,30 @@ select:focus-visible {
 }
 #kpiSaldoCarteraCard:hover::after { opacity: 1; }
 #kpiSaldoCarteraCard.expanded::after { content: 'Ocultar composición ‹'; opacity: 1; }
+
+/* Mobile: el sub-label "X cuentas · fecha" se sobreponía con el
+ * "Ver composición ›" del ::after. Mover la etiqueta a una posición que
+ * NO compita con el contenido del card. */
+@media (max-width: 768px) {
+  #kpiSaldoCarteraCard {
+    padding-bottom: 36px;
+  }
+  #kpiSaldoCarteraCard::after {
+    bottom: 6px;
+    right: 10px;
+    font-size: 0.58rem;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  #kpiSaldoCarteraCard .kpi-sub {
+    /* Si la sub-label es larga, que truncate con ellipsis en lugar de wrappear */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: calc(100% - 12px);
+  }
+}
 
 /* Fix 3: Toast notification — reemplaza alert() nativo con feedback
  * de marca FIDE. Llamar showToast(msg, kind='ok'|'warn'|'err'). */
@@ -2675,8 +2702,35 @@ select:focus-visible {
 
     <div class="charts-grid">
       <div class="chart-card full">
-        <h3><span class="dot"></span> Aging de Mora &mdash; Distribuci&oacute;n del Saldo por Bucket</h3>
+        <h3>
+          <span class="dot"></span> Aging de Mora &mdash; Distribuci&oacute;n del Saldo por Bucket
+          <span style="font-size:0.65rem;font-weight:500;color:var(--neutral-500);margin-left:0.4rem;">Click en una barra para ver los cr&eacute;ditos del bucket</span>
+        </h3>
         <div class="chart-container tall"><canvas id="chartAging"></canvas></div>
+        <!-- Drill-down: créditos del bucket seleccionado -->
+        <div id="agingDrillPanel" style="display:none;margin-top:0.8rem;border-top:1px solid var(--border);padding-top:0.8rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+            <div style="font-size:0.8rem;font-weight:700;color:var(--neutral-900);">
+              Cr&eacute;ditos en bucket: <span id="agingDrillBucketName" style="color:var(--fide-teal-dark);"></span>
+              <span id="agingDrillCount" style="font-weight:500;color:var(--neutral-600);"></span>
+            </div>
+            <button class="btn btn-reset" style="font-size:0.7rem;padding:0.3rem 0.7rem;" onclick="closeAgingDrill()">Cerrar</button>
+          </div>
+          <div class="table-wrapper" style="max-height:380px;">
+            <table class="data-table compact" id="tblAgingDrill">
+              <thead><tr>
+                <th>Cliente</th>
+                <th>Identificaci&oacute;n</th>
+                <th>L&iacute;nea</th>
+                <th class="num">Saldo</th>
+                <th class="num">D&iacute;as Mora</th>
+                <th>Aliado</th>
+                <th>Fecha Desembolso</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <div class="chart-card full">
@@ -5029,6 +5083,49 @@ function onAnFechaChange() {
   renderAnalitica();
 }
 
+// Drill-down de Aging de Mora: abre tabla con los créditos del bucket.
+// Usa window._agingCreditsByBucket que se llena en renderAnalitica().
+function openAgingDrill(bucketKey, bucketLabel) {
+  const list = (window._agingCreditsByBucket && window._agingCreditsByBucket[bucketKey]) || [];
+  window._agingDrillKey = bucketKey;
+  const panel = document.getElementById('agingDrillPanel');
+  if (!panel) return;
+  panel.style.display = 'block';
+  document.getElementById('agingDrillBucketName').textContent = bucketLabel;
+  document.getElementById('agingDrillCount').textContent =
+    ` · ${list.length} créditos · saldo total ${fmtCurrency(list.reduce((s,r)=>s+(parseFloat(r.saldo_capital)||0),0))}`;
+  // Ordenar por saldo desc
+  const sorted = [...list].sort((a, b) =>
+    (parseFloat(b.saldo_capital) || 0) - (parseFloat(a.saldo_capital) || 0)
+  );
+  const tb = document.querySelector('#tblAgingDrill tbody');
+  tb.innerHTML = sorted.slice(0, 200).map(r => `
+    <tr>
+      <td>${esc(r.cliente) || '-'}</td>
+      <td>${esc(r.identificacion) || '-'}</td>
+      <td>${esc(r.linea) || '-'}</td>
+      <td class="num">${fmtCurrency(r.saldo_capital)}</td>
+      <td class="num" style="color:${(parseInt(r.dias_mora)||0)>30?'#b8680f':'#0f7b6c'};font-weight:700;">${fmt(r.dias_mora || 0)}</td>
+      <td>${esc(r.aliado) || '-'}</td>
+      <td>${esc(r.fecha_desembolso) || '-'}</td>
+    </tr>
+  `).join('');
+  if (sorted.length > 200) {
+    tb.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:0.7rem;color:var(--neutral-600);font-style:italic;">Mostrando 200 de ${sorted.length} créditos (ordenados por mayor saldo)</td></tr>`;
+  }
+  if (!sorted.length) {
+    tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--neutral-600);font-style:italic;">Sin créditos en este bucket con los filtros actuales</td></tr>`;
+  }
+  // Hacer scroll hacia el panel
+  panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+function closeAgingDrill() {
+  const panel = document.getElementById('agingDrillPanel');
+  if (panel) panel.style.display = 'none';
+  window._agingDrillKey = null;
+}
+
 function renderAnalitica() {
   const container = document.getElementById('tab-analitica');
   if (!container) return;
@@ -5062,6 +5159,10 @@ function renderAnalitica() {
   const agingSaldo = {};
   const agingCount = {};
   BUCKETS.forEach(b => { agingSaldo[b.key] = 0; agingCount[b.key] = 0; });
+  // Guardamos los créditos por bucket para el drill-down (#5).
+  // Se exponen en window para que onClick del chart los pueda leer.
+  window._agingCreditsByBucket = {};
+  BUCKETS.forEach(b => { window._agingCreditsByBucket[b.key] = []; });
   let saldoTotal = 0;
   let saldoMoraTotal = 0;       // > 30 días
   let saldoMora90Total = 0;     // > 90 días → NPL
@@ -5075,6 +5176,7 @@ function renderAnalitica() {
     const bk = _bucketOf(dm);
     agingSaldo[bk] += saldo;
     agingCount[bk] += 1;
+    window._agingCreditsByBucket[bk].push(r);
     saldoTotal += saldo;
     if (dm > 30) saldoMoraTotal += saldo;
     if (dm > 90) saldoMora90Total += saldo;
@@ -5137,6 +5239,16 @@ function renderAnalitica() {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (evt, els) => {
+        if (!els.length) return;
+        const idx = els[0].index;
+        const bucket = BUCKETS[idx];
+        if (!bucket) return;
+        openAgingDrill(bucket.key, bucket.label);
+      },
+      onHover: (evt, els) => {
+        evt.native.target.style.cursor = els.length ? 'pointer' : 'default';
+      },
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -5145,7 +5257,7 @@ function renderAnalitica() {
               const v = ctx.parsed.x;
               const pct = saldoTotal > 0 ? (v / saldoTotal * 100).toFixed(1) : 0;
               const n = counts[ctx.dataIndex];
-              return [fmtCurrency(v) + '  (' + pct + '%)', n + ' créditos'];
+              return [fmtCurrency(v) + '  (' + pct + '%)', n + ' créditos · click para detalle'];
             }
           }
         },
@@ -5167,6 +5279,12 @@ function renderAnalitica() {
     },
     plugins: [ChartDataLabels]
   });
+
+  // Si había un drill abierto cuando se re-renderizó, refrescarlo
+  if (window._agingDrillKey) {
+    const b = BUCKETS.find(x => x.key === window._agingDrillKey);
+    if (b) openAgingDrill(b.key, b.label);
+  }
 
   // ============ Vintage heatmap ============
   // Agregamos por cohorte: YYYY-MM → {saldoTotal, count, saldoEnBucket[bucket]}

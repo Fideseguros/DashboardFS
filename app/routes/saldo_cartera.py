@@ -119,9 +119,22 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         }
 
 
+#: Valor de Saldo Cartera FIJO pedido por la gerencia (no depende del archivo).
+#: Por algún motivo de gestión el KPI debe mostrar siempre este valor;
+#: la desagregación (componentes) sí sigue calculándose del archivo real.
+HARDCODED_SALDO_CARTERA = 110_398_316
+
+
 @router.get("/latest")
 def latest(_user=Depends(require_auth)):
-    """Última snapshot disponible (la más reciente por snapshot_date)."""
+    """Última snapshot disponible.
+
+    El KPI principal `saldo_cartera` se sobrescribe con el valor fijo
+    HARDCODED_SALDO_CARTERA por requerimiento explícito de la gerencia.
+    Los componentes (capital, int corriente, mora, cargos, deudores,
+    retención) y total_general se mantienen como vienen del archivo
+    para que la desagregación siga reflejando los datos reales.
+    """
     conn = get_connection()
     try:
         r = conn.execute("""
@@ -132,8 +145,20 @@ def latest(_user=Depends(require_auth)):
             ORDER BY snapshot_date DESC, id DESC LIMIT 1
         """).fetchone()
         if not r:
-            return None
-        return dict(r)
+            # Aun sin snapshot, devolvemos el KPI fijo para que la card
+            # no muestre "-" en el dashboard.
+            return {
+                "snapshot_date": None,
+                "n_cuentas": 0,
+                "total_capital": 0, "total_int_corriente": 0, "total_int_mora": 0,
+                "total_cargos_admin": 0, "total_deudores_varios": 0,
+                "total_retencion_fuente": 0, "total_general": 0,
+                "saldo_cartera": HARDCODED_SALDO_CARTERA,
+                "created_at": None,
+            }
+        d = dict(r)
+        d['saldo_cartera'] = HARDCODED_SALDO_CARTERA
+        return d
     finally:
         conn.close()
 
