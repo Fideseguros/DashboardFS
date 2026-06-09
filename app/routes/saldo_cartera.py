@@ -119,21 +119,22 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         }
 
 
-#: Valor de Saldo Cartera FIJO pedido por la gerencia (no depende del archivo).
-#: Por algún motivo de gestión el KPI debe mostrar siempre este valor;
-#: la desagregación (componentes) sí sigue calculándose del archivo real.
-HARDCODED_SALDO_CARTERA = 110_398_316
+#: Saldo adicional FIJO pedido por la gerencia. Representa cartera que NO
+#: viene en el archivo Loggro (saldos legacy, garantías, etc.) y siempre
+#: se suma al saldo calculado del archivo. Cada vez que se carga un archivo
+#: nuevo el KPI total = (cálculo real) + este monto fijo.
+SALDO_FIJO_ADICIONAL = 110_398_316
 
 
 @router.get("/latest")
 def latest(_user=Depends(require_auth)):
     """Última snapshot disponible.
 
-    El KPI principal `saldo_cartera` se sobrescribe con el valor fijo
-    HARDCODED_SALDO_CARTERA por requerimiento explícito de la gerencia.
-    Los componentes (capital, int corriente, mora, cargos, deudores,
-    retención) y total_general se mantienen como vienen del archivo
-    para que la desagregación siga reflejando los datos reales.
+    Política gerencia: `saldo_cartera` = saldo calculado del archivo
+    (Total − Mora) + SALDO_FIJO_ADICIONAL. El campo `saldo_cartera_real`
+    expone el monto que viene del archivo solo, y `saldo_fijo_adicional`
+    el sumando fijo, para que la desagregación pueda mostrar ambos
+    componentes por separado al hacer click.
     """
     conn = get_connection()
     try:
@@ -145,19 +146,23 @@ def latest(_user=Depends(require_auth)):
             ORDER BY snapshot_date DESC, id DESC LIMIT 1
         """).fetchone()
         if not r:
-            # Aun sin snapshot, devolvemos el KPI fijo para que la card
-            # no muestre "-" en el dashboard.
+            # Sin archivo cargado: el KPI sigue mostrando el saldo fijo.
             return {
                 "snapshot_date": None,
                 "n_cuentas": 0,
                 "total_capital": 0, "total_int_corriente": 0, "total_int_mora": 0,
                 "total_cargos_admin": 0, "total_deudores_varios": 0,
                 "total_retencion_fuente": 0, "total_general": 0,
-                "saldo_cartera": HARDCODED_SALDO_CARTERA,
+                "saldo_cartera_real": 0,
+                "saldo_fijo_adicional": SALDO_FIJO_ADICIONAL,
+                "saldo_cartera": SALDO_FIJO_ADICIONAL,
                 "created_at": None,
             }
         d = dict(r)
-        d['saldo_cartera'] = HARDCODED_SALDO_CARTERA
+        saldo_real = d.get('saldo_cartera') or 0  # = total_general - total_int_mora del archivo
+        d['saldo_cartera_real'] = saldo_real
+        d['saldo_fijo_adicional'] = SALDO_FIJO_ADICIONAL
+        d['saldo_cartera'] = saldo_real + SALDO_FIJO_ADICIONAL
         return d
     finally:
         conn.close()
