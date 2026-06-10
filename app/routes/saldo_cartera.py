@@ -1,4 +1,5 @@
-"""Saldo de Cartera — snapshot agregado del archivo Loggro 'Resumen Estado Cuenta'.
+"""Saldo de Cartera — snapshot agregado del archivo 'Resumen Estado Cuenta'
+de la plataforma nueva de cartera.
 
 Plantilla del archivo (`Resumen Estado Cuenta YYYYMMDD.xlsx`):
 - Fila 1 = headers
@@ -37,7 +38,7 @@ COL_RETENCION = 13
 COL_TOTAL = 16
 
 # Validación de estructura: palabra clave que DEBE aparecer en el header de
-# cada columna que sumamos. Si Loggro reordena/inserta columnas, el header
+# cada columna que sumamos. Si la plataforma reordena/inserta columnas, el header
 # no coincide y abortamos con mensaje claro en vez de sumar la columna
 # equivocada en silencio (que corrompería el KPI de saldo).
 EXPECTED_HEADERS = {
@@ -70,8 +71,8 @@ def _validate_headers(header_row):
             problemas.append(f"columna {letra}: esperaba '{keyword}', encontré '{actual or '(vacío)'}'")
     if problemas:
         raise ValueError(
-            "La estructura del archivo no coincide con el formato esperado de "
-            "Loggro (Resumen Estado Cuenta). Puede que Loggro haya cambiado el "
+            "La estructura del archivo no coincide con el formato esperado del "
+            "Resumen Estado Cuenta. Puede que la plataforma haya cambiado el "
             "orden de las columnas. Detalle: " + "; ".join(problemas)
         )
 
@@ -162,7 +163,7 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
 
 
 #: Saldo adicional FIJO pedido por la gerencia. Representa cartera que NO
-#: viene en el archivo Loggro (saldos legacy, garantías, etc.) y siempre
+#: viene en el archivo de la plataforma (saldos legacy, garantías, etc.) y siempre
 #: se suma al saldo calculado del archivo. Cada vez que se carga un archivo
 #: nuevo el KPI total = (cálculo real) + este monto fijo.
 SALDO_FIJO_ADICIONAL = 110_398_316

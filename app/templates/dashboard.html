@@ -2000,7 +2000,7 @@ select:focus-visible {
         <div style="font-size:0.7rem;color:var(--neutral-600);margin-top:0.15rem;">Snapshot: <span id="scFecha">&mdash;</span> &middot; <span id="scNCuentas">&mdash;</span> cuentas</div>
       </div>
       <div style="display:flex;gap:0.5rem;align-items:center;">
-        <button class="btn btn-export admin-only" id="btnUploadSaldoCartera" style="display:none;padding:0.3rem 0.8rem;font-size:0.72rem;" onclick="document.getElementById('fileSaldoCartera').click()" title="Sube el archivo Resumen Estado Cuenta YYYYMMDD.xlsx descargado de Loggro">Actualizar Saldo</button>
+        <button class="btn btn-export admin-only" id="btnUploadSaldoCartera" style="display:none;padding:0.3rem 0.8rem;font-size:0.72rem;" onclick="document.getElementById('fileSaldoCartera').click()" title="Sube el archivo Resumen Estado Cuenta YYYYMMDD.xlsx de la plataforma de cartera">Actualizar Saldo</button>
         <input type="file" id="fileSaldoCartera" accept=".xlsx" style="display:none;" onchange="uploadSaldoCartera(this.files[0])">
       </div>
     </div>
@@ -2985,7 +2985,7 @@ async function loadData() {
     loadTopClientesUnmasked();
     // Cuadro Desembolsado vs Recaudado (requiere JOIN cartera+pagos en server)
     loadDesembolsoVsRecaudo();
-    // KPI Saldo Cartera (snapshot agregado del Resumen Estado Cuenta Loggro)
+    // KPI Saldo Cartera (snapshot agregado del Resumen Estado Cuenta)
     loadSaldoCartera();
     // Pintar el lastSync con la data ya obtenida
     if (syncRes && syncRes.ok) {

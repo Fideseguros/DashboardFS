@@ -264,7 +264,7 @@ CREATE INDEX IF NOT EXISTS idx_juridico_prob ON procesos_juridicos(probabilidad)
 CREATE INDEX IF NOT EXISTS idx_juridico_sync ON procesos_juridicos(sync_batch_id);
 
 -- ============== Saldo de Cartera (snapshots agregados) ==============
--- Datos del archivo 'Resumen Estado Cuenta YYYYMMDD.xlsx' (Loggro export).
+-- Datos del archivo 'Resumen Estado Cuenta YYYYMMDD.xlsx' (plataforma de cartera).
 -- Guardamos SOLO agregados — no detalle por cuenta, no PII.
 -- saldo_cartera = total_general - total_int_mora (la mora se muestra pero NO suma).
 CREATE TABLE IF NOT EXISTS saldo_cartera_snapshots (
