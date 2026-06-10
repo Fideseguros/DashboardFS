@@ -1027,9 +1027,6 @@ body {
 .sc-comp-excluded { background: var(--neutral-100); border-style: dashed; }
 .sc-comp-excluded .sc-comp-val { color: var(--neutral-700); }
 /* Saldo Adicional Fijo: monto que siempre se suma al total (no viene del archivo) */
-.sc-comp-fijo { background: var(--fide-teal-tint); border-color: var(--fide-teal); border-style: solid; }
-.sc-comp-fijo .sc-comp-val { color: var(--fide-teal-deeper); }
-.sc-comp-fijo .sc-comp-lbl { color: var(--fide-teal-dark); }
 .data-table.compact th { font-size: 0.7rem; padding: 0.5rem 0.65rem; }
 .data-table.compact td { padding: 0.4rem 0.65rem; font-size: 0.75rem; }
 .data-table.compact td.rank { font-weight: 800; color: var(--fide-teal); text-align: center; width: 36px; }
@@ -2249,11 +2246,10 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="sc-comp"><div class="sc-comp-lbl">Deudores Varios</div><div class="sc-comp-val" id="scDeudores">&mdash;</div></div>
       <div class="sc-comp"><div class="sc-comp-lbl">Retenci&oacute;n en la Fuente</div><div class="sc-comp-val" id="scRetencion">&mdash;</div></div>
       <div class="sc-comp sc-comp-excluded"><div class="sc-comp-lbl">Inter&eacute;s de Mora <span style="color:var(--neutral-500);font-weight:400;">(no suma)</span></div><div class="sc-comp-val" id="scMora">&mdash;</div></div>
-      <div class="sc-comp sc-comp-fijo"><div class="sc-comp-lbl">Saldo Adicional Fijo <span style="color:var(--neutral-500);font-weight:400;">(siempre suma)</span></div><div class="sc-comp-val" id="scFijo">&mdash;</div></div>
     </div>
     <div style="margin-top:0.7rem;padding-top:0.6rem;border-top:1px dashed var(--border);display:flex;justify-content:space-between;flex-wrap:wrap;gap:0.3rem;font-size:0.74rem;color:var(--neutral-700);">
-      <span>Saldo del archivo (Total &minus; Mora): <strong id="scSaldoReal">&mdash;</strong> &nbsp;+&nbsp; Saldo Fijo: <strong id="scFijoFooter">&mdash;</strong></span>
-      <span>= Saldo Cartera Total: <strong style="color:var(--fide-teal-deeper);" id="scSaldoCalc">&mdash;</strong></span>
+      <span>Composici&oacute;n de la cartera por cobrar</span>
+      <span>Saldo Cartera: <strong style="color:var(--fide-teal-deeper);" id="scSaldoCalc">&mdash;</strong></span>
     </div>
   </div>
 
@@ -4057,9 +4053,9 @@ async function loadSaldoCartera() {
     const fecha = s.snapshot_date ? new Date(s.snapshot_date + 'T00:00:00').toLocaleDateString('es-CO',
       { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
     elSub.textContent = s.snapshot_date
-      ? `${fecha} · ${fmt(s.n_cuentas)} cuentas + fijo`
-      : 'Solo saldo fijo · sube archivo para sumar';
-    // Popular panel de desagregación
+      ? `${fecha} · ${fmt(s.n_cuentas)} cuentas`
+      : 'Sube el archivo Resumen Estado Cuenta';
+    // Popular panel de desagregación (composición del archivo)
     document.getElementById('scFecha').textContent = fecha;
     document.getElementById('scNCuentas').textContent = fmt(s.n_cuentas);
     document.getElementById('scCapital').textContent = fmtM(s.total_capital);
@@ -4068,9 +4064,6 @@ async function loadSaldoCartera() {
     document.getElementById('scDeudores').textContent = fmtM(s.total_deudores_varios);
     document.getElementById('scRetencion').textContent = fmtM(s.total_retencion_fuente);
     document.getElementById('scMora').textContent = fmtM(s.total_int_mora);
-    document.getElementById('scFijo').textContent = fmtM(s.saldo_fijo_adicional || 0);
-    document.getElementById('scSaldoReal').textContent = fmtM(s.saldo_cartera_real || 0);
-    document.getElementById('scFijoFooter').textContent = fmtM(s.saldo_fijo_adicional || 0);
     document.getElementById('scSaldoCalc').textContent = fmtM(s.saldo_cartera);
   } catch (e) {
     console.error('loadSaldoCartera', e);
