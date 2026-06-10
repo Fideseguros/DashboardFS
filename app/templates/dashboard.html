@@ -391,10 +391,13 @@ body {
   border: 1px solid var(--border);
   border-left: 2px solid var(--fide-teal);
   box-shadow: var(--shadow);
-  transition: box-shadow 0.18s, border-color 0.18s;
+  transition: box-shadow 0.18s, border-color 0.18s, transform 0.12s;
   position: relative;
   z-index: 1;
 }
+/* Microanimación táctil: las cards clickeables se "hunden" levemente al
+ * tocarlas (feedback instantáneo tipo app nativa). */
+#kpiSaldoCarteraCard:active { transform: scale(0.98); }
 .kpi-card::after { content: none; }
 .kpi-card:hover,
 .kpi-card:focus-within {
@@ -647,8 +650,10 @@ body {
   color: var(--neutral-700);
   border-radius: var(--radius-sm);
   border-left: 2px solid transparent;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
 }
+.nav-tab:active { transform: scale(0.98); }
 .nav-tab:hover {
   color: var(--neutral-900);
   background: var(--neutral-50);
@@ -729,7 +734,18 @@ body {
 
 /* =================== CHARTS =================== */
 .tab-content { display: none; }
-.tab-content.active { display: block; }
+.tab-content.active {
+  display: block;
+  /* Transición de entrada suave entre tabs (sensación premium) */
+  animation: tabFadeIn 0.18s ease-out;
+}
+@keyframes tabFadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-content.active { animation: none; }
+}
 .charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1324,17 +1340,20 @@ body {
 @media (max-width: 768px) {
   body { font-size: 14px; }
   html, body { overflow-x: hidden; }
+  /* Header colapsado: una sola franja fina (logo + título), sin subtítulo
+   * ni header-right. Recupera ~70px de pantalla útil. El contexto del tab
+   * lo da el mobile-topbar de abajo. */
   .header {
-    padding: 0.9rem 0.9rem;
-    flex-direction: column;
-    align-items: flex-start;
+    padding: 0.5rem 0.8rem;
+    flex-direction: row;
+    align-items: center;
     gap: 0.5rem;
   }
-  .header-left { gap: 0.8rem; }
-  .fide-logo { height: 38px; }
-  .header-title { padding-left: 0.8rem; }
-  .header-title h1 { font-size: 0.95rem; }
-  .header-title .subtitle { font-size: 0.7rem; }
+  .header-left { gap: 0.6rem; align-items: center; }
+  .fide-logo { height: 30px; }
+  .header-title { padding-left: 0.6rem; }
+  .header-title h1 { font-size: 0.85rem; }
+  .header-title .subtitle { display: none; }
   .header-right {
     width: 100%;
     text-align: left;
@@ -1706,13 +1725,80 @@ select:focus-visible {
   padding: 0 4px;
 }
 .fide-toast .toast-close:hover { color: var(--neutral-900); }
+
+/* ====================== SKELETON LOADERS ====================== */
+/* Cajas grises con shimmer mientras cargan datos — se percibe más rápido
+ * que un spinner. */
+.skeleton-box {
+  background: linear-gradient(90deg, #eee 25%, #f5f5f5 50%, #eee 75%);
+  background-size: 200% 100%;
+  animation: skShimmer 1.2s ease-in-out infinite;
+  border-radius: 4px;
+  display: inline-block;
+}
+@keyframes skShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-box { animation: none; }
+}
+td.skeleton-cell { padding: 0.5rem 0.65rem; }
+td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
+
+/* ====================== BOTTOM NAVIGATION (móvil) ====================== */
+.bottom-nav { display: none; }
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 90;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  }
+  .bn-item {
+    flex: 1;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 7px 2px 6px;
+    color: var(--neutral-500);
+    font-family: inherit;
+    font-size: 0.6rem;
+    font-weight: 600;
+    transition: color 0.15s, transform 0.1s;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 52px;
+  }
+  .bn-item svg {
+    width: 22px; height: 22px;
+    fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .bn-item.active { color: var(--fide-teal); }
+  .bn-item:active { transform: scale(0.92); }
+  /* Dejar espacio al final del contenido para que el bottom-nav no tape
+   * la última fila de datos. */
+  .app-main { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* En móvil: toast abajo (cerca del pulgar), full-width, respetando el
  * safe-area del notch/home-indicator. Entra desde abajo, no desde la
  * derecha (más natural en móvil). */
 @media (max-width: 768px) {
   .fide-toast-stack {
     top: auto;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    /* Por encima del bottom-nav (~64px) + safe-area */
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
     left: 12px;
     right: 12px;
     max-width: none;
@@ -2880,6 +2966,32 @@ select:focus-visible {
 </main>
 </div><!-- /.app-shell -->
 
+<!-- Bottom navigation (solo móvil): acceso con el pulgar a los tabs clave.
+     El botón "Más" abre el drawer para el resto (Proyección, Financieros,
+     Jurídico, Configuración). -->
+<nav class="bottom-nav" id="bottomNav">
+  <button class="bn-item active" data-bn-tab="cartera-360" onclick="bottomNavGo(this,'cartera-360')">
+    <svg viewBox="0 0 24 24"><path d="M3 12l2-2 4 4 8-8 4 4"/><path d="M3 20h18"/></svg>
+    <span>Cartera</span>
+  </button>
+  <button class="bn-item" data-bn-tab="recaudo" onclick="bottomNavGo(this,'recaudo')">
+    <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+    <span>Recaudo</span>
+  </button>
+  <button class="bn-item" data-bn-tab="solicitudes" onclick="bottomNavGo(this,'solicitudes')">
+    <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    <span>Solicitudes</span>
+  </button>
+  <button class="bn-item" data-bn-tab="analitica" onclick="bottomNavGo(this,'analitica')">
+    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+    <span>An&aacute;lisis</span>
+  </button>
+  <button class="bn-item" onclick="openSidebar()">
+    <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
+    <span>M&aacute;s</span>
+  </button>
+</nav>
+
 <!-- Modal de usuario (crear / editar) -->
 <div class="user-modal" id="userModal" style="display:none;">
   <div class="user-modal-backdrop" onclick="closeUserModal()"></div>
@@ -3175,6 +3287,22 @@ function filterTableRows(inputEl, tableId) {
   // Mostrar contador si hay un elemento hermano para ello
   const counter = document.getElementById(tableId + 'SearchCount');
   if (counter) counter.textContent = q ? `${visibles} coincidencias` : '';
+}
+
+// Inyecta filas skeleton (shimmer) en una tabla mientras llega el fetch.
+// Da sensación de carga inmediata en vez de tabla vacía.
+function showTableSkeleton(tableId, cols = 6, rows = 6) {
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  if (!tbody) return;
+  let html = '';
+  for (let r = 0; r < rows; r++) {
+    html += '<tr>';
+    for (let c = 0; c < cols; c++) {
+      html += '<td class="skeleton-cell"><span class="skeleton-box"></span></td>';
+    }
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
 }
 
 function fmt(n) {
@@ -4240,6 +4368,23 @@ function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarBackdrop').classList.remove('show');
 }
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebarBackdrop').classList.add('show');
+}
+
+// Bottom nav (móvil): activa el tab correspondiente por su data-tab.
+function bottomNavGo(btn, tabName) {
+  const navTab = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
+  if (navTab) activateTab(navTab);
+  // El highlight del bottom-nav lo sincroniza activateTab vía _syncBottomNav.
+}
+// Mantiene el item del bottom-nav resaltado en sync con el tab activo.
+function _syncBottomNav(tabName) {
+  document.querySelectorAll('.bn-item[data-bn-tab]').forEach(b => {
+    b.classList.toggle('active', b.dataset.bnTab === tabName);
+  });
+}
 
 // ---- TABS (nav-tab en sidebar) ----
 function activateTab(tab) {
@@ -4265,6 +4410,7 @@ function activateTab(tab) {
   if (mobileLabel) mobileLabel.textContent = (tab.textContent || 'Menú').trim();
   // Carga bajo demanda según el tab
   const tabName = tab.dataset.tab;
+  _syncBottomNav(tabName);
   if (tabName === 'usuarios') loadUsers();
   if (tabName === 'recaudo') loadRecaudo();
   if (tabName === 'solicitudes') loadSolicitudes();
@@ -4365,6 +4511,8 @@ async function renderUploadStatus(modulo) {
 let _rcCharts = {};
 async function loadRecaudo() {
   renderUploadStatus('recaudo');
+  showTableSkeleton('tblRecaudo', 9, 6);
+  showTableSkeleton('tblRecaudoLegacy', 6, 4);
   try {
     const [s, l, sLeg, lLeg] = await Promise.all([
       fetch('/api/recaudo/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
@@ -4495,6 +4643,7 @@ function _normalizeLineaSolic(linea) {
 
 async function loadSolicitudes() {
   renderUploadStatus('solicitudes');
+  showTableSkeleton('tblSolicitudes', 8, 6);
   try {
     const data = await fetch('/api/solicitudes/combined', { credentials: 'same-origin' })
       .then(r => r.ok ? r.json() : []);
@@ -4708,6 +4857,7 @@ function renderSolicitudes() {
 // ---------- JURÍDICO (solo superadmin) ----------
 let _jrCharts = {};
 async function loadJuridico() {
+  showTableSkeleton('tblJuridico', 8, 6);
   try {
     const [s, l, cs] = await Promise.all([
       fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
