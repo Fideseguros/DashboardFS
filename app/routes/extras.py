@@ -518,6 +518,13 @@ SOLIC_NUEVA_REMAP = {
     # Sin este mapeo, ~15% de las solicitudes del archivo quedaban con un
     # nombre técnico que la gerente no reconocía como "En estudio".
     'TRATAMIENTO DE DATOS ACEPTADO': 'EN ESTUDIO',
+    # Pedido gerencia: en la plataforma nueva, NEGADA (y demás formas de
+    # rechazo/cancelación) cuentan como ANULADA — igual que en legacy, para
+    # que el estado sea consistente entre ambas plataformas.
+    'NEGADA':    'ANULADA',
+    'RECHAZADA': 'ANULADA',
+    'DESISTIDA': 'ANULADA',
+    'BORRADA':   'ANULADA',
 }
 SOLIC_LEGACY_REMAP = {
     'APROBADA':   'DESEMBOLSADA',
@@ -559,8 +566,12 @@ def _normalize_estado(estado, source: str) -> str | None:
     # Nueva plataforma — match exacto primero
     if key in SOLIC_NUEVA_REMAP:
         return SOLIC_NUEVA_REMAP[key]
-    # Fuzzy fallback: cualquier estado del pipeline que NO sea final
-    # (DESEMBOLSADA/ANULADA/RECHAZADA) cuenta como EN ESTUDIO.
+    # Rechazo / cancelación → ANULADA (consistente con legacy). Se evalúa
+    # antes que EN ESTUDIO porque son estados finales.
+    if 'NEGAD' in key or 'RECHAZ' in key or 'DESIST' in key or 'BORRAD' in key:
+        return 'ANULADA'
+    # Fuzzy fallback: cualquier estado intermedio del pipeline cuenta como
+    # EN ESTUDIO.
     if 'TRATAMIENTO' in key and 'DATOS' in key:
         return 'EN ESTUDIO'
     if 'DEVUELTA' in key:
