@@ -980,6 +980,26 @@ body {
 }
 .data-table tr.fin-utilidad-neta:hover td { background: var(--neutral-50); }
 
+/* Input de búsqueda en tablas (Recaudo/Solicitudes/Jurídico) */
+.table-search-input {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  min-width: 200px;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.table-search-input:focus {
+  outline: none;
+  border-color: var(--fide-teal);
+  box-shadow: 0 0 0 2px rgba(0, 167, 157, 0.12);
+}
+@media (max-width: 768px) {
+  .table-search-input { min-width: 0; width: 100%; font-size: 16px; }
+}
+
 /* Mini-cards de desagregación de Saldo Cartera */
 .sc-comp { background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.55rem 0.7rem; }
 .sc-comp-lbl { font-size: 0.65rem; font-weight: 700; color: var(--neutral-600); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 0.25rem; }
@@ -2336,7 +2356,13 @@ select:focus-visible {
         <div class="chart-container tall"><canvas id="chartRcMensual"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Detalle de Pagos</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Detalle de Pagos</h3>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span id="tblRecaudoSearchCount" style="font-size:0.68rem;color:var(--neutral-500);"></span>
+            <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o cliente..." oninput="filterTableRows(this,'tblRecaudo')">
+          </div>
+        </div>
         <div class="table-wrapper" style="max-height:480px;">
           <table class="data-table compact" id="tblRecaudo">
             <thead><tr>
@@ -2355,7 +2381,13 @@ select:focus-visible {
         </div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Hist&oacute;rico de Pagos por Pr&eacute;stamo <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(plataforma anterior, agrupado por Id Pr&eacute;stamo)</span></h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Hist&oacute;rico de Pagos por Pr&eacute;stamo <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(plataforma anterior, agrupado por Id Pr&eacute;stamo)</span></h3>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span id="tblRecaudoLegacySearchCount" style="font-size:0.68rem;color:var(--neutral-500);"></span>
+            <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o cliente..." oninput="filterTableRows(this,'tblRecaudoLegacy')">
+          </div>
+        </div>
         <div class="table-wrapper" style="max-height:480px;">
           <table class="data-table compact" id="tblRecaudoLegacy">
             <thead><tr>
@@ -2442,7 +2474,13 @@ select:focus-visible {
         <div class="chart-container"><canvas id="chartSlLinea"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Detalle de Solicitudes</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Detalle de Solicitudes</h3>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span id="tblSolicitudesSearchCount" style="font-size:0.68rem;color:var(--neutral-500);"></span>
+            <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o solicitante..." oninput="filterTableRows(this,'tblSolicitudes')">
+          </div>
+        </div>
         <div class="table-wrapper" style="max-height:480px;">
           <table class="data-table compact" id="tblSolicitudes">
             <thead><tr>
@@ -2626,7 +2664,13 @@ select:focus-visible {
         <div class="chart-container"><canvas id="chartJrJuzgado"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Procesos Judiciales</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Procesos Judiciales</h3>
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <span id="tblJuridicoSearchCount" style="font-size:0.68rem;color:var(--neutral-500);"></span>
+            <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o nombre..." oninput="filterTableRows(this,'tblJuridico')">
+          </div>
+        </div>
         <div class="table-wrapper" style="max-height:520px;">
           <table class="data-table compact" id="tblJuridico">
             <thead><tr>
@@ -2676,30 +2720,30 @@ select:focus-visible {
 
     <div class="kpi-grid">
       <div class="kpi-card mint">
-        <div class="kpi-info">i<span class="kpi-tooltip">% del saldo capital total con d&iacute;as de mora = 0. Mide la salud general de la cartera activa.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">% del saldo capital ACTIVO (con saldo &gt; 0) que tiene 0 d&iacute;as de mora. Mismo denominador que el NPL para que sean reconciliables.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
         <div class="kpi-label">Cartera al D&iacute;a</div>
         <div class="kpi-value" id="anAlDia">-</div>
         <div class="kpi-sub" id="anAlDiaSub"></div>
       </div>
       <div class="kpi-card coral">
-        <div class="kpi-info">i<span class="kpi-tooltip">NPL Ratio = saldo capital con mora &gt; 90 d&iacute;as / saldo total. M&eacute;trica est&aacute;ndar de cartera deteriorada (Non-Performing Loans).</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">NPL Ratio = saldo capital con mora &gt; 90 d&iacute;as / saldo capital ACTIVO (con saldo &gt; 0). M&eacute;trica est&aacute;ndar de cartera deteriorada. El sub muestra el ICV (&gt; 30 d) con el MISMO denominador para que sean comparables: ICV &ge; NPL siempre.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
         <div class="kpi-label">NPL Ratio (Mora 90+)</div>
         <div class="kpi-value" id="anNPL">-</div>
         <div class="kpi-sub" id="anNPLSub"></div>
       </div>
       <div class="kpi-card yellow">
-        <div class="kpi-info">i<span class="kpi-tooltip">Promedio de d&iacute;as de mora ponderado por saldo capital. M&aacute;s representativo que el promedio simple cuando hay cr&eacute;ditos grandes con mora.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">D&iacute;as de mora promedio ponderado por saldo, calculado SOLO sobre la cartera vencida (mora &gt; 0 d). Responde: cuando un peso est&aacute; en mora, &iquest;cu&aacute;ntos d&iacute;as lleva en promedio? M&eacute;trica interna, no comparable con benchmarks de industria.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg></div>
-        <div class="kpi-label">Mora Promedio (ponderada)</div>
+        <div class="kpi-label">Mora Promedio (vencida)</div>
         <div class="kpi-value" id="anMoraProm">-</div>
         <div class="kpi-sub" id="anMoraPromSub"></div>
       </div>
       <div class="kpi-card magenta">
-        <div class="kpi-info">i<span class="kpi-tooltip">Mes de desembolso con mayor concentraci&oacute;n de saldo en mora &gt; 90 d&iacute;as. &Uacute;til para identificar cohortes de originaci&oacute;n problem&aacute;ticas.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Cosecha (mes de desembolso) RECIENTE con peor mora temprana (&gt; 30 d). Solo eval&uacute;a cosechas de 3 a 18 meses de edad para comparar peras con peras &mdash; las cosechas muy viejas se excluyen porque su mora alta es efecto de maduraci&oacute;n, no de mala originaci&oacute;n. Esta m&eacute;trica s&iacute; detecta si la pol&iacute;tica de originaci&oacute;n reciente est&aacute; fallando.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
-        <div class="kpi-label">Cosecha M&aacute;s Riesgosa</div>
+        <div class="kpi-label">Cosecha de Atenci&oacute;n</div>
         <div class="kpi-value" id="anCosechaPeor">-</div>
         <div class="kpi-sub" id="anCosechaPeorSub"></div>
       </div>
@@ -2719,7 +2763,10 @@ select:focus-visible {
               Cr&eacute;ditos en bucket: <span id="agingDrillBucketName" style="color:var(--fide-teal-dark);"></span>
               <span id="agingDrillCount" style="font-weight:500;color:var(--neutral-600);"></span>
             </div>
-            <button class="btn btn-reset" style="font-size:0.7rem;padding:0.3rem 0.7rem;" onclick="closeAgingDrill()">Cerrar</button>
+            <div style="display:flex;gap:0.4rem;">
+              <button class="btn btn-export" style="font-size:0.7rem;padding:0.3rem 0.7rem;" onclick="exportAgingDrill()">Descargar CSV</button>
+              <button class="btn btn-reset" style="font-size:0.7rem;padding:0.3rem 0.7rem;" onclick="closeAgingDrill()">Cerrar</button>
+            </div>
           </div>
           <div class="table-wrapper" style="max-height:380px;">
             <table class="data-table compact" id="tblAgingDrill">
@@ -2740,9 +2787,12 @@ select:focus-visible {
 
       <div class="chart-card full">
         <h3>
-          <span class="dot"></span> Vintage Analysis &mdash; Cosechas por Mes de Desembolso
-          <span style="font-size:0.65rem;font-weight:500;color:var(--neutral-500);margin-left:0.4rem;">(% del saldo de cada cosecha en cada bucket de mora)</span>
+          <span class="dot"></span> Mora Actual por Cosecha de Desembolso
+          <span style="font-size:0.65rem;font-weight:500;color:var(--neutral-500);margin-left:0.4rem;">(% del saldo de cada cosecha en cada bucket de mora, HOY)</span>
         </h3>
+        <div style="font-size:0.68rem;color:var(--neutral-600);background:#fffbf0;border-left:3px solid #c29200;padding:0.5rem 0.7rem;border-radius:4px;margin-bottom:0.7rem;">
+          <strong>&#9888; Ojo al interpretar:</strong> esto muestra la mora <em>actual</em> de cada cosecha, no la mora a una misma edad. Las cosechas m&aacute;s antiguas tienden a tener m&aacute;s mora simplemente porque han tenido m&aacute;s tiempo de madurar &mdash; no necesariamente porque la originaci&oacute;n fuera peor. Para evaluar calidad de originaci&oacute;n reciente, mira la <em>mora temprana</em> (buckets 1-30 / 31-60) de las cosechas de los &uacute;ltimos meses.
+        </div>
         <div id="vintageHeatmap" class="vintage-heatmap"></div>
       </div>
 
@@ -3070,6 +3120,29 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
+}
+
+// Filtro de tabla por texto libre (cédula, cliente, etc.) sobre las filas
+// ya renderizadas en el DOM. Oculta los <tr> que no contienen el término.
+// Normaliza tildes y mayúsculas. Usado por Recaudo/Solicitudes/Jurídico.
+function filterTableRows(inputEl, tableId) {
+  const q = (inputEl.value || '').trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  if (!tbody) return;
+  let visibles = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    // Ignorar filas de estado (colspan con mensaje)
+    if (tr.querySelector('td[colspan]')) { tr.style.display = ''; return; }
+    const txt = (tr.textContent || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const match = !q || txt.includes(q);
+    tr.style.display = match ? '' : 'none';
+    if (match) visibles++;
+  });
+  // Mostrar contador si hay un elemento hermano para ello
+  const counter = document.getElementById(tableId + 'SearchCount');
+  if (counter) counter.textContent = q ? `${visibles} coincidencias` : '';
 }
 
 function fmt(n) {
@@ -4322,9 +4395,10 @@ async function loadRecaudo() {
         scales:{ y:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } } } }
     });
 
-    // Tabla
+    // Tabla — render amplio (1500) para que la búsqueda por cédula cubra
+    // la mayoría del dataset sin paginación server-side.
     const tb = document.querySelector('#tblRecaudo tbody');
-    tb.innerHTML = l.slice(0, 200).map(p => `
+    tb.innerHTML = l.slice(0, 1500).map(p => `
       <tr>
         <td>${esc(p.fecha_movimiento) || '-'}</td>
         <td>${esc(p.cliente) || '-'}</td>
@@ -4578,7 +4652,7 @@ function renderSolicitudes() {
       : 'Sin datos. Sube el archivo de solicitudes.';
     tb.innerHTML = `<tr><td colspan="8">${msg}</td></tr>`;
   } else {
-    tb.innerHTML = filtered.slice(0, 200).map(x => `
+    tb.innerHTML = filtered.slice(0, 1500).map(x => `
       <tr>
         <td><strong>${esc(x.solicitud) || '-'}</strong></td>
         <td>${esc(x.solicitante) || '-'}</td>
@@ -5136,6 +5210,42 @@ function closeAgingDrill() {
   window._agingDrillKey = null;
 }
 
+// Export CSV de TODOS los créditos del bucket actual (no solo los 200
+// visibles en la tabla). Genera el archivo client-side, sin pasar por el
+// servidor — los datos ya están en memoria.
+function exportAgingDrill() {
+  const key = window._agingDrillKey;
+  if (!key || !window._agingCreditsByBucket) {
+    showToast('Abre un bucket primero (click en una barra del Aging)', 'warn');
+    return;
+  }
+  const list = window._agingCreditsByBucket[key] || [];
+  if (!list.length) { showToast('Sin créditos en este bucket', 'warn'); return; }
+  const bucket = (BUCKETS.find(b => b.key === key) || {}).label || key;
+  const sorted = [...list].sort((a, b) =>
+    (parseFloat(b.saldo_capital) || 0) - (parseFloat(a.saldo_capital) || 0)
+  );
+  const headers = ['Cliente','Identificacion','Linea','Saldo_Capital','Dias_Mora','Aliado','Fecha_Desembolso','Estado','Calificacion'];
+  const keys = ['cliente','identificacion','linea','saldo_capital','dias_mora','aliado','fecha_desembolso','estado','calificacion'];
+  let csv = '﻿' + headers.join(',') + '\n';  // BOM para Excel
+  sorted.forEach(r => {
+    csv += keys.map(k => {
+      let v = r[k] == null ? '' : String(r[k]);
+      if (v.includes(',') || v.includes('"') || v.includes('\n')) v = '"' + v.replace(/"/g, '""') + '"';
+      return v;
+    }).join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fechaStr = new Date().toISOString().substring(0, 10);
+  a.href = url;
+  a.download = `aging_${key}_${fechaStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${sorted.length} créditos del bucket "${bucket}" exportados`, 'ok');
+}
+
 function renderAnalitica() {
   const container = document.getElementById('tab-analitica');
   if (!container) return;
@@ -5176,6 +5286,7 @@ function renderAnalitica() {
   let saldoTotal = 0;
   let saldoMoraTotal = 0;       // > 30 días
   let saldoMora90Total = 0;     // > 90 días → NPL
+  let saldoConMora = 0;         // > 0 días (cartera vencida real)
   let saldoMoraDiasSum = 0;     // Σ saldo * días_mora (para ponderado)
   let peorCosechaMap = {};      // YYYY-MM → saldo mora 90+
 
@@ -5190,44 +5301,67 @@ function renderAnalitica() {
     saldoTotal += saldo;
     if (dm > 30) saldoMoraTotal += saldo;
     if (dm > 90) saldoMora90Total += saldo;
+    if (dm > 0) saldoConMora += saldo;
     saldoMoraDiasSum += saldo * dm;
 
-    // Por cosecha (mes de desembolso)
+    // Por cosecha (mes de desembolso). Guardamos saldo en mora temprana
+    // (>30) además de >90, para detectar originación reciente mala sin
+    // el sesgo de maduración.
     if (r.fecha_desembolso) {
       const ym = r.fecha_desembolso.substring(0, 7);
-      if (!peorCosechaMap[ym]) peorCosechaMap[ym] = { saldoTotal: 0, saldo90: 0 };
+      if (!peorCosechaMap[ym]) peorCosechaMap[ym] = { saldoTotal: 0, saldo30: 0, saldo90: 0, count: 0 };
       peorCosechaMap[ym].saldoTotal += saldo;
+      peorCosechaMap[ym].count += 1;
+      if (dm > 30) peorCosechaMap[ym].saldo30 += saldo;
       if (dm > 90) peorCosechaMap[ym].saldo90 += saldo;
     }
   });
 
-  // KPIs
+  // KPIs — TODOS sobre el MISMO denominador (saldoTotal = saldo capital
+  // activo con saldo > 0 en el rango). Así ICV y NPL son reconciliables:
+  // ICV (>30d) ≥ NPL (>90d) siempre, porque >30 incluye a >90.
   const pctAlDia = saldoTotal > 0 ? (agingSaldo.b0 / saldoTotal * 100) : 0;
   const npl     = saldoTotal > 0 ? (saldoMora90Total / saldoTotal * 100) : 0;
-  const moraProm = saldoTotal > 0 ? (saldoMoraDiasSum / saldoTotal) : 0;
-  // Peor cosecha por % saldo en mora 90+, con mínimo 5 créditos / saldo significativo
+  const icv30   = saldoTotal > 0 ? (saldoMoraTotal / saldoTotal * 100) : 0;
+  // Mora ponderada SOLO de la cartera vencida (>0 días): "cuando un peso
+  // está en mora, ¿cuántos días lleva en promedio?". No diluida por la sana.
+  const moraProm = saldoConMora > 0 ? (saldoMoraDiasSum / saldoConMora) : 0;
+  // "Cosecha de atención": detecta ORIGINACIÓN RECIENTE problemática, no
+  // maduración. Solo evalúa cosechas con edad 3-18 meses (suficiente para
+  // mostrar señal temprana, reciente para reflejar política de originación
+  // actual) y usa mora TEMPRANA (>30) que es más sensible a mala originación
+  // que la mora >90 (que requiere mucha maduración). Esto evita el sesgo de
+  // que las cosechas viejas siempre se vean peor.
+  const _hoy = new Date();
+  function _edadMeses(ym) {
+    const [y, m] = ym.split('-').map(Number);
+    return (_hoy.getFullYear() - y) * 12 + (_hoy.getMonth() + 1 - m);
+  }
   let peorYM = null, peorPct = 0, peorSaldo = 0;
   Object.entries(peorCosechaMap).forEach(([ym, v]) => {
-    if (v.saldoTotal < 1000000) return; // ignora cosechas muy pequeñas
-    const p = v.saldo90 / v.saldoTotal * 100;
+    if (v.saldoTotal < 1000000 || v.count < 5) return; // ignora cosechas chicas
+    const edad = _edadMeses(ym);
+    if (edad < 3 || edad > 18) return;  // solo ventana de edad comparable
+    const p = v.saldo30 / v.saldoTotal * 100;  // mora temprana
     if (p > peorPct) { peorPct = p; peorYM = ym; peorSaldo = v.saldoTotal; }
   });
 
   document.getElementById('anAlDia').textContent = pctAlDia.toFixed(1) + '%';
   document.getElementById('anAlDiaSub').textContent =
-    fmtCurrency(agingSaldo.b0) + ' de ' + fmtCurrency(saldoTotal);
+    fmtCurrency(agingSaldo.b0) + ' de ' + fmtCurrency(saldoTotal) + ' activo';
   document.getElementById('anNPL').textContent = npl.toFixed(2) + '%';
+  // Sub muestra el ICV>30 con el MISMO denominador → reconciliable con NPL.
   document.getElementById('anNPLSub').textContent =
-    fmtCurrency(saldoMora90Total) + ' en mora > 90 d';
+    'ICV>30: ' + icv30.toFixed(1) + '% · ' + fmtCurrency(saldoMora90Total) + ' en mora >90 d';
   document.getElementById('anMoraProm').textContent = Math.round(moraProm) + ' d';
   document.getElementById('anMoraPromSub').textContent =
-    'Ponderado por saldo capital';
+    'Solo cartera vencida (>0 d) · ' + fmtCurrency(saldoConMora) + ' en mora';
   document.getElementById('anCosechaPeor').textContent = peorYM ? peorPct.toFixed(1) + '%' : '–';
-  // Sub-label aclara el umbral $1M de filtrado de cosechas pequeñas
-  // (auditoría: antes era opaco; ahora la gerente sabe por qué se ignoran)
+  // Sub-label: mes de la cosecha + su saldo + criterio (mora temprana >30,
+  // cosechas de 3-18 meses, mín 5 créditos y $1M).
   document.getElementById('anCosechaPeorSub').textContent = peorYM
-    ? (peorYM + ' · saldo ' + fmtCurrency(peorSaldo) + ' · cosechas con <$1M se ignoran')
-    : 'Sin cosechas con saldo > $1M en el rango';
+    ? (peorYM + ' · mora >30 · saldo ' + fmtCurrency(peorSaldo))
+    : 'Sin cosechas recientes (3-18 meses) con señal';
 
   // ============ Chart: Aging bar (barras horizontales) ============
   Object.keys(_anCharts).forEach(k => { _anCharts[k]?.destroy?.(); });

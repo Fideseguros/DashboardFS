@@ -36,6 +36,45 @@ COL_DEUDORES_VARIOS = 12
 COL_RETENCION = 13
 COL_TOTAL = 16
 
+# Validación de estructura: palabra clave que DEBE aparecer en el header de
+# cada columna que sumamos. Si Loggro reordena/inserta columnas, el header
+# no coincide y abortamos con mensaje claro en vez de sumar la columna
+# equivocada en silencio (que corrompería el KPI de saldo).
+EXPECTED_HEADERS = {
+    COL_CAPITAL: 'capital',
+    COL_INT_CORRIENTE: 'corriente',
+    COL_INT_MORA: 'mora',
+    COL_CARGOS_ADMIN: 'cargos',
+    COL_DEUDORES_VARIOS: 'deudores',
+    COL_RETENCION: 'retencion',
+    COL_TOTAL: 'total',
+}
+
+
+def _validate_headers(header_row):
+    """Verifica que cada columna esperada contenga su palabra clave.
+
+    Tolera tildes y mayúsculas. Lanza ValueError con detalle si no coincide,
+    para que el superadmin vea exactamente qué columna no cuadra.
+    """
+    import unicodedata
+    def _norm(s):
+        s = str(s or '').strip().lower()
+        return ''.join(c for c in unicodedata.normalize('NFD', s)
+                       if unicodedata.category(c) != 'Mn')
+    problemas = []
+    for col, keyword in EXPECTED_HEADERS.items():
+        actual = _norm(header_row[col]) if col < len(header_row) else ''
+        if keyword not in actual:
+            letra = chr(ord('A') + col)  # columna en notación Excel
+            problemas.append(f"columna {letra}: esperaba '{keyword}', encontré '{actual or '(vacío)'}'")
+    if problemas:
+        raise ValueError(
+            "La estructura del archivo no coincide con el formato esperado de "
+            "Loggro (Resumen Estado Cuenta). Puede que Loggro haya cambiado el "
+            "orden de las columnas. Detalle: " + "; ".join(problemas)
+        )
+
 
 def _detect_snapshot_date(filename: str) -> str:
     """Extrae YYYYMMDD del nombre del archivo, fallback a hoy.
@@ -61,6 +100,9 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         rows = ctx.read_excel()
         if not rows or len(rows) < 2:
             raise ValueError("Archivo vacío o sin filas de datos")
+
+        # Validar que las columnas estén donde esperamos ANTES de sumar.
+        _validate_headers(rows[0])
 
         snapshot_date = _detect_snapshot_date(file.filename or "")
 
