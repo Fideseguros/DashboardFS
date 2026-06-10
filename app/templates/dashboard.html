@@ -689,12 +689,16 @@ body {
   background: rgba(255,255,255,0.18);
   border: 1px solid rgba(255,255,255,0.3);
   color: white;
+  /* Área táctil mínima 44x44 (recomendación Apple HIG) */
+  min-width: 44px;
+  min-height: 44px;
   padding: 0.4rem 0.55rem;
   border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  -webkit-tap-highlight-color: transparent;
 }
 .sidebar-toggle:hover { background: rgba(255,255,255,0.28); }
 .sidebar-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
@@ -1418,6 +1422,17 @@ body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     max-width: 100%;
+    /* Scroll-shadow: sombras laterales que indican que hay más columnas al
+     * deslizar. Desaparecen al llegar al inicio/fin (background-attachment:
+     * local vs scroll). Sin JS, sin ocupar espacio. */
+    background:
+      linear-gradient(to right, #fff 30%, rgba(255,255,255,0)) left center,
+      linear-gradient(to left, #fff 30%, rgba(255,255,255,0)) right center,
+      radial-gradient(farthest-side at 0 50%, rgba(0,167,157,0.18), transparent) left center,
+      radial-gradient(farthest-side at 100% 50%, rgba(0,167,157,0.18), transparent) right center;
+    background-repeat: no-repeat;
+    background-size: 36px 100%, 36px 100%, 14px 100%, 14px 100%;
+    background-attachment: local, local, scroll, scroll;
   }
   .data-table { font-size: 0.72rem; }
   .data-table th, .data-table td { padding: 0.45rem 0.5rem; }
@@ -1622,9 +1637,12 @@ select:focus-visible {
     bottom: 6px;
     right: 10px;
     font-size: 0.58rem;
-    background: rgba(255, 255, 255, 0.85);
-    padding: 2px 6px;
-    border-radius: 4px;
+    /* En táctil no hay :hover → la etiqueta debe verse SIEMPRE clara */
+    opacity: 1;
+    color: var(--fide-teal-deeper);
+    background: var(--fide-teal-tint);
+    padding: 2px 7px;
+    border-radius: 10px;
   }
   #kpiSaldoCarteraCard .kpi-sub {
     /* Si la sub-label es larga, que truncate con ellipsis en lugar de wrappear */
@@ -1688,6 +1706,20 @@ select:focus-visible {
   padding: 0 4px;
 }
 .fide-toast .toast-close:hover { color: var(--neutral-900); }
+/* En móvil: toast abajo (cerca del pulgar), full-width, respetando el
+ * safe-area del notch/home-indicator. Entra desde abajo, no desde la
+ * derecha (más natural en móvil). */
+@media (max-width: 768px) {
+  .fide-toast-stack {
+    top: auto;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    max-width: none;
+  }
+  .fide-toast { transform: translateY(20px); }
+  .fide-toast.show { transform: translateY(0); }
+}
 
 /* Fix 6: Agrupación visual de KPIs por tema (Volumen / Saldo / Riesgo).
  * Sub-labels ocupan toda la fila del grid auto-fit. */
@@ -1777,7 +1809,7 @@ select:focus-visible {
     <button class="sidebar-toggle" id="btnMenu" aria-label="Men&uacute;" onclick="toggleSidebar()">
       <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <span class="menu-label">Men&uacute;</span>
+    <span class="menu-label" id="mobileTabLabel">Cartera</span>
   </div>
   <button class="btn-salir" onclick="doLogout()">Salir</button>
 </div>
@@ -4228,6 +4260,9 @@ function activateTab(tab) {
     main.dataset.activeTab = tab.dataset.tab || '';
   }
   setTimeout(() => Object.values(charts).forEach(c => c.resize()), 50);
+  // Topbar móvil: reflejar el tab activo para no perder contexto.
+  const mobileLabel = document.getElementById('mobileTabLabel');
+  if (mobileLabel) mobileLabel.textContent = (tab.textContent || 'Menú').trim();
   // Carga bajo demanda según el tab
   const tabName = tab.dataset.tab;
   if (tabName === 'usuarios') loadUsers();

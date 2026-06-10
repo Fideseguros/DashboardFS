@@ -84,7 +84,9 @@ body::after {
   padding: 0.75rem 1rem;
   border: 2px solid #d4e8e5;
   border-radius: 10px;
-  font-size: 0.95rem;
+  /* 16px exacto: < 16px hace que iOS Safari haga zoom al enfocar el input,
+     una mala primera impresión en móvil. */
+  font-size: 16px;
   font-family: inherit;
   color: var(--fide-black);
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -140,7 +142,7 @@ body::after {
   <form id="loginForm">
     <div class="form-group">
       <label>Usuario</label>
-      <input type="text" id="username" autocomplete="username" required placeholder="Tu usuario">
+      <input type="text" id="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="Tu usuario">
     </div>
     <div class="form-group">
       <label>Contrase&ntilde;a</label>
