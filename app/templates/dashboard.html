@@ -1401,11 +1401,15 @@ body {
   .kpi-label { font-size: 0.64rem; }
   .kpi-sub { font-size: 0.66rem; }
 
-  .charts-grid { grid-template-columns: 1fr; gap: 12px; }
-  .chart-card { padding: 12px; }
-  .chart-card h3 { font-size: 0.82rem; }
-  .chart-container { height: 240px !important; }
-  .chart-container.tall { height: 280px !important; }
+  .charts-grid { grid-template-columns: 1fr; gap: 14px; }
+  /* Menos padding lateral → más ancho útil para el canvas. Aire arriba
+   * para separar del título. */
+  .chart-card { padding: 14px 8px 10px; }
+  .chart-card h3 { font-size: 0.85rem; margin-bottom: 0.6rem; padding: 0 6px; }
+  /* Charts más altos en móvil: a 240px quedaban aplastados (sobre todo con
+   * leyenda). Damos respiración vertical. */
+  .chart-container { height: 320px !important; }
+  .chart-container.tall { height: 400px !important; }
 
   /* Mobile topbar visible, hamburger ya está dentro */
   .mobile-topbar { display: flex; }
@@ -3308,7 +3312,11 @@ const MORA_COLORS = ['#0f7b6c', '#7a9f6e', '#c29200', '#b8680f', '#8a4810', '#4a
 
 // ---- Chart.js global defaults (Power BI-like professional style) ----
 Chart.defaults.font.family = "'Segoe UI', 'Nunito', system-ui, sans-serif";
-Chart.defaults.font.size = 11;
+// En móvil subimos la fuente base de los charts (ejes, leyendas) para que
+// no se vean tan apretados. Los charts se recrean en cada render, así que
+// este default aplica.
+var _isMobileChart = window.innerWidth <= 768;
+Chart.defaults.font.size = _isMobileChart ? 12.5 : 11;
 Chart.defaults.font.weight = 500;
 Chart.defaults.color = '#605E5C';
 Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
@@ -3331,10 +3339,10 @@ Chart.defaults.plugins.tooltip.usePointStyle = true;
 // Legend style
 Chart.defaults.plugins.legend.labels.usePointStyle = true;
 Chart.defaults.plugins.legend.labels.pointStyle = 'rectRounded';
-Chart.defaults.plugins.legend.labels.padding = 14;
-Chart.defaults.plugins.legend.labels.boxWidth = 10;
-Chart.defaults.plugins.legend.labels.boxHeight = 10;
-Chart.defaults.plugins.legend.labels.font = { weight: 600, size: 11 };
+Chart.defaults.plugins.legend.labels.padding = _isMobileChart ? 12 : 14;
+Chart.defaults.plugins.legend.labels.boxWidth = _isMobileChart ? 12 : 10;
+Chart.defaults.plugins.legend.labels.boxHeight = _isMobileChart ? 12 : 10;
+Chart.defaults.plugins.legend.labels.font = { weight: 600, size: _isMobileChart ? 12 : 11 };
 
 // Toast component — reemplaza alert() nativo con feedback de marca FIDE.
 // Uso: showToast('Saldo actualizado: 765 cuentas');
