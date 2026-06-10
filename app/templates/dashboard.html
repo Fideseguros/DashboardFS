@@ -1778,6 +1778,9 @@ select:focus-visible {
   table.cards-mobile td.rank::before { content: none; }
   table.cards-mobile td.rank { display: block !important; }
   table.cards-mobile tr { position: relative; padding-top: 18px; }
+  /* Fila de estado (colspan "Sin datos"): mostrar normal, sin label ni flex */
+  table.cards-mobile td[colspan] { display: block !important; text-align: center !important; }
+  table.cards-mobile td[colspan]::before { content: none; }
 }
 
 /* ====================== PULL-TO-REFRESH (móvil) ====================== */
@@ -1809,6 +1812,20 @@ select:focus-visible {
  * En móvil, los paneles de drill-down (composición de Saldo, créditos del
  * bucket de Aging) se presentan como hojas que suben desde abajo —patrón
  * nativo móvil— en lugar de paneles inline que descolocan el scroll. */
+.sheet-backdrop { display: none; }
+@media (max-width: 768px) {
+  .sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 150;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .sheet-backdrop.show { display: block; opacity: 1; }
+  /* Mientras un sheet está abierto, congelar el scroll de fondo */
+  body.sheet-open { overflow: hidden; }
+}
 @media (max-width: 768px) {
   #saldoCarteraDetalle,
   #agingDrillPanel {
@@ -1985,6 +2002,9 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 
 <!-- Indicador de pull-to-refresh (solo móvil). Se revela al tirar hacia abajo. -->
 <div id="ptrIndicator" class="ptr-indicator"><div class="ptr-spinner"></div></div>
+
+<!-- Backdrop para bottom sheets en móvil (cierra al tocar fuera). -->
+<div id="sheetBackdrop" class="sheet-backdrop" onclick="closeAllSheets()"></div>
 
 <!-- Overlay de carga inicial. Se oculta cuando loadData() termina. -->
 <div id="initialLoader" class="initial-loader">
@@ -2241,6 +2261,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div style="display:flex;gap:0.5rem;align-items:center;">
         <button class="btn btn-export admin-only" id="btnUploadSaldoCartera" style="display:none;padding:0.3rem 0.8rem;font-size:0.72rem;" onclick="document.getElementById('fileSaldoCartera').click()" title="Sube el archivo Resumen Estado Cuenta YYYYMMDD.xlsx de la plataforma de cartera">Actualizar Saldo</button>
         <input type="file" id="fileSaldoCartera" accept=".xlsx" style="display:none;" onchange="uploadSaldoCartera(this.files[0])">
+        <button class="btn btn-reset" style="padding:0.3rem 0.8rem;font-size:0.72rem;" onclick="toggleSaldoCarteraDetalle()">Cerrar</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:0.6rem;">
@@ -3428,6 +3449,13 @@ function showTableSkeleton(tableId, cols = 6, rows = 6) {
   }
   tbody.innerHTML = html;
 }
+// Reemplaza el skeleton por un mensaje de error (evita tabla "cargando"
+// eterna si el fetch falla por red). El td usa class sin data-label.
+function clearTableSkeleton(tableId, cols, msg) {
+  const tbody = document.querySelector('#' + tableId + ' tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state-cell" style="text-align:center;padding:1.5rem;color:var(--neutral-600);font-style:italic;">${esc(msg)}</td></tr>`;
+}
 
 function fmt(n) {
   if (n == null || isNaN(n)) return '-';
@@ -4084,6 +4112,34 @@ function toggleSaldoCarteraDetalle() {
   const open = panel.style.display !== 'none';
   panel.style.display = open ? 'none' : 'block';
   chev.innerHTML = open ? '&#9656;' : '&#9662;';
+  _setSheetMode(!open, panel);
+}
+
+// Gestiona backdrop + scroll-lock cuando un sheet se abre/cierra en móvil.
+function _setSheetMode(opening, panel) {
+  const isMobile = window.innerWidth <= 768;
+  const bd = document.getElementById('sheetBackdrop');
+  if (opening && isMobile) {
+    if (bd) bd.classList.add('show');
+    document.body.classList.add('sheet-open');
+  } else {
+    // Cerrar solo si no queda OTRO sheet abierto
+    const otroAbierto = ['saldoCarteraDetalle', 'agingDrillPanel'].some(id => {
+      const el = document.getElementById(id);
+      return el && el !== panel && el.style.display !== 'none' && el.style.display !== '';
+    });
+    if (!otroAbierto) {
+      if (bd) bd.classList.remove('show');
+      document.body.classList.remove('sheet-open');
+    }
+  }
+}
+
+// Cierra cualquier bottom sheet abierto (lo invoca el backdrop al tocarlo).
+function closeAllSheets() {
+  const sc = document.getElementById('saldoCarteraDetalle');
+  if (sc && sc.style.display !== 'none') toggleSaldoCarteraDetalle();
+  closeAgingDrill();
 }
 
 async function uploadSaldoCartera(file) {
@@ -4736,6 +4792,10 @@ async function loadRecaudo() {
     }
   } catch(e) {
     console.error('loadRecaudo', e);
+    // Limpiar skeletons para no dejar la tabla "cargando" eternamente
+    clearTableSkeleton('tblRecaudo', 9, 'No se pudieron cargar los pagos. Desliza para reintentar.');
+    clearTableSkeleton('tblRecaudoLegacy', 6, 'No se pudo cargar el histórico.');
+    showToast('Error al cargar Recaudo. Verifica tu conexión.', 'err');
   }
 }
 
@@ -4772,7 +4832,11 @@ async function loadSolicitudes() {
     // Reset filters al recargar
     _slFilters = {};
     renderSolicitudes();
-  } catch (e) { console.error('loadSolicitudes', e); }
+  } catch (e) {
+    console.error('loadSolicitudes', e);
+    clearTableSkeleton('tblSolicitudes', 8, 'No se pudieron cargar las solicitudes. Desliza para reintentar.');
+    showToast('Error al cargar Solicitudes. Verifica tu conexión.', 'err');
+  }
 }
 
 function _slMatchesFilters(r) {
@@ -5051,7 +5115,11 @@ async function loadJuridico() {
       `;
     }).join('');
     if (!l.length) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el Informe de Conexión.</td></tr>';
-  } catch(e) { console.error('loadJuridico', e); }
+  } catch(e) {
+    console.error('loadJuridico', e);
+    clearTableSkeleton('tblJuridico', 8, 'No se pudieron cargar los procesos. Desliza para reintentar.');
+    showToast('Error al cargar Cobro Jurídico. Verifica tu conexión.', 'err');
+  }
 }
 
 // ============================================================
@@ -5506,13 +5574,21 @@ function openAgingDrill(bucketKey, bucketLabel) {
   if (!sorted.length) {
     tb.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1rem;color:var(--neutral-600);font-style:italic;">Sin créditos en este bucket con los filtros actuales</td></tr>`;
   }
-  // Hacer scroll hacia el panel
-  panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  // En móvil es un bottom sheet fijo: activar backdrop + scroll-lock y NO
+  // hacer scrollIntoView (es no-op sobre un elemento fixed y puede saltar).
+  if (window.innerWidth <= 768) {
+    _setSheetMode(true, panel);
+  } else {
+    panel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  }
 }
 
 function closeAgingDrill() {
   const panel = document.getElementById('agingDrillPanel');
-  if (panel) panel.style.display = 'none';
+  if (panel) {
+    panel.style.display = 'none';
+    _setSheetMode(false, panel);
+  }
   window._agingDrillKey = null;
 }
 
@@ -6449,6 +6525,8 @@ try {
       else if (tab === 'juridico') await loadJuridico();
       else if (tab === 'financieros') await loadFinancierosInit();
       else if (tab === 'analitica') renderAnalitica();
+      else if (tab === 'usuarios') loadUsers();
+      else if (tab === 'proyeccion') { await loadData(); renderProyeccion(); }
       else await loadData();   // cartera y demás
       loadSaldoCartera();
       showToast('Datos actualizados', 'ok', 2000);
@@ -6460,6 +6538,11 @@ try {
   document.addEventListener('touchstart', (e) => {
     if (window.innerWidth > 768) return;
     if (!atTop()) { pulling = false; return; }
+    // No activar PTR si el gesto nace dentro de un bottom sheet, el sidebar
+    // abierto, o cualquier zona con scroll propio — evita recargas fantasma.
+    if (e.target.closest('#saldoCarteraDetalle, #agingDrillPanel, .sidebar.open, .table-wrapper, .user-modal')) {
+      pulling = false; return;
+    }
     startY = e.touches[0].clientY;
     pulling = true; ready = false;
   }, { passive: true });
