@@ -1726,6 +1726,123 @@ select:focus-visible {
 }
 .fide-toast .toast-close:hover { color: var(--neutral-900); }
 
+/* ============ Tablas → tarjetas apiladas en móvil estrecho ============
+ * Solo .cards-mobile (Top Clientes / Aliados): en ≤480px cada fila se
+ * convierte en una tarjeta con label:valor, mucho más legible que una
+ * tabla de 8 columnas comprimida. Requiere data-label en cada <td>. */
+@media (max-width: 480px) {
+  table.cards-mobile { border: none; }
+  table.cards-mobile thead { display: none; }
+  table.cards-mobile tbody { display: block; }
+  table.cards-mobile tr {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--fide-teal);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    box-shadow: var(--shadow);
+  }
+  table.cards-mobile td {
+    /* !important vence las reglas nth-child que ocultan columnas en 768px */
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    text-align: right !important;
+    padding: 4px 0 !important;
+    border: none !important;
+    font-size: 0.78rem;
+  }
+  table.cards-mobile td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    color: var(--neutral-600);
+    text-align: left;
+    margin-right: 1rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  /* La celda rank (#) se vuelve un badge en la esquina superior */
+  table.cards-mobile td.rank {
+    position: absolute;
+    background: var(--fide-teal-tint);
+    color: var(--fide-teal-deeper);
+    font-weight: 800;
+    border-radius: 0 8px 0 8px;
+    padding: 2px 8px !important;
+    font-size: 0.68rem;
+    right: 0; top: 0;
+  }
+  table.cards-mobile td.rank::before { content: none; }
+  table.cards-mobile td.rank { display: block !important; }
+  table.cards-mobile tr { position: relative; padding-top: 18px; }
+}
+
+/* ====================== PULL-TO-REFRESH (móvil) ====================== */
+.ptr-indicator {
+  display: none;
+  position: fixed;
+  top: 0; left: 50%;
+  transform: translateX(-50%) translateY(-100%);
+  z-index: 9998;
+  width: 40px; height: 40px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s linear;
+}
+.ptr-indicator.visible { display: flex; }
+.ptr-spinner {
+  width: 18px; height: 18px;
+  border: 2px solid var(--fide-teal-tint);
+  border-top-color: var(--fide-teal);
+  border-radius: 50%;
+}
+.ptr-indicator.spinning .ptr-spinner { animation: ptrSpin 0.7s linear infinite; }
+@keyframes ptrSpin { to { transform: rotate(360deg); } }
+
+/* ====================== BOTTOM SHEETS (móvil) ======================
+ * En móvil, los paneles de drill-down (composición de Saldo, créditos del
+ * bucket de Aging) se presentan como hojas que suben desde abajo —patrón
+ * nativo móvil— en lugar de paneles inline que descolocan el scroll. */
+@media (max-width: 768px) {
+  #saldoCarteraDetalle,
+  #agingDrillPanel {
+    position: fixed !important;
+    left: 0; right: 0; bottom: 0;
+    top: auto;
+    z-index: 200;
+    margin: 0 !important;
+    max-height: 80vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background: #fff;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.22);
+    padding-top: 1.4rem !important;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    animation: sheetUp 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Drag-handle visual (barrita superior) */
+  #saldoCarteraDetalle::before,
+  #agingDrillPanel::before {
+    content: '';
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 36px; height: 4px;
+    border-radius: 2px;
+    background: var(--neutral-300, #ccc);
+  }
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
 /* ====================== SKELETON LOADERS ====================== */
 /* Cajas grises con shimmer mientras cargan datos — se percibe más rápido
  * que un spinner. */
@@ -1864,6 +1981,9 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 </style>
 </head>
 <body>
+
+<!-- Indicador de pull-to-refresh (solo móvil). Se revela al tirar hacia abajo. -->
+<div id="ptrIndicator" class="ptr-indicator"><div class="ptr-spinner"></div></div>
 
 <!-- Overlay de carga inicial. Se oculta cuando loadData() termina. -->
 <div id="initialLoader" class="initial-loader">
@@ -2252,7 +2372,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="chart-card full">
         <h3><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
         <div class="table-wrapper" style="max-height:460px;">
-          <table class="data-table compact" id="tblTopClientes">
+          <table class="data-table compact cards-mobile" id="tblTopClientes">
             <thead><tr>
               <th>#</th>
               <th>Cliente</th>
@@ -2288,7 +2408,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="chart-card full">
         <h3><span class="dot"></span> Detalle de Aliados</h3>
         <div class="table-wrapper" style="max-height:460px;">
-          <table class="data-table compact" id="tblAliados">
+          <table class="data-table compact cards-mobile" id="tblAliados">
             <thead><tr>
               <th>#</th>
               <th>Aliado</th>
@@ -6125,13 +6245,13 @@ async function loadTopClientesUnmasked() {
       return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td>${esc(c.cliente) || '-'}</td>
-          <td>${esc(c.identificacion) || '-'}</td>
-          <td class="num">${fmt(c.n_creditos || 0)}</td>
-          <td class="num">${fmtCurrency(c.valor_credito)}</td>
-          <td class="num">${fmtCurrency(c.saldo_capital)}</td>
-          <td class="num" style="color:${moraColor};font-weight:800;">${fmt(c.max_mora || 0)}</td>
-          <td class="num">${saldoMora > 0 ? fmtCurrency(saldoMora) : '-'}</td>
+          <td data-label="Cliente">${esc(c.cliente) || '-'}</td>
+          <td data-label="Identificación">${esc(c.identificacion) || '-'}</td>
+          <td class="num" data-label="# Créditos">${fmt(c.n_creditos || 0)}</td>
+          <td class="num" data-label="Valor Total">${fmtCurrency(c.valor_credito)}</td>
+          <td class="num" data-label="Saldo Capital">${fmtCurrency(c.saldo_capital)}</td>
+          <td class="num" data-label="Días Mora" style="color:${moraColor};font-weight:800;">${fmt(c.max_mora || 0)}</td>
+          <td class="num" data-label="Saldo en Mora">${saldoMora > 0 ? fmtCurrency(saldoMora) : '-'}</td>
         </tr>
       `;
     }).join('');
@@ -6175,13 +6295,13 @@ function updateAggTables() {
     tbCli.innerHTML = topCli.map((c, i) => `
       <tr>
         <td class="rank">${i + 1}</td>
-        <td>${esc(c.cliente)}</td>
-        <td>${esc(c.ident)}</td>
-        <td class="num">${fmt(c.count)}</td>
-        <td class="num">${fmtCurrency(c.valor)}</td>
-        <td class="num">${fmtCurrency(c.saldo)}</td>
-        <td class="num" style="color:${c.moraMax > 30 ? '#b8680f' : '#0f7b6c'};font-weight:800;">${fmt(c.moraMax)}</td>
-        <td class="num">${c.saldoMora > 0 ? fmtCurrency(c.saldoMora) : '-'}</td>
+        <td data-label="Cliente">${esc(c.cliente)}</td>
+        <td data-label="Identificación">${esc(c.ident)}</td>
+        <td class="num" data-label="# Créditos">${fmt(c.count)}</td>
+        <td class="num" data-label="Valor Total">${fmtCurrency(c.valor)}</td>
+        <td class="num" data-label="Saldo Capital">${fmtCurrency(c.saldo)}</td>
+        <td class="num" data-label="Días Mora" style="color:${c.moraMax > 30 ? '#b8680f' : '#0f7b6c'};font-weight:800;">${fmt(c.moraMax)}</td>
+        <td class="num" data-label="Saldo en Mora">${c.saldoMora > 0 ? fmtCurrency(c.saldoMora) : '-'}</td>
       </tr>
     `).join('');
     if (!topCli.length) tbCli.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos para los filtros aplicados</td></tr>';
@@ -6211,12 +6331,12 @@ function updateAggTables() {
       return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td>${esc(g.name)}</td>
-          <td class="num">${fmt(g.count)}</td>
-          <td class="num">${fmt(g.activos)}</td>
-          <td class="num">${fmtCurrency(g.valor)}</td>
-          <td class="num">${fmtCurrency(g.saldo)}</td>
-          <td class="num"><span class="mora-pill" style="background:${c.bg};color:${c.fg};">${moraPct.toFixed(1)}%</span></td>
+          <td data-label="Aliado">${esc(g.name)}</td>
+          <td class="num" data-label="# Créditos">${fmt(g.count)}</td>
+          <td class="num" data-label="Activos">${fmt(g.activos)}</td>
+          <td class="num" data-label="Valor Total">${fmtCurrency(g.valor)}</td>
+          <td class="num" data-label="Saldo Capital">${fmtCurrency(g.saldo)}</td>
+          <td class="num" data-label="% Mora"><span class="mora-pill" style="background:${c.bg};color:${c.fg};">${moraPct.toFixed(1)}%</span></td>
         </tr>
       `;
     }).join('');
@@ -6303,6 +6423,73 @@ try {
     document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
   }
 } catch (e) {}
+
+// ===================== PULL-TO-REFRESH (móvil) =====================
+// Tirar hacia abajo desde el tope recarga el tab activo. Gesto esperado
+// por usuarios no técnicos. Solo se activa con touch y con scroll en 0.
+(function initPullToRefresh() {
+  const THRESHOLD = 70;      // px para disparar el refresh
+  const MAX_PULL = 110;      // tope visual del arrastre
+  let startY = 0, pulling = false, ready = false;
+  const ind = document.getElementById('ptrIndicator');
+  if (!ind) return;
+
+  function atTop() {
+    return (window.scrollY || document.documentElement.scrollTop || 0) <= 0;
+  }
+
+  // Recarga el tab activo según corresponda.
+  async function refreshActiveTab() {
+    const main = document.getElementById('appMain');
+    const tab = main ? main.dataset.activeTab : '';
+    try {
+      if (tab === 'recaudo') await loadRecaudo();
+      else if (tab === 'solicitudes') await loadSolicitudes();
+      else if (tab === 'juridico') await loadJuridico();
+      else if (tab === 'financieros') await loadFinancierosInit();
+      else if (tab === 'analitica') renderAnalitica();
+      else await loadData();   // cartera y demás
+      loadSaldoCartera();
+      showToast('Datos actualizados', 'ok', 2000);
+    } catch (e) {
+      showToast('No se pudo actualizar', 'err');
+    }
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (window.innerWidth > 768) return;
+    if (!atTop()) { pulling = false; return; }
+    startY = e.touches[0].clientY;
+    pulling = true; ready = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling || window.innerWidth > 768) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { pulling = false; ind.classList.remove('visible'); return; }
+    if (!atTop()) { pulling = false; ind.classList.remove('visible'); return; }
+    const pull = Math.min(dy, MAX_PULL);
+    ind.classList.add('visible');
+    ind.style.transform = `translateX(-50%) translateY(${pull - 40}px)`;
+    ready = pull >= THRESHOLD;
+    ind.style.opacity = Math.min(1, pull / THRESHOLD);
+  }, { passive: true });
+
+  document.addEventListener('touchend', async () => {
+    if (!pulling || window.innerWidth > 768) return;
+    pulling = false;
+    if (ready) {
+      ind.style.transform = 'translateX(-50%) translateY(16px)';
+      ind.classList.add('spinning');
+      await refreshActiveTab();
+      ind.classList.remove('spinning');
+    }
+    ind.classList.remove('visible');
+    ind.style.transform = 'translateX(-50%) translateY(-100%)';
+    ind.style.opacity = '';
+    ready = false;
+  }, { passive: true });
+})();
 
 async function uploadCarteraUpdate(file) {
   if (!file) return;
