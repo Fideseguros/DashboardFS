@@ -1727,12 +1727,19 @@ select:focus-visible {
 }
 .fide-toast .toast-close:hover { color: var(--neutral-900); }
 
-/* ============ Tablas → tarjetas apiladas en móvil estrecho ============
- * Solo .cards-mobile (Top Clientes / Aliados): en ≤480px cada fila se
- * convierte en una tarjeta con label:valor, mucho más legible que una
- * tabla de 8 columnas comprimida. Requiere data-label en cada <td>. */
-@media (max-width: 480px) {
-  table.cards-mobile { border: none; }
+/* ============ Tablas → tarjetas apiladas en móvil ============
+ * Solo .cards-mobile (Top Clientes / Aliados): en TODO el rango móvil
+ * (≤768px) cada fila se convierte en una tarjeta con label:valor, así
+ * cabe en el ancho de la pantalla SIN scroll horizontal. Requiere
+ * data-label en cada <td>. */
+@media (max-width: 768px) {
+  /* El wrapper de una tabla-tarjeta no necesita scroll horizontal ni el
+   * scroll-shadow lateral: el contenido ya cabe en el ancho. */
+  .table-wrapper:has(.cards-mobile) {
+    overflow-x: hidden;
+    background: none;
+  }
+  table.cards-mobile { border: none; width: 100%; }
   table.cards-mobile thead { display: none; }
   table.cards-mobile tbody { display: block; }
   table.cards-mobile tr {
