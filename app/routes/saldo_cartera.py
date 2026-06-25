@@ -28,55 +28,88 @@ router = APIRouter(prefix="/api/saldo-cartera", tags=["saldo-cartera"])
 _log = logging.getLogger("fide.saldo_cartera")
 MAX_UPLOAD_MB = 25
 
-# Columnas (1-indexed Excel → 0-indexed tuple)
-COL_CAPITAL = 8
-COL_INT_CORRIENTE = 9
-COL_INT_MORA = 10
-COL_CARGOS_ADMIN = 11
-COL_DEUDORES_VARIOS = 12
-COL_RETENCION = 13
-COL_TOTAL = 16
-
-# Validación de estructura: palabra clave que DEBE aparecer en el header de
-# cada columna que sumamos. Si la plataforma reordena/inserta columnas, el header
-# no coincide y abortamos con mensaje claro en vez de sumar la columna
-# equivocada en silencio (que corrompería el KPI de saldo).
-EXPECTED_HEADERS = {
-    COL_CAPITAL: 'capital',
-    COL_INT_CORRIENTE: 'corriente',
-    COL_INT_MORA: 'mora',
-    COL_CARGOS_ADMIN: 'cargos',
-    COL_DEUDORES_VARIOS: 'deudores',
-    COL_RETENCION: 'retencion',
-    COL_TOTAL: 'total',
-}
+# Detección de columnas POR NOMBRE de header (no por índice fijo). La
+# plataforma cambia el orden/inserta columnas cada cierto tiempo (ej. 24-jun
+# añadió "Gastos Aplicacion Y Almacenamiento Cloud" que desfasó Total), así
+# que ubicar cada concepto por su título lo hace inmune a esos cambios.
+#
+# Cada concepto define un matcher: 'exact' (header == frase) o 'contains'
+# (header contiene la frase). 'mora' usa frase completa para no confundirse
+# con "Dias Mora"; 'total' usa exact para no agarrar "Total Cheque" etc.
+COLUMN_SPECS = [
+    ('capital',    'contains', 'capital prestamos'),
+    ('int_corr',   'contains', 'interes corriente'),
+    ('int_mora',   'contains', 'interes de mora'),
+    ('cargos',     'contains', 'cargos administrativos'),
+    ('deudores',   'contains', 'deudores varios'),
+    ('retencion',  'contains', 'retencion en la fuente'),
+    ('total',      'exact',    'total'),
+]
 
 
-def _validate_headers(header_row):
-    """Verifica que cada columna esperada contenga su palabra clave.
-
-    Tolera tildes y mayúsculas. Lanza ValueError con detalle si no coincide,
-    para que el superadmin vea exactamente qué columna no cuadra.
-    """
+def _norm_header(s):
     import unicodedata
-    def _norm(s):
-        s = str(s or '').strip().lower()
-        return ''.join(c for c in unicodedata.normalize('NFD', s)
-                       if unicodedata.category(c) != 'Mn')
-    problemas = []
-    for col, keyword in EXPECTED_HEADERS.items():
-        actual = _norm(header_row[col]) if col < len(header_row) else ''
-        if keyword not in actual:
-            letra = chr(ord('A') + col)  # columna en notación Excel
-            problemas.append(f"columna {letra}: esperaba '{keyword}', encontré '{actual or '(vacío)'}'")
-    if problemas:
+    s = str(s or '').strip().lower()
+    s = ' '.join(s.split())  # colapsa espacios múltiples
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
+
+
+# Columnas FIRMA del Resumen Estado Cuenta — existen en él pero NO en otros
+# reportes que comparten columnas de montos (ej. IngresosDesembolso, que tiene
+# Capital/Mora/Total pero es de movimientos). Si ninguna está, es otro archivo.
+SIGNATURE_HEADERS = ['numero cuenta', 'saldo vigente', 'estado cobro']
+# Columnas que delatan el archivo de MOVIMIENTOS (recaudo) — si están, NO es
+# el Resumen Estado Cuenta aunque comparta columnas de montos.
+MOVEMENT_HEADERS = ['fecha movimiento', 'tipo mvto']
+
+
+def _resolve_columns(header_row):
+    """Devuelve {concepto: índice} ubicando cada columna por su nombre.
+
+    Lanza ValueError (con detalle) si falta alguna columna esperada o si el
+    archivo no parece un Resumen Estado Cuenta (típico: archivo equivocado).
+    """
+    norm = [_norm_header(h) for h in header_row]
+    norm_set = set(norm)
+
+    def _has(frase):
+        return any(frase in h for h in norm)
+
+    # 1) Rechazar si tiene firma de archivo de movimientos (recaudo).
+    if any(_has(m) for m in MOVEMENT_HEADERS):
+        raise ValueError(
+            "Este archivo parece ser de Recaudo/Movimientos, no el «Resumen Estado "
+            "Cuenta». Sube el archivo correcto en este botón (el Resumen Estado "
+            "Cuenta tiene una fila por cuenta, no por pago)."
+        )
+    # 2) Exigir al menos una columna firma del Resumen.
+    if not any(_has(s) for s in SIGNATURE_HEADERS):
+        raise ValueError(
+            "Este archivo no parece ser el «Resumen Estado Cuenta» (no encontré "
+            "columnas como «Numero Cuenta» o «Saldo Vigente»). Verifica que estés "
+            "subiendo el archivo correcto en este botón."
+        )
+    # 3) Ubicar las columnas de montos por nombre.
+    cols = {}
+    faltan = []
+    for concepto, modo, frase in COLUMN_SPECS:
+        idx = None
+        for i, h in enumerate(norm):
+            if (modo == 'exact' and h == frase) or (modo == 'contains' and frase in h):
+                idx = i
+                break
+        if idx is None:
+            faltan.append(f"«{frase}»")
+        else:
+            cols[concepto] = idx
+    if faltan:
         raise ValueError(
             "Este archivo no parece ser el «Resumen Estado Cuenta». Verifica que "
-            "estés subiendo el archivo correcto en este botón (no el de Recaudo, "
-            "Solicitudes ni Cartera). Si es el archivo correcto, puede que la "
-            "plataforma haya cambiado el orden de las columnas. "
-            "Detalle: " + "; ".join(problemas[:3])
+            "estés subiendo el archivo correcto en este botón. No encontré las "
+            "columnas: " + ", ".join(faltan)
         )
+    return cols
 
 
 def _detect_snapshot_date(filename: str) -> str:
@@ -104,8 +137,14 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         if not rows or len(rows) < 2:
             raise ValueError("Archivo vacío o sin filas de datos")
 
-        # Validar que las columnas estén donde esperamos ANTES de sumar.
-        _validate_headers(rows[0])
+        # Ubicar las columnas POR NOMBRE (robusto a inserción/reordenamiento
+        # de columnas por parte de la plataforma). Lanza ValueError claro si
+        # falta alguna (típico: archivo equivocado).
+        cols = _resolve_columns(rows[0])
+        c_cap, c_corr, c_mora = cols['capital'], cols['int_corr'], cols['int_mora']
+        c_carg, c_deu, c_ret, c_tot = (cols['cargos'], cols['deudores'],
+                                       cols['retencion'], cols['total'])
+        max_col = max(cols.values())
 
         snapshot_date = _detect_snapshot_date(file.filename or "")
 
@@ -114,19 +153,19 @@ async def upload(request: Request, user=Depends(require_superadmin), file: Uploa
         n = 0
         # Skip fila 1 (headers). Una fila válida tiene Numero Cuenta + algún monto.
         for r in rows[1:]:
-            if not r or len(r) <= COL_TOTAL:
+            if not r or len(r) <= max_col:
                 continue
             cuenta = r[0]
             if cuenta is None or str(cuenta).strip() == '':
                 continue  # filas vacías al final
             n += 1
-            total_capital      += to_float(r[COL_CAPITAL]) or 0
-            total_int_corr     += to_float(r[COL_INT_CORRIENTE]) or 0
-            total_int_mora     += to_float(r[COL_INT_MORA]) or 0
-            total_cargos       += to_float(r[COL_CARGOS_ADMIN]) or 0
-            total_deudores     += to_float(r[COL_DEUDORES_VARIOS]) or 0
-            total_retencion    += to_float(r[COL_RETENCION]) or 0
-            total_general      += to_float(r[COL_TOTAL]) or 0
+            total_capital      += to_float(r[c_cap]) or 0
+            total_int_corr     += to_float(r[c_corr]) or 0
+            total_int_mora     += to_float(r[c_mora]) or 0
+            total_cargos       += to_float(r[c_carg]) or 0
+            total_deudores     += to_float(r[c_deu]) or 0
+            total_retencion    += to_float(r[c_ret]) or 0
+            total_general      += to_float(r[c_tot]) or 0
         saldo_cartera = total_general - total_int_mora
 
         try:
