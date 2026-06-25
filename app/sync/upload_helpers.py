@@ -284,6 +284,16 @@ async def upload_session(request: Request, user: dict, file: UploadFile,
         # Errores que ya son HTTPException (validación previa) → re-raise sin alterar
         _finalize_sync(sync_id, 'failed', ctx._fetched, ctx._inserted, "HTTPException")
         raise
+    except ValueError as e:
+        # ValueError = validación de datos con mensaje ACCIONABLE para el usuario
+        # (ej. "este archivo no coincide con el formato esperado, ¿es el correcto?").
+        # Lo mostramos tal cual en vez del genérico, para que la gerente sepa
+        # exactamente qué corregir (típicamente: subió el archivo equivocado).
+        _finalize_sync(sync_id, 'failed', ctx._fetched, ctx._inserted,
+                       f"ValueError: {str(e)[:200]}")
+        log_audit(user["user_id"], user["username"], source + "_failed",
+                  f"file={file.filename} error={str(e)[:200]}", ctx.ip)
+        raise HTTPException(status_code=400, detail=str(e)[:400]) from e
     except Exception as e:
         _log.exception("upload failed source=%s", source)
         _finalize_sync(sync_id, 'failed', ctx._fetched, ctx._inserted,

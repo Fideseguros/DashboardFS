@@ -71,9 +71,11 @@ def _validate_headers(header_row):
             problemas.append(f"columna {letra}: esperaba '{keyword}', encontré '{actual or '(vacío)'}'")
     if problemas:
         raise ValueError(
-            "La estructura del archivo no coincide con el formato esperado del "
-            "Resumen Estado Cuenta. Puede que la plataforma haya cambiado el "
-            "orden de las columnas. Detalle: " + "; ".join(problemas)
+            "Este archivo no parece ser el «Resumen Estado Cuenta». Verifica que "
+            "estés subiendo el archivo correcto en este botón (no el de Recaudo, "
+            "Solicitudes ni Cartera). Si es el archivo correcto, puede que la "
+            "plataforma haya cambiado el orden de las columnas. "
+            "Detalle: " + "; ".join(problemas[:3])
         )
 
 
