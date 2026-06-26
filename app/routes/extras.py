@@ -55,52 +55,100 @@ def _upload_status_for(sources: list[str]) -> dict:
 # ============================================================
 recaudo = APIRouter(prefix="/api/recaudo", tags=["recaudo"])
 
-# Mapeo columna Excel -> campo BD.
-# Origen: 'Informe Pagos Nueva Plataforma.xlsx' (30 cols).
-# Cols 18 (Retencion En La Fuente) y 21 (Deudores Varios) son nuevas vs el
-# formato anterior — los índices siguientes están corridos por 2.
-# total_cheque/efectivo/tarjeta/interno se IGNORAN por solicitud explícita
-# (no relevantes para el análisis).
-PAGOS_COL_MAP = {
-    0:  ('entidad', _str_or_none),
-    1:  ('linea_credito', _str_or_none),
-    2:  ('fecha_movimiento', _to_date),
-    3:  ('fecha_documento', _to_date),
-    4:  ('identificacion', None),       # cifrado abajo
-    5:  ('cliente', None),              # cifrado
-    6:  ('cuenta', _str_or_none),
-    7:  ('solicitud', _str_or_none),
-    8:  ('aliado', _str_or_none),
-    9:  ('tipo_mvto', _str_or_none),
-    10: ('tipo_documento', _str_or_none),
-    11: ('documento', _str_or_none),
-    12: ('usuario', _str_or_none),
-    14: ('capital', _to_float),
-    15: ('interes_corriente', _to_float),
-    16: ('interes_mora', _to_float),
-    17: ('iva', _to_float),
-    # 18: 'Retencion En La Fuente' (no se almacena, no se analiza)
-    19: ('saldo_favor', _to_float),
-    20: ('gastos_pj', _to_float),
-    # 21: 'Deudores Varios' (no se almacena)
-    22: ('cargos_admin', _to_float),
-    23: ('total', _to_float),
-    # 24-27: total_cheque/efectivo/tarjeta/interno → IGNORADOS por solicitud
-    28: ('autorizacion', _str_or_none),
-    29: ('observaciones', _str_or_none),
-}
+# Mapeo de campos de Recaudo POR NOMBRE de columna (no por índice fijo).
+# La plataforma inserta/reordena columnas cada cierto tiempo (24-jun añadió
+# Ciclo Cobro, Fecha Cuota, Cuota, Gastos Aplicacion Cloud, etc.) — antes el
+# mapeo por índice fijo leía columnas equivocadas y producía valores negativos
+# (ej. 'total' leía 'Deudores Varios'). Ubicar cada campo por su título lo
+# hace inmune a esos cambios.
+#
+# Cada spec: (campo_bd, parser, modo, frase_norm, requerido)
+#   modo 'exact'  → header normalizado == frase
+#   modo 'contains' → header normalizado contiene frase
+def _norm_col(s):
+    """Normaliza header: minúsculas, sin tildes, sin puntos/guiones, espacios
+    colapsados. 'I.v.a' → 'iva'; ' Interes De Mora' → 'interes de mora'."""
+    import unicodedata
+    s = str(s or '').strip().lower()
+    s = ''.join(c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn')
+    s = s.replace('.', '')              # puntos se ELIMINAN ('i.v.a' → 'iva')
+    s = s.replace('-', ' ')             # guiones → espacio (separan palabras)
+    return ' '.join(s.split())          # colapsa espacios
+
+PAGOS_FIELD_SPECS = [
+    ('entidad',          _str_or_none, 'exact',    'entidad',            False),
+    ('linea_credito',    _str_or_none, 'contains', 'linea credito',      False),
+    ('fecha_movimiento', _to_date,     'contains', 'fecha movimiento',   False),
+    ('fecha_documento',  _to_date,     'contains', 'fecha documento',    False),
+    ('identificacion',   None,         'exact',    'identificacion',     True),
+    ('cliente',          None,         'exact',    'cliente',            False),
+    ('cuenta',           _str_or_none, 'exact',    'cuenta',             False),
+    ('solicitud',        _str_or_none, 'exact',    'solicitud',          False),
+    ('aliado',           _str_or_none, 'contains', 'aliado',             False),
+    ('tipo_mvto',        _str_or_none, 'contains', 'tipo mvto',          False),
+    ('tipo_documento',   _str_or_none, 'contains', 'tipo documento',     False),
+    ('documento',        _str_or_none, 'exact',    'documento',          False),
+    ('usuario',          _str_or_none, 'exact',    'usuario',            False),
+    ('capital',          _to_float,    'contains', 'capital prestamos',  True),
+    ('interes_corriente',_to_float,    'contains', 'interes corriente',  False),
+    ('interes_mora',     _to_float,    'contains', 'interes de mora',    False),
+    ('iva',              _to_float,    'exact',    'iva',                False),
+    ('saldo_favor',      _to_float,    'contains', 'saldo favor',        False),
+    ('gastos_pj',        _to_float,    'contains', 'gastos prejuridico', False),
+    ('cargos_admin',     _to_float,    'contains', 'cargos administrativos', False),
+    ('total',            _to_float,    'exact',    'total',              True),
+    ('autorizacion',     _str_or_none, 'contains', 'autorizacion',       False),
+    ('observaciones',    _str_or_none, 'contains', 'observaciones',      False),
+]
 
 
-def _transform_pago_row(row: tuple) -> dict | None:
-    rec = {}
-    for idx, (key, parser) in PAGOS_COL_MAP.items():
-        val = row[idx] if idx < len(row) else None
-        if key == 'identificacion':
-            v = _str_or_none(val); rec[key] = encrypt(v) if v else None
-        elif key == 'cliente':
-            v = _str_or_none(val); rec[key] = encrypt(v) if v else None
+def _resolve_pago_columns(header_row):
+    """Mapea cada campo de Recaudo a su índice de columna por nombre.
+    Lanza ValueError si falta una columna REQUERIDA (archivo equivocado)."""
+    norm = [_norm_col(h) for h in header_row]
+    # Firma del archivo de movimientos/recaudo: distingue de otros reportes
+    # que comparten columnas de montos (ej. el Resumen Estado Cuenta también
+    # tiene Capital y Total). Si no tiene firma de movimientos, es otro archivo.
+    firma_recaudo = ['fecha movimiento', 'tipo mvto', 'entidad']
+    if not any(any(f in h for h in norm) for f in firma_recaudo):
+        raise ValueError(
+            "Este archivo no parece ser el reporte de Recaudo/Movimientos "
+            "(no encontré columnas como «Fecha Movimiento» o «Tipo Mvto»). "
+            "Verifica que estés subiendo el archivo correcto en este botón."
+        )
+    mapping = {}   # campo_bd -> (idx, parser)
+    faltan = []
+    for campo, parser, modo, frase, requerido in PAGOS_FIELD_SPECS:
+        idx = None
+        for i, h in enumerate(norm):
+            if (modo == 'exact' and h == frase) or (modo == 'contains' and frase in h):
+                idx = i
+                break
+        if idx is None:
+            if requerido:
+                faltan.append(f"«{frase}»")
         else:
-            rec[key] = parser(val) if parser else val
+            mapping[campo] = (idx, parser)
+    if faltan:
+        raise ValueError(
+            "Este archivo no parece ser el reporte de Recaudo/Movimientos. "
+            "Verifica que estés subiendo el archivo correcto en este botón. "
+            "No encontré las columnas: " + ", ".join(faltan)
+        )
+    return mapping
+
+
+def _transform_pago_row(row: tuple, col_map: dict) -> dict | None:
+    """Transforma una fila usando el mapeo {campo: (idx, parser)} resuelto
+    por nombre desde el header."""
+    rec = {}
+    for campo, (idx, parser) in col_map.items():
+        val = row[idx] if idx < len(row) else None
+        if campo in ('identificacion', 'cliente'):
+            v = _str_or_none(val); rec[campo] = encrypt(v) if v else None
+        else:
+            rec[campo] = parser(val) if parser else val
     if not rec.get('total') and not rec.get('capital'):
         return None
     return rec
@@ -113,7 +161,11 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
         rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
-        records = [r for r in (_transform_pago_row(row) for row in rows[1:]) if r]
+        if not rows or len(rows) < 2:
+            raise ValueError("Archivo vacío o sin filas de datos")
+        # Ubicar columnas por NOMBRE (robusto a cambios de formato de la plataforma)
+        col_map = _resolve_pago_columns(rows[0])
+        records = [r for r in (_transform_pago_row(row, col_map) for row in rows[1:]) if r]
 
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
