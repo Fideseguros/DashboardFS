@@ -1807,7 +1807,11 @@ select:focus-visible {
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.re-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+/* :hover solo en dispositivos con puntero real (evita hover pegajoso en táctil) */
+@media (hover: hover) {
+  .re-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+}
+.re-card:active { transform: scale(0.99); }
 .re-card.riesgo { border-left-color: var(--fide-coral); }
 .re-card.ok { border-left-color: var(--fide-teal); }
 .re-card .re-lbl {
@@ -1841,7 +1845,9 @@ select:focus-visible {
 
 /* KPIs clicables (llevan a la lista relacionada) */
 .kpi-clickable { cursor: pointer; }
-.kpi-clickable:hover { box-shadow: 0 4px 14px rgba(184, 104, 15, 0.18); transform: translateY(-1px); }
+@media (hover: hover) {
+  .kpi-clickable:hover { box-shadow: 0 4px 14px rgba(184, 104, 15, 0.18); transform: translateY(-1px); }
+}
 .kpi-clickable:active { transform: scale(0.99); }
 
 /* ====================== FICHA CLIENTE 360 ====================== */
@@ -1866,7 +1872,9 @@ select:focus-visible {
   transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
-.ficha-fab:hover { background: var(--fide-teal-dark); transform: translateY(-2px); }
+@media (hover: hover) {
+  .ficha-fab:hover { background: var(--fide-teal-dark); transform: translateY(-2px); }
+}
 .ficha-fab:active { transform: scale(0.96); }
 .ficha-fab svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; }
 @media (max-width: 768px) {
@@ -2107,8 +2115,9 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 @media (max-width: 768px) {
   .fide-toast-stack {
     top: auto;
-    /* Por encima del bottom-nav (~64px) + safe-area */
-    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    /* Por encima del FAB "Buscar cliente" (que va en ~76px+safe con ~48px
+     * de alto), para que las notificaciones no tapen el botón. */
+    bottom: calc(134px + env(safe-area-inset-bottom, 0px));
     left: 12px;
     right: 12px;
     max-width: none;
@@ -3345,7 +3354,11 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
      El botón "Más" abre el drawer para el resto (Proyección, Financieros,
      Jurídico, Configuración). -->
 <nav class="bottom-nav" id="bottomNav">
-  <button class="bn-item active" data-bn-tab="cartera-360" onclick="bottomNavGo(this,'cartera-360')">
+  <button class="bn-item active" data-bn-tab="resumen-ejecutivo" onclick="bottomNavGo(this,'resumen-ejecutivo')">
+    <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z"/></svg>
+    <span>Inicio</span>
+  </button>
+  <button class="bn-item" data-bn-tab="cartera-360" onclick="bottomNavGo(this,'cartera-360')">
     <svg viewBox="0 0 24 24"><path d="M3 12l2-2 4 4 8-8 4 4"/><path d="M3 20h18"/></svg>
     <span>Cartera</span>
   </button>
@@ -3355,11 +3368,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   </button>
   <button class="bn-item" data-bn-tab="solicitudes" onclick="bottomNavGo(this,'solicitudes')">
     <svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-    <span>Solicitudes</span>
-  </button>
-  <button class="bn-item" data-bn-tab="analitica" onclick="bottomNavGo(this,'analitica')">
-    <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
-    <span>An&aacute;lisis</span>
+    <span>Solic.</span>
   </button>
   <button class="bn-item" onclick="openSidebar()">
     <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>
