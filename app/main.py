@@ -9,7 +9,7 @@ import os
 import logging
 from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
-from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data
+from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
 
 app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
@@ -29,6 +29,7 @@ app.include_router(juridico)
 app.include_router(financieros.router)
 app.include_router(saldo_cartera.router)
 app.include_router(habeas_data.router)
+app.include_router(cliente.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"

@@ -1790,6 +1790,120 @@ select:focus-visible {
   table.cards-mobile td[colspan]::before { content: none; }
 }
 
+/* ====================== FICHA CLIENTE 360 ====================== */
+.ficha-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--fide-teal);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 122, 115, 0.35);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.ficha-fab:hover { background: var(--fide-teal-dark); transform: translateY(-2px); }
+.ficha-fab:active { transform: scale(0.96); }
+.ficha-fab svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+@media (max-width: 768px) {
+  /* Sobre el bottom-nav */
+  .ficha-fab { bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 12px); right: 12px; padding: 12px 14px; }
+  .ficha-fab span { display: none; }  /* solo ícono en móvil */
+}
+
+.ficha-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: none;
+}
+.ficha-modal.open { display: block; }
+.ficha-modal-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+.ficha-panel {
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: min(680px, 100%);
+  background: #fff;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  animation: fichaSlideIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes fichaSlideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@media (max-width: 768px) {
+  .ficha-panel { width: 100%; }
+}
+.ficha-head {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--fide-teal-tint) 0%, #fff 100%);
+}
+.ficha-head-row { display: flex; align-items: center; gap: 10px; }
+.ficha-search-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1.5px solid var(--fide-teal);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 16px;   /* anti-zoom iOS */
+  font-weight: 600;
+}
+.ficha-search-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(0,167,157,0.15); }
+.ficha-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 1.5rem; color: var(--neutral-600); padding: 4px 10px;
+  border-radius: 6px;
+}
+.ficha-close:hover { background: var(--neutral-100); color: var(--neutral-900); }
+.ficha-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+}
+.ficha-cliente-nombre { font-size: 1.05rem; font-weight: 800; color: var(--neutral-900); margin-top: 10px; }
+.ficha-cliente-id { font-size: 0.78rem; color: var(--neutral-600); font-weight: 600; }
+.ficha-section { margin-top: 18px; }
+.ficha-section h4 {
+  font-size: 0.72rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.6px; color: var(--fide-teal-dark);
+  margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.ficha-section h4::after { content: ''; flex: 1; height: 1px; background: var(--fide-teal-tint); }
+.ficha-card {
+  background: var(--neutral-50);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fide-teal);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+}
+.ficha-card .fc-row { display: flex; justify-content: space-between; padding: 2px 0; gap: 12px; }
+.ficha-card .fc-row .lbl { color: var(--neutral-600); font-weight: 600; font-size: 0.72rem; white-space: nowrap; }
+.ficha-card .fc-row .val { font-weight: 700; color: var(--neutral-900); text-align: right; }
+.ficha-card.warn { border-left-color: #c29200; background: #fffbf0; }
+.ficha-empty { color: var(--neutral-500); font-style: italic; font-size: 0.78rem; padding: 4px 0 8px; }
+.ficha-badge {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-size: 0.68rem; font-weight: 800;
+}
+.ficha-badge.ok { background: var(--fide-teal-tint); color: var(--fide-teal-deeper); }
+.ficha-badge.warn { background: #fcf0dd; color: #b8680f; }
+
 /* ====================== PULL-TO-REFRESH (móvil) ====================== */
 .ptr-indicator {
   display: none;
@@ -3113,6 +3227,34 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 </div>
 </main>
 </div><!-- /.app-shell -->
+
+<!-- Ficha Cliente 360: botón flotante + panel lateral -->
+<button class="ficha-fab" onclick="openFicha()" title="Buscar cliente por c&eacute;dula — ficha completa">
+  <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+  <span>Buscar cliente</span>
+</button>
+
+<div class="ficha-modal" id="fichaModal">
+  <div class="ficha-modal-backdrop" onclick="closeFicha()"></div>
+  <div class="ficha-panel">
+    <div class="ficha-head">
+      <div class="ficha-head-row">
+        <input type="text" class="ficha-search-input" id="fichaInput"
+               placeholder="C&eacute;dula del cliente..." inputmode="numeric"
+               onkeydown="if(event.key==='Enter')buscarFicha()">
+        <button class="btn btn-export" style="padding:0.55rem 1rem;font-size:0.8rem;" onclick="buscarFicha()">Buscar</button>
+        <button class="ficha-close" onclick="closeFicha()" aria-label="Cerrar">&times;</button>
+      </div>
+      <div id="fichaCabecera" style="display:none;">
+        <div class="ficha-cliente-nombre" id="fichaNombre"></div>
+        <div class="ficha-cliente-id" id="fichaId"></div>
+      </div>
+    </div>
+    <div class="ficha-body" id="fichaBody">
+      <p class="ficha-empty">Escribe la c&eacute;dula del cliente y presiona Buscar. Ver&aacute;s su cr&eacute;dito, pagos, solicitudes y proceso jur&iacute;dico en una sola vista.</p>
+    </div>
+  </div>
+</div>
 
 <!-- Bottom navigation (solo móvil): acceso con el pulgar a los tabs clave.
      El botón "Más" abre el drawer para el resto (Proyección, Financieros,
@@ -6516,6 +6658,122 @@ try {
     document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
   }
 } catch (e) {}
+
+// ===================== FICHA CLIENTE 360 =====================
+function openFicha() {
+  document.getElementById('fichaModal').classList.add('open');
+  document.body.classList.add('sheet-open');
+  setTimeout(() => document.getElementById('fichaInput').focus(), 100);
+}
+function closeFicha() {
+  document.getElementById('fichaModal').classList.remove('open');
+  document.body.classList.remove('sheet-open');
+}
+
+async function buscarFicha() {
+  const input = document.getElementById('fichaInput');
+  const body = document.getElementById('fichaBody');
+  const cab = document.getElementById('fichaCabecera');
+  const ced = (input.value || '').trim();
+  if (ced.length < 3) { showToast('Escribe una cédula válida', 'warn'); return; }
+  body.innerHTML = '<p class="ficha-empty">Buscando en todos los módulos…</p>';
+  cab.style.display = 'none';
+  try {
+    const res = await fetch('/api/cliente/ficha?identificacion=' + encodeURIComponent(ced),
+                            { credentials: 'same-origin' });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      body.innerHTML = `<p class="ficha-empty">${esc(d.detail || 'Error al consultar')}</p>`;
+      return;
+    }
+    const f = await res.json();
+    if (!f.encontrado) {
+      body.innerHTML = '<p class="ficha-empty">No se encontró ningún registro con esa cédula en cartera, pagos, solicitudes ni jurídico.</p>';
+      return;
+    }
+    // Cabecera
+    document.getElementById('fichaNombre').textContent = f.nombre || '(sin nombre)';
+    document.getElementById('fichaId').textContent = 'CC ' + (f.identificacion || ced);
+    cab.style.display = 'block';
+
+    let html = '';
+
+    // ---- Créditos ----
+    html += '<div class="ficha-section"><h4>Créditos en cartera (' + f.creditos.length + ')</h4>';
+    if (!f.creditos.length) html += '<p class="ficha-empty">Sin créditos en la cartera activa.</p>';
+    f.creditos.forEach(c => {
+      const enMora = (parseInt(c.dias_mora) || 0) > 30;
+      html += `<div class="ficha-card${enMora ? ' warn' : ''}">
+        <div class="fc-row"><span class="lbl">Cuenta</span><span class="val">${esc(c.cuenta) || '-'} · <span class="ficha-badge ${c.estado === 'ACTIVO' ? 'ok' : 'warn'}">${esc(c.estado)}</span></span></div>
+        <div class="fc-row"><span class="lbl">Línea</span><span class="val">${esc(c.linea) || '-'}</span></div>
+        <div class="fc-row"><span class="lbl">Valor / Saldo</span><span class="val">${fmtCurrency(c.valor_credito)} / <strong>${fmtCurrency(c.saldo_capital)}</strong></span></div>
+        <div class="fc-row"><span class="lbl">Días mora (máx hist.)</span><span class="val" style="color:${enMora ? '#b8680f' : '#0f7b6c'};">${fmt(c.dias_mora || 0)} (${fmt(c.maxima_mora || 0)})</span></div>
+        <div class="fc-row"><span class="lbl">Cuotas</span><span class="val">${fmt(c.cuotas_pagadas || 0)} / ${fmt(c.cuotas_pactadas || 0)}</span></div>
+        <div class="fc-row"><span class="lbl">Último pago</span><span class="val">${esc(c.fecha_ult_pago) || '-'}</span></div>
+        <div class="fc-row"><span class="lbl">Aliado</span><span class="val">${esc(c.aliado) || '-'}</span></div>
+      </div>`;
+    });
+    html += '</div>';
+
+    // ---- Pagos (recaudo actual) ----
+    const pr = f.pagos_resumen || {};
+    html += '<div class="ficha-section"><h4>Pagos recientes (' + fmt(pr.n || 0) + ' movs · ' + fmtCurrency(pr.total || 0) + ')</h4>';
+    if (!f.pagos.length) html += '<p class="ficha-empty">Sin pagos en el período cargado.</p>';
+    f.pagos.slice(0, 8).forEach(p => {
+      html += `<div class="ficha-card">
+        <div class="fc-row"><span class="lbl">${esc(p.fecha_movimiento) || '-'}</span><span class="val">${fmtCurrency(p.total)}</span></div>
+        <div class="fc-row"><span class="lbl">${esc(p.tipo_mvto) || ''}</span><span class="val" style="font-weight:500;color:var(--neutral-600);">cap ${fmtCurrency(p.capital)} · int ${fmtCurrency(p.interes_corriente)}</span></div>
+      </div>`;
+    });
+    if (f.pagos.length > 8) html += `<p class="ficha-empty">… y ${f.pagos.length - 8} movimientos más.</p>`;
+    html += '</div>';
+
+    // ---- Histórico legacy ----
+    if (f.pagos_legacy.length) {
+      html += '<div class="ficha-section"><h4>Histórico plataforma anterior</h4>';
+      f.pagos_legacy.forEach(p => {
+        html += `<div class="ficha-card">
+          <div class="fc-row"><span class="lbl">Préstamo ${esc(p.id_prestamo)}</span><span class="val">${fmt(p.num_pagos || 0)} pagos · ${fmtCurrency(p.valor_pago_total)}</span></div>
+          <div class="fc-row"><span class="lbl">Período</span><span class="val" style="font-weight:500;">${esc(p.fecha_primer_pago) || '?'} → ${esc(p.fecha_ultimo_pago) || '?'}</span></div>
+          <div class="fc-row"><span class="lbl">Cancelado</span><span class="val">${esc(p.prestamo_cancelado) || '-'}</span></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    // ---- Solicitudes ----
+    html += '<div class="ficha-section"><h4>Solicitudes (' + f.solicitudes.length + ')</h4>';
+    if (!f.solicitudes.length) html += '<p class="ficha-empty">Sin solicitudes registradas.</p>';
+    f.solicitudes.forEach(s => {
+      html += `<div class="ficha-card">
+        <div class="fc-row"><span class="lbl">${esc(s.solicitud || s.id_solicitud) || '-'}${s._legacy ? ' (hist.)' : ''}</span><span class="val"><span class="ficha-badge ${s.estado === 'DESEMBOLSADA' ? 'ok' : 'warn'}">${esc(s.estado) || '-'}</span></span></div>
+        <div class="fc-row"><span class="lbl">${esc(s.linea || s.producto) || '-'}</span><span class="val">${fmtCurrency(s.valor || s.monto)}</span></div>
+        <div class="fc-row"><span class="lbl">Fecha</span><span class="val" style="font-weight:500;">${esc(s.fecha_solicitud) || '-'}</span></div>
+      </div>`;
+    });
+    html += '</div>';
+
+    // ---- Jurídico ----
+    if (f.juridico.length) {
+      html += '<div class="ficha-section"><h4>⚠ Proceso jurídico</h4>';
+      f.juridico.forEach(j => {
+        html += `<div class="ficha-card warn">
+          <div class="fc-row"><span class="lbl">Naturaleza</span><span class="val">${esc(j.naturaleza_litigio) || '-'}</span></div>
+          <div class="fc-row"><span class="lbl">Probabilidad</span><span class="val">${esc(j.probabilidad) || '-'}</span></div>
+          <div class="fc-row"><span class="lbl">Avance</span><span class="val" style="font-weight:500;">${esc(j.avance) || '-'}</span></div>
+          <div class="fc-row"><span class="lbl">Juzgado</span><span class="val" style="font-weight:500;">${esc(j.juzgado) || '-'}</span></div>
+          <div class="fc-row"><span class="lbl">Medida cautelar</span><span class="val">${esc(j.medida_cautelar) || '-'}</span></div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    body.innerHTML = html;
+  } catch (e) {
+    console.error('buscarFicha', e);
+    body.innerHTML = '<p class="ficha-empty">Error de conexión. Verifica tu internet y reintenta.</p>';
+  }
+}
 
 // ===================== PULL-TO-REFRESH (móvil) =====================
 // Tirar hacia abajo desde el tope recarga el tab activo. Gesto esperado
