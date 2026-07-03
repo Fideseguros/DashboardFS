@@ -1790,6 +1790,11 @@ select:focus-visible {
   table.cards-mobile td[colspan]::before { content: none; }
 }
 
+/* KPIs clicables (llevan a la lista relacionada) */
+.kpi-clickable { cursor: pointer; }
+.kpi-clickable:hover { box-shadow: 0 4px 14px rgba(184, 104, 15, 0.18); transform: translateY(-1px); }
+.kpi-clickable:active { transform: scale(0.99); }
+
 /* ====================== FICHA CLIENTE 360 ====================== */
 .ficha-fab {
   position: fixed;
@@ -2349,15 +2354,15 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 
     <!-- GRUPO 3: RIESGO Y CARTERA POR COBRAR -->
     <div class="kpi-group-label">Riesgo y Cartera por Cobrar</div>
-    <div class="kpi-card coral">
-      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de mora (la pol&iacute;tica Fideseguros considera 1-30 d&iacute;as como al d&iacute;a). El sub muestra el saldo total en mora y su % sobre el saldo activo.</span></div>
+    <div class="kpi-card coral kpi-clickable" onclick="verClientesEnMora()" title="Ver los cr&eacute;ditos en mora (ordenados por d&iacute;as de mora)">
+      <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de mora (la pol&iacute;tica Fideseguros considera 1-30 d&iacute;as como al d&iacute;a). El sub muestra el saldo total en mora y su % sobre el saldo activo. Click para ver la lista.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
       <div class="kpi-label">Cartera en Mora</div>
       <div class="kpi-value" id="kpiMora">-</div>
       <div class="kpi-sub" id="kpiMoraSub"></div>
     </div>
-    <div class="kpi-card coral">
-      <div class="kpi-info">i<span class="kpi-tooltip">&Iacute;ndice de Cartera Vencida: saldo en mora &gt; 30 d&iacute;as / saldo total activo. Es la principal m&eacute;trica de riesgo regulada por la Superfinanciera. Ideal &lt; 5%.</span></div>
+    <div class="kpi-card coral kpi-clickable" onclick="verClientesEnMora()" title="Ver los cr&eacute;ditos que originan el ICV">
+      <div class="kpi-info">i<span class="kpi-tooltip">&Iacute;ndice de Cartera Vencida: saldo en mora &gt; 30 d&iacute;as / saldo total activo. Es la principal m&eacute;trica de riesgo regulada por la Superfinanciera. Ideal &lt; 5%. Click para ver la lista.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
       <div class="kpi-label">ICV (Mora &gt; 30)</div>
       <div class="kpi-value" id="kpiICV">-</div>
@@ -2574,6 +2579,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="table-controls">
         <input type="text" class="search-box" id="tableSearch" placeholder="Buscar por cliente, identificaci&oacute;n, aliado...">
         <div class="table-info"><span id="tableCount">0</span> registros</div>
+        <button class="btn btn-export" style="font-size:0.75rem;padding:0.4rem 0.8rem;" onclick="exportDetalleCartera()" title="Descargar los cr&eacute;ditos filtrados a CSV">Descargar CSV</button>
       </div>
       <div class="table-wrapper">
         <table class="data-table" id="dataTable">
@@ -3049,6 +3055,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div style="display:flex;align-items:center;gap:0.5rem;">
             <span id="tblJuridicoSearchCount" style="font-size:0.68rem;color:var(--neutral-500);"></span>
             <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o nombre..." oninput="filterTableRows(this,'tblJuridico')">
+            <button class="btn btn-export" style="font-size:0.72rem;padding:0.35rem 0.7rem;" onclick="exportJuridico()" title="Descargar procesos a CSV para gesti&oacute;n">CSV</button>
           </div>
         </div>
         <div class="table-wrapper" style="max-height:520px;">
@@ -4628,6 +4635,63 @@ function updateCharts() {
 }
 
 // ---- TABLE ----
+// Helper genérico: descarga un CSV client-side desde un array de objetos.
+// headers = etiquetas de columna; keys = propiedades a extraer de cada fila.
+function downloadCSV(rows, headers, keys, filename) {
+  if (!rows || !rows.length) { showToast('No hay datos para exportar', 'warn'); return; }
+  let csv = '﻿' + headers.join(',') + '\n';   // BOM para Excel
+  rows.forEach(r => {
+    csv += keys.map(k => {
+      let v = r[k] == null ? '' : String(r[k]);
+      if (v.includes(',') || v.includes('"') || v.includes('\n')) v = '"' + v.replace(/"/g, '""') + '"';
+      return v;
+    }).join(',') + '\n';
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const fecha = new Date().toISOString().substring(0, 10);
+  a.href = url; a.download = `${filename}_${fecha}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${rows.length} filas exportadas`, 'ok');
+}
+
+// Exporta los créditos actualmente filtrados (respeta filtros + búsqueda).
+function exportDetalleCartera() {
+  const rows = getSearchFiltered();
+  downloadCSV(rows,
+    ['Cliente','Identificacion','Estado','Linea','Valor','Saldo','Calificacion','Dias_Mora','Tasa','Desembolso','Vencimiento','Aliado','Ciudad'],
+    ['cliente','identificacion','estado','linea','valor_credito','saldo_capital','calificacion','dias_mora','tasa_efectiva','fecha_desembolso','fecha_vencimiento','aliado','ciudad'],
+    'cartera_detalle');
+}
+
+// KPI Mora/ICV clicable → lleva a la tabla Detalle ordenada por días de
+// mora descendente (los peores primero), listo para gestionar.
+function verClientesEnMora() {
+  // Asegurar que el grupo Cartera está activo
+  const navTab = document.querySelector('.nav-tab[data-tab="cartera-360"]');
+  if (navTab && !navTab.classList.contains('active')) activateTab(navTab);
+  sortCol = 'dias_mora'; sortDir = -1; currentPage = 1;
+  updateTable();
+  const tbl = document.getElementById('tab-detalle');
+  if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('Créditos ordenados por días de mora (mayor primero)', 'ok', 2500);
+}
+
+// Exporta los procesos jurídicos (con su cruce de cartera) para gestión.
+function exportJuridico() {
+  const rows = (window._jrData || []).map(x => ({
+    identificacion: x.identificacion, nombre: x.nombre, probabilidad: x.probabilidad,
+    naturaleza: x.naturaleza_litigio, avance: x.avance, medida_cautelar: x.medida_cautelar,
+    juzgado: x.juzgado, en_cartera: x.cartera_match ? 'SI' : 'NO',
+    saldo_cartera: x.cartera_saldo_capital || 0, dias_mora: x.cartera_dias_mora_max || 0,
+  }));
+  downloadCSV(rows,
+    ['Identificacion','Nombre','Probabilidad','Naturaleza','Avance','Medida_Cautelar','Juzgado','En_Cartera','Saldo_Cartera','Dias_Mora_Max'],
+    ['identificacion','nombre','probabilidad','naturaleza','avance','medida_cautelar','juzgado','en_cartera','saldo_cartera','dias_mora'],
+    'procesos_juridicos');
+}
+
 function getSearchFiltered() {
   const s = document.getElementById('tableSearch').value.toLowerCase().trim();
   if (!s) return filteredData;
@@ -4813,9 +4877,14 @@ async function renderUploadStatus(modulo) {
       return;
     }
     const when = _fmtLocalDateTime(last.completed_at || last.started_at);
+    // Fecha corta visible (no solo en hover): DD/MM
+    const whenShort = (() => {
+      const d = new Date(last.completed_at || last.started_at);
+      return isNaN(d) ? '' : ` · ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+    })();
     if (last.status === 'success') {
       badge.className = 'upload-status-badge ok';
-      badge.textContent = `✓ Última carga: ${last.records_inserted} reg.`;
+      badge.textContent = `✓ Actualizado${whenShort} · ${last.records_inserted} reg.`;
       badge.title = `Fuente: ${last.source}\nUsuario: ${last.username || 'N/A'}\nFecha: ${when}\nFilas leídas: ${last.records_fetched}\nFilas insertadas: ${last.records_inserted}\nDuración: ${(last.duration_seconds || 0).toFixed(1)}s`;
     } else if (last.status === 'failed') {
       badge.className = 'upload-status-badge err';
@@ -5200,6 +5269,7 @@ async function loadJuridico() {
       fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
       fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
     ]);
+    window._jrData = l || [];   // para exportar a CSV
     const _matched = (l || []).filter(r => r.cartera_match);
     const cs = {
       total: (l || []).length,
