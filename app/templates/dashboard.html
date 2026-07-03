@@ -1790,6 +1790,55 @@ select:focus-visible {
   table.cards-mobile td[colspan]::before { content: none; }
 }
 
+/* ====================== RESUMEN EJECUTIVO ====================== */
+.re-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+.re-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fide-teal);
+  border-radius: 10px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.re-card:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+.re-card.riesgo { border-left-color: var(--fide-coral); }
+.re-card.ok { border-left-color: var(--fide-teal); }
+.re-card .re-lbl {
+  font-size: 0.68rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--neutral-600); margin-bottom: 6px;
+}
+.re-card .re-val { font-size: 1.5rem; font-weight: 900; color: var(--neutral-900); line-height: 1.1; }
+.re-card .re-sub { font-size: 0.74rem; color: var(--neutral-600); margin-top: 6px; font-weight: 600; }
+.re-card .re-trend { font-size: 0.72rem; font-weight: 700; }
+.re-loading { color: var(--neutral-500); font-style: italic; padding: 2rem; grid-column: 1/-1; text-align: center; }
+.re-alerta {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; border-radius: 8px; margin-bottom: 8px;
+  font-size: 0.85rem; font-weight: 600;
+}
+.re-alerta.alta { background: #fcf0dd; color: #b8680f; border-left: 4px solid #b8680f; }
+.re-alerta.media { background: #fffbf0; color: #c29200; border-left: 4px solid #c29200; }
+.re-alerta-icon { font-size: 1.1rem; }
+.re-updates {
+  grid-column: 1/-1;
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 8px; padding-top: 12px; border-top: 1px dashed var(--border);
+  font-size: 0.72rem; color: var(--neutral-600);
+}
+.re-updates .re-up { display: flex; align-items: center; gap: 5px; }
+.re-updates .re-up b { color: var(--neutral-900); }
+.re-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.re-dot.fresh { background: var(--fide-teal); }
+.re-dot.stale { background: #c29200; }
+.re-dot.none { background: var(--neutral-300); }
+
 /* KPIs clicables (llevan a la lista relacionada) */
 .kpi-clickable { cursor: pointer; }
 .kpi-clickable:hover { box-shadow: 0 4px 14px rgba(184, 104, 15, 0.18); transform: translateY(-1px); }
@@ -2173,12 +2222,19 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">Navegaci&oacute;n</div>
 
+  <div class="nav-group" data-group="inicio">
+    <div class="nav-tab active" data-tab="resumen-ejecutivo" data-group="inicio">
+      <svg class="cat-icon" viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z"/></svg>
+      Resumen Ejecutivo
+    </div>
+  </div>
+
   <div class="nav-group" data-group="cartera">
     <div class="nav-group-label">
       <svg class="cat-icon" viewBox="0 0 24 24"><path d="M3 12l2-2 4 4 8-8 4 4"/><path d="M3 20h18"/></svg>
       Cartera
     </div>
-    <div class="nav-tab active" data-tab="cartera-360"
+    <div class="nav-tab" data-tab="cartera-360"
          data-tab-contents="resumen cartera aliados detalle" data-group="cartera">
       An&aacute;lisis de Cartera
     </div>
@@ -2220,9 +2276,31 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   </div>
 </aside>
 
-<main class="app-main" id="appMain" data-active-group="cartera">
+<main class="app-main" id="appMain" data-active-group="inicio">
 
 <div class="container">
+  <!-- ============ RESUMEN EJECUTIVO (home) ============ -->
+  <div class="tab-content active" id="tab-resumen-ejecutivo">
+    <div class="module-header">
+      <div class="module-title">
+        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3zM13 21h8V11h-8zM13 3v6h8V3zM3 21h8v-6H3z"/></svg>
+        <div>
+          <h2>Resumen Ejecutivo</h2>
+          <div class="module-meta"><span id="reFecha">Estado consolidado de todos los m&oacute;dulos</span></div>
+        </div>
+      </div>
+      <button class="btn btn-export" style="font-size:0.78rem;" onclick="loadResumenEjecutivo()">Actualizar</button>
+    </div>
+
+    <!-- Alertas -->
+    <div id="reAlertas"></div>
+
+    <!-- Cifras clave -->
+    <div class="re-grid" id="reGrid">
+      <div class="re-loading">Cargando resumen&hellip;</div>
+    </div>
+  </div>
+
   <!-- Module header de Cartera: título + upload + estado (solo visible en grupo cartera) -->
   <div class="module-header cartera-scope cartera-main-only">
     <div class="module-title">
@@ -2409,7 +2487,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   </div>
 
   <!-- Tab: Resumen -->
-  <div class="tab-content active" id="tab-resumen">
+  <div class="tab-content" id="tab-resumen">
     <div class="charts-grid">
       <div class="chart-card full">
         <h3><span class="dot"></span> Valor Desembolsado vs Valor Recaudado <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(cartera vs pagos &mdash; nueva + hist&oacute;rica)</span></h3>
@@ -4801,6 +4879,7 @@ function activateTab(tab) {
   // Carga bajo demanda según el tab
   const tabName = tab.dataset.tab;
   _syncBottomNav(tabName);
+  if (tabName === 'resumen-ejecutivo') loadResumenEjecutivo();
   if (tabName === 'usuarios') loadUsers();
   if (tabName === 'recaudo') loadRecaudo();
   if (tabName === 'solicitudes') loadSolicitudes();
@@ -6705,6 +6784,8 @@ loadData = async function() { await _origLoadData(); _enableKpiTooltipTaps(); };
 
 // Load data from API (replaces static embedded data)
 loadData();
+// El home es el Resumen Ejecutivo — cargarlo al inicio (independiente de loadData)
+loadResumenEjecutivo();
 async function doLogout() {
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
@@ -6728,6 +6809,120 @@ try {
     document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none');
   }
 } catch (e) {}
+
+// ===================== RESUMEN EJECUTIVO =====================
+function _reFechaCorta(iso) {
+  if (!iso) return null;
+  const d = new Date(iso.length <= 10 ? iso + 'T00:00:00' : iso);
+  if (isNaN(d)) return null;
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function _reDiasDesde(iso) {
+  if (!iso) return null;
+  const d = new Date(iso.length <= 10 ? iso + 'T00:00:00' : iso);
+  if (isNaN(d)) return null;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+async function loadResumenEjecutivo() {
+  const grid = document.getElementById('reGrid');
+  const alertasEl = document.getElementById('reAlertas');
+  grid.innerHTML = '<div class="re-loading">Cargando resumen…</div>';
+  try {
+    const r = await fetch('/api/resumen/ejecutivo', { credentials: 'same-origin' });
+    if (!r.ok) { grid.innerHTML = '<div class="re-loading">No se pudo cargar el resumen.</div>'; return; }
+    const d = await r.json();
+
+    // Alertas
+    alertasEl.innerHTML = (d.alertas || []).map(a =>
+      `<div class="re-alerta ${a.nivel}"><span class="re-alerta-icon">⚠</span>${esc(a.texto)}</div>`
+    ).join('');
+
+    let cards = '';
+
+    // Saldo cartera por cobrar
+    if (d.saldo_cartera) {
+      let trend = '';
+      if (typeof d.saldo_tendencia_pct === 'number') {
+        const up = d.saldo_tendencia_pct >= 0;
+        trend = `<div class="re-trend" style="color:${up ? '#0f7b6c' : '#b8680f'};">${up ? '▲' : '▼'} ${Math.abs(d.saldo_tendencia_pct)}% vs anterior</div>`;
+      }
+      cards += `<div class="re-card ok" onclick="_reGo('cartera-360')">
+        <div class="re-lbl">Saldo por Cobrar</div>
+        <div class="re-val">${fmtM(d.saldo_cartera.valor)}</div>
+        <div class="re-sub">${d.saldo_cartera.fecha ? 'al ' + (_reFechaCorta(d.saldo_cartera.fecha) || d.saldo_cartera.fecha) : 'sin archivo'}</div>
+        ${trend}
+      </div>`;
+    }
+
+    // Cartera / mora / ICV
+    if (d.cartera) {
+      const c = d.cartera;
+      const icvColor = c.icv_pct > 8 ? '#b8680f' : c.icv_pct > 5 ? '#c29200' : '#0f7b6c';
+      cards += `<div class="re-card" onclick="_reGo('cartera-360')">
+        <div class="re-lbl">Cartera Activa</div>
+        <div class="re-val">${fmt(c.activos)}</div>
+        <div class="re-sub">de ${fmt(c.total)} créditos · saldo ${fmtM(c.saldo_activo)}</div>
+      </div>`;
+      cards += `<div class="re-card riesgo" onclick="verClientesEnMora()">
+        <div class="re-lbl">Cartera en Mora (+30d)</div>
+        <div class="re-val">${fmt(c.mora_count)}</div>
+        <div class="re-sub">${fmtM(c.mora_saldo)} · <span style="color:${icvColor};font-weight:800;">ICV ${c.icv_pct}%</span></div>
+      </div>`;
+    }
+
+    // Recaudo
+    if (d.recaudo) {
+      cards += `<div class="re-card ok" onclick="_reGo('recaudo')">
+        <div class="re-lbl">Recaudo (período)</div>
+        <div class="re-val">${fmtM(d.recaudo.total)}</div>
+        <div class="re-sub">${fmt(d.recaudo.movimientos)} movimientos · capital ${fmtM(d.recaudo.capital)}</div>
+      </div>`;
+    }
+
+    // Solicitudes
+    if (d.solicitudes) {
+      const s = d.solicitudes;
+      cards += `<div class="re-card" onclick="_reGo('solicitudes')">
+        <div class="re-lbl">Solicitudes</div>
+        <div class="re-val">${fmt(s.en_estudio)}</div>
+        <div class="re-sub">en estudio · ${fmt(s.desembolsadas)} desembolsadas de ${fmt(s.total)}</div>
+      </div>`;
+    }
+
+    // Jurídico
+    if (d.juridico && d.juridico.total > 0) {
+      cards += `<div class="re-card riesgo" onclick="_reGo('juridico')">
+        <div class="re-lbl">Cobro Jurídico</div>
+        <div class="re-val">${fmt(d.juridico.total)}</div>
+        <div class="re-sub">procesos activos · ${fmt(d.juridico.probables)} probables</div>
+      </div>`;
+    }
+
+    // Fila de actualizaciones (qué está al día)
+    const ups = d.actualizaciones || {};
+    const nombres = { cartera: 'Cartera', recaudo: 'Recaudo', solicitudes: 'Solicitudes', juridico: 'Jurídico', saldo_cartera: 'Saldo' };
+    let upsHtml = '<div class="re-updates">';
+    Object.keys(nombres).forEach(k => {
+      const when = ups[k];
+      const dias = _reDiasDesde(when);
+      const dot = when == null ? 'none' : (dias != null && dias > 7 ? 'stale' : 'fresh');
+      const txt = when ? (_reFechaCorta(when) || when) : 'sin cargar';
+      upsHtml += `<span class="re-up"><span class="re-dot ${dot}"></span>${nombres[k]}: <b>${txt}</b></span>`;
+    });
+    upsHtml += '</div>';
+
+    grid.innerHTML = cards + upsHtml;
+    document.getElementById('reFecha').textContent = 'Estado consolidado · actualizado ahora';
+  } catch (e) {
+    console.error('loadResumenEjecutivo', e);
+    grid.innerHTML = '<div class="re-loading">Error de conexión.</div>';
+  }
+}
+// Navegar a un tab desde una tarjeta del resumen
+function _reGo(tabName) {
+  const t = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
+  if (t) activateTab(t);
+}
 
 // ===================== FICHA CLIENTE 360 =====================
 function openFicha() {
