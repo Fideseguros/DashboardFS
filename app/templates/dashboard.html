@@ -5051,11 +5051,20 @@ let _jrCharts = {};
 async function loadJuridico() {
   showTableSkeleton('tblJuridico', 8, 6);
   try {
-    const [s, l, cs] = await Promise.all([
+    // Solo 2 llamadas: summary + listado. El cruce con cartera (cs) se deriva
+    // del listado que ya trae cartera_match/saldo por proceso — antes se
+    // pedía /cartera-summary que re-descifraba TODA la cartera (duplicado).
+    const [s, l] = await Promise.all([
       fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
-      fetch('/api/juridico/cartera-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {})
+      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
     ]);
+    const _matched = (l || []).filter(r => r.cartera_match);
+    const cs = {
+      total: (l || []).length,
+      matched: _matched.length,
+      saldo_total_cartera: _matched.reduce((a, r) => a + (r.cartera_saldo_activo || 0), 0),
+      saldo_en_mora: _matched.reduce((a, r) => a + (r.cartera_saldo_activo_mora30 || 0), 0),
+    };
     document.getElementById('jrTotal').textContent = fmt(s.total || 0);
     document.getElementById('jrTotalSub').textContent = `${s.juzgados || 0} juzgados involucrados`;
     document.getElementById('jrProb').textContent = fmt(s.probables || 0);

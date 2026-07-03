@@ -16,7 +16,8 @@ app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
 
 # Comprime respuestas JSON > 500 bytes. Los endpoints de cartera/recaudo/
 # solicitudes devuelven listas grandes que se reducen 70-90% con gzip.
-app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
+# level=5: ~mismo ratio que 6 con menos CPU por respuesta (mejor en Railway).
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=5)
 
 app.include_router(auth.router)
 app.include_router(credits.router)

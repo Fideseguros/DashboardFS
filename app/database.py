@@ -314,10 +314,24 @@ CREDIT_FIELDS = [
 
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DATABASE_PATH)
+    # timeout=5s a nivel de driver: si otra conexión tiene el lock (ej. un
+    # upload en curso), esperamos hasta 5s en vez de fallar con "database
+    # is locked" de inmediato.
+    conn = sqlite3.connect(DATABASE_PATH, timeout=5.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # busy_timeout: mismo efecto que timeout pero también dentro de la
+    # transacción (el lector espera al writer en vez de reventar).
+    conn.execute("PRAGMA busy_timeout=5000")
+    # NORMAL es seguro con WAL y mucho más rápido que FULL en disco de red.
+    conn.execute("PRAGMA synchronous=NORMAL")
+    # Cache de páginas en RAM: -16000 = 16 MB (negativo = KB). Menos I/O.
+    conn.execute("PRAGMA cache_size=-16000")
+    # mmap 128 MB: lecturas vía memoria mapeada, reduce syscalls en Railway.
+    conn.execute("PRAGMA mmap_size=134217728")
+    # Tablas temporales (ORDER BY, subqueries) en RAM, no en disco.
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 

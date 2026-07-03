@@ -7,7 +7,7 @@ Cada módulo expone:
 """
 import logging
 import re
-from fastapi import APIRouter, Depends, UploadFile, File, Request
+from fastapi import APIRouter, Depends, UploadFile, File, Request, Response, Header
 from app.database import get_db, get_connection
 from app.auth.middleware import require_auth, require_superadmin
 from app.crypto import encrypt, decrypt, mask_identificacion, mask_cliente
@@ -17,6 +17,31 @@ from app.sync.upload_helpers import (
     to_date as _to_date,
     str_or_none as _str_or_none,
 )
+
+
+def _source_etag(conn, *sources, extra="") -> str:
+    """ETag para endpoints de lista: cambia cuando se sube un nuevo archivo
+    en cualquiera de los `sources`. `extra` (ej. rol) distingue variantes de
+    contenido (plaintext vs enmascarado) para no servir cache cruzada."""
+    parts = []
+    for src in sources:
+        row = conn.execute(
+            "SELECT id, completed_at FROM sync_logs WHERE source=? AND status='success' "
+            "ORDER BY id DESC LIMIT 1", (src,)
+        ).fetchone()
+        parts.append(f"{src}:{row['id']}:{row['completed_at'] or ''}" if row else f"{src}:0")
+    return '"' + "|".join(parts) + (f"|{extra}" if extra else "") + '"'
+
+
+def _maybe_304(response, if_none_match, etag):
+    """Si el cliente ya tiene esta versión, devuelve un Response 304 (sin
+    re-serializar ni re-descifrar). Setea ETag+Cache-Control en ambos casos."""
+    response.headers["ETag"] = etag
+    response.headers["Cache-Control"] = "private, must-revalidate"
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers={
+            "ETag": etag, "Cache-Control": "private, must-revalidate"})
+    return None
 
 _log = logging.getLogger("fide.extras")
 MAX_UPLOAD_MB = 20
@@ -180,12 +205,20 @@ async def recaudo_upload(request: Request, user=Depends(require_superadmin), fil
 
 
 @recaudo.get("")
-def recaudo_list(user=Depends(require_auth)):
+def recaudo_list(response: Response, user=Depends(require_auth),
+                 if_none_match: str | None = Header(default=None, alias="If-None-Match")):
     """Para superadmin: identificación + cliente en plaintext (buscar por
-    cédula). Para otros roles: enmascarado."""
+    cédula). Para otros roles: enmascarado.
+
+    ETag por batch+rol: si la gerente vuelve a entrar a Recaudo sin que se
+    haya subido un archivo nuevo → 304, sin re-descifrar 9k filas."""
     is_super = user.get("role") == "superadmin"
     conn = get_connection()
     try:
+        etag = _source_etag(conn, "recaudo_upload", extra=user.get("role", "v"))
+        early = _maybe_304(response, if_none_match, etag)
+        if early is not None:
+            return early
         rows = conn.execute(
             "SELECT * FROM pagos WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='recaudo_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
         ).fetchall()
@@ -636,12 +669,13 @@ def _normalize_estado(estado, source: str) -> str | None:
 
 
 @solicitudes.get("/combined")
-def solic_combined(user=Depends(require_auth)):
+def solic_combined(response: Response, user=Depends(require_auth),
+                   if_none_match: str | None = Header(default=None, alias="If-None-Match")):
     """UNION de legacy + nueva plataforma con estados normalizados.
 
     Para superadmin: identificación + nombre en plaintext (gerente requiere
-    buscar por cédula). Otros roles: enmascarado.
-    """
+    buscar por cédula). Otros roles: enmascarado. ETag cubre ambos sources
+    (nueva + legacy)."""
     is_super = user.get("role") == "superadmin"
     def _id(plain):
         return plain if is_super else mask_identificacion(plain)
@@ -649,6 +683,11 @@ def solic_combined(user=Depends(require_auth)):
         return plain if is_super else mask_cliente(plain)
     conn = get_connection()
     try:
+        etag = _source_etag(conn, "solicitudes_upload", "solicitudes_legacy_upload",
+                            extra=user.get("role", "v"))
+        early = _maybe_304(response, if_none_match, etag)
+        if early is not None:
+            return early
         new_rows = conn.execute(
             "SELECT * FROM solicitudes WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
         ).fetchall()
@@ -837,16 +876,24 @@ async def jur_upload(request: Request, user=Depends(require_superadmin), file: U
 
 
 @juridico.get("")
-def jur_list(user=Depends(require_superadmin)):
+def jur_list(user=Depends(require_superadmin), response: Response = None,
+             if_none_match: str | None = Header(default=None, alias="If-None-Match")):
     """Listado completo, cruzado con cartera por identificación.
 
     Para cada proceso: agrega resumen del crédito (estado, saldo, días mora,
     valor crédito, fechas) si el cliente existe en la cartera.
 
-    Por contener PII de cobro → solo superadmin.
+    Por contener PII de cobro → solo superadmin. ETag por batch cruzado
+    (juridico + cartera, porque el cruce depende de ambos). `response=None`
+    cuando se llama internamente (sin ETag).
     """
     conn = get_connection()
     try:
+        if response is not None:
+            etag = _source_etag(conn, "juridico_upload", "manual_upload", extra="super")
+            early = _maybe_304(response, if_none_match, etag)
+            if early is not None:
+                return early
         rows = conn.execute(
             "SELECT * FROM procesos_juridicos WHERE sync_batch_id = (SELECT id FROM sync_logs WHERE source='juridico_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
         ).fetchall()
