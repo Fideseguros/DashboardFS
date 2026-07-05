@@ -2604,7 +2604,10 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <div class="chart-container tall"><canvas id="chartCosecha"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+          <h3 style="margin:0;"><span class="dot"></span> Top 20 Clientes por Saldo Capital <span style="font-size:0.65rem;font-weight:600;color:#5a6a6e;text-transform:none;letter-spacing:0;margin-left:0.4rem;">(agregado por cliente)</span></h3>
+          <button class="btn btn-export" style="font-size:0.72rem;padding:0.35rem 0.7rem;" onclick="exportTopClientes()" title="Descargar top clientes a CSV">CSV</button>
+        </div>
         <div class="table-wrapper" style="max-height:460px;">
           <table class="data-table compact cards-mobile" id="tblTopClientes">
             <thead><tr>
@@ -2744,7 +2747,10 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     </div>
 
     <div class="chart-card full">
-      <h3><span class="dot"></span> Detalle de Cuotas Proyectadas <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(d&iacute;a de pago = d&iacute;a del mes de fecha_inicio · mora &lt; 20)</span></h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+        <h3 style="margin:0;"><span class="dot"></span> Detalle de Cuotas Proyectadas <span style="font-size:0.65rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(d&iacute;a de pago = d&iacute;a del mes de fecha_inicio · mora &lt; 20)</span></h3>
+        <button class="btn btn-export" style="font-size:0.72rem;padding:0.35rem 0.7rem;" onclick="exportProyeccion()" title="Descargar cuotas proyectadas a CSV">CSV</button>
+      </div>
       <div class="table-wrapper" style="max-height:480px;">
         <table class="data-table compact" id="tblProyeccion">
           <thead><tr>
@@ -4765,6 +4771,37 @@ function verClientesEnMora() {
   showToast('Créditos ordenados por días de mora (mayor primero)', 'ok', 2500);
 }
 
+// Exporta el Top 20 clientes por saldo (versión con IDs si es superadmin).
+function exportTopClientes() {
+  const data = window._topClientesData || [];
+  if (!data.length) { showToast('Aún no hay datos de top clientes', 'warn'); return; }
+  const rows = data.map((c, i) => ({
+    rank: i + 1, cliente: c.cliente, identificacion: c.identificacion,
+    n_creditos: c.n_creditos, valor: c.valor_credito, saldo: c.saldo_capital,
+    dias_mora_max: c.max_mora, saldo_en_mora: c.saldo_mora_30,
+  }));
+  downloadCSV(rows,
+    ['Rank','Cliente','Identificacion','N_Creditos','Valor_Total','Saldo_Capital','Dias_Mora_Max','Saldo_en_Mora'],
+    ['rank','cliente','identificacion','n_creditos','valor','saldo','dias_mora_max','saldo_en_mora'],
+    'top_clientes');
+}
+
+// Exporta las cuotas proyectadas (proyección de pagos) del período.
+function exportProyeccion() {
+  const data = window._proyeccionData || [];
+  if (!data.length) { showToast('No hay cuotas proyectadas en el período', 'warn'); return; }
+  const rows = data.map(r => ({
+    fecha_cuota: r._venc_date ? new Date(r._venc_date).toISOString().substring(0,10) : '',
+    cliente: r.cliente, linea: r.linea, aliado: r.aliado,
+    valor_cuota: r._valor_cuota_num || r.valor_cuota, saldo_capital: r.saldo_capital,
+    dias_mora: r.dias_mora,
+  }));
+  downloadCSV(rows,
+    ['Fecha_Cuota','Cliente','Linea','Aliado','Valor_Cuota','Saldo_Capital','Dias_Mora'],
+    ['fecha_cuota','cliente','linea','aliado','valor_cuota','saldo_capital','dias_mora'],
+    'cuotas_proyectadas');
+}
+
 // Exporta los procesos jurídicos (con su cruce de cartera) para gestión.
 function exportJuridico() {
   const rows = (window._jrData || []).map(x => ({
@@ -6354,6 +6391,7 @@ function renderProyeccion() {
 
   // Tabla detallada (siempre)
   const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 300);
+  window._proyeccionData = sorted;   // para exportar a CSV
   const tb = document.querySelector('#tblProyeccion tbody');
   if (tb) {
     const fmtDate = d => {
@@ -6628,6 +6666,7 @@ async function loadTopClientesUnmasked() {
     const top = await res.json();
     const tbCli = document.querySelector('#tblTopClientes tbody');
     if (!tbCli || !Array.isArray(top)) return;
+    window._topClientesData = top;   // para exportar a CSV (versión con IDs)
     if (!top.length) {
       tbCli.innerHTML = '<tr><td colspan="8">Sin clientes activos en el batch actual.</td></tr>';
       return;
