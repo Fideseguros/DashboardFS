@@ -2298,7 +2298,10 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div class="module-meta"><span id="reFecha">Estado consolidado de todos los m&oacute;dulos</span></div>
         </div>
       </div>
-      <button class="btn btn-export" style="font-size:0.78rem;" onclick="loadResumenEjecutivo()">Actualizar</button>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="btn btn-reset" style="font-size:0.78rem;" onclick="openGlosario()" title="¿Qu&eacute; significan los t&eacute;rminos?">Glosario</button>
+        <button class="btn btn-export" style="font-size:0.78rem;" onclick="loadResumenEjecutivo()">Actualizar</button>
+      </div>
     </div>
 
     <!-- Alertas -->
@@ -3352,6 +3355,39 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     </div>
     <div class="ficha-body" id="fichaBody">
       <p class="ficha-empty">Escribe la c&eacute;dula del cliente y presiona Buscar. Ver&aacute;s su cr&eacute;dito, pagos, solicitudes y proceso jur&iacute;dico en una sola vista.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Glosario de términos (modal) -->
+<div class="ficha-modal" id="glosarioModal">
+  <div class="ficha-modal-backdrop" onclick="closeGlosario()"></div>
+  <div class="ficha-panel">
+    <div class="ficha-head">
+      <div class="ficha-head-row">
+        <div class="ficha-cliente-nombre" style="flex:1;margin:0;">Glosario de t&eacute;rminos</div>
+        <button class="ficha-close" onclick="closeGlosario()" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="ficha-cliente-id" style="margin-top:4px;">Explicaci&oacute;n sencilla de las m&eacute;tricas del dashboard</div>
+    </div>
+    <div class="ficha-body">
+      <div class="ficha-section"><h4>Cartera y mora</h4>
+        <div class="ficha-card"><strong>Cartera Activa</strong><div style="margin-top:4px;color:var(--neutral-700);">Cr&eacute;ditos que a&uacute;n est&aacute;n vigentes (no cancelados). Es la plata que est&aacute; "trabajando".</div></div>
+        <div class="ficha-card"><strong>Saldo Capital</strong><div style="margin-top:4px;color:var(--neutral-700);">Lo que falta por cobrar del capital prestado, sin contar intereses.</div></div>
+        <div class="ficha-card"><strong>Cartera en Mora (+30 d&iacute;as)</strong><div style="margin-top:4px;color:var(--neutral-700);">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de atraso. La pol&iacute;tica interna considera 1&ndash;30 d&iacute;as todav&iacute;a "al d&iacute;a".</div></div>
+        <div class="ficha-card"><strong>ICV &mdash; &Iacute;ndice de Cartera Vencida</strong><div style="margin-top:4px;color:var(--neutral-700);">Porcentaje del saldo activo que est&aacute; en mora &gt; 30 d&iacute;as. Es la principal alarma de riesgo. Ideal por debajo de 5%.</div></div>
+        <div class="ficha-card"><strong>NPL &mdash; Mora dura (+90 d&iacute;as)</strong><div style="margin-top:4px;color:var(--neutral-700);">Porcentaje del saldo con m&aacute;s de 90 d&iacute;as de atraso &mdash; cartera muy deteriorada, dif&iacute;cil de recuperar.</div></div>
+        <div class="ficha-card"><strong>Aging de Mora</strong><div style="margin-top:4px;color:var(--neutral-700);">Reparte el saldo por rangos de d&iacute;as de atraso (0, 1&ndash;30, 31&ndash;60&hellip;) para ver d&oacute;nde se concentra el riesgo.</div></div>
+      </div>
+      <div class="ficha-section"><h4>An&aacute;lisis</h4>
+        <div class="ficha-card"><strong>Cosecha (Vintage)</strong><div style="margin-top:4px;color:var(--neutral-700);">Agrupa los cr&eacute;ditos por el mes en que se desembolsaron. Sirve para comparar si los cr&eacute;ditos de un mes se comportan peor que los de otro.</div></div>
+        <div class="ficha-card"><strong>Cr&eacute;dito Promedio (Ticket)</strong><div style="margin-top:4px;color:var(--neutral-700);">Valor promedio de cada cr&eacute;dito &mdash; el tama&ntilde;o t&iacute;pico de lo que se presta.</div></div>
+        <div class="ficha-card"><strong>Tasa Promedio</strong><div style="margin-top:4px;color:var(--neutral-700);">Inter&eacute;s promedio de la cartera, ponderado por el saldo &mdash; cu&aacute;nto rinde la cartera hoy.</div></div>
+      </div>
+      <div class="ficha-section"><h4>Solicitudes y saldo</h4>
+        <div class="ficha-card"><strong>En Estudio / Desembolsada / Anulada</strong><div style="margin-top:4px;color:var(--neutral-700);">Estados de una solicitud: en revisi&oacute;n, ya prestada, o rechazada/cancelada (incluye negadas).</div></div>
+        <div class="ficha-card"><strong>Saldo por Cobrar</strong><div style="margin-top:4px;color:var(--neutral-700);">Total que los clientes deben, seg&uacute;n el &uacute;ltimo Resumen Estado Cuenta cargado.</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -6970,6 +7006,16 @@ async function loadResumenEjecutivo() {
 function _reGo(tabName) {
   const t = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
   if (t) activateTab(t);
+}
+
+// ===================== GLOSARIO =====================
+function openGlosario() {
+  document.getElementById('glosarioModal').classList.add('open');
+  document.body.classList.add('sheet-open');
+}
+function closeGlosario() {
+  document.getElementById('glosarioModal').classList.remove('open');
+  document.body.classList.remove('sheet-open');
 }
 
 // ===================== FICHA CLIENTE 360 =====================
