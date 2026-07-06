@@ -1,11 +1,12 @@
 """Fide Seguros Dashboard - FastAPI Application."""
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Header
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 from pathlib import Path
 
 import os
+import hashlib
 import logging
 from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
@@ -171,13 +172,38 @@ def health():
     return {"status": "ok", "service": "fide-dashboard"}
 
 
-@app.get("/login", response_class=HTMLResponse)
-def login_page():
-    return (TEMPLATES_DIR / "login.html").read_text(encoding="utf-8")
+@app.get("/login")
+def login_page(if_none_match: str | None = Header(default=None, alias="If-None-Match")):
+    return _html_with_etag("login.html", if_none_match)
 
 
-@app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request):
+# Caché en memoria de los templates HTML + su ETag. El archivo NO cambia en
+# runtime (cada deploy reinicia el proceso y re-lee), así que:
+#   - evitamos leer del disco en cada request (el dashboard son ~250KB),
+#   - servimos un ETag para que el navegador reciba 304 Not Modified si ya
+#     tiene esa versión → no re-descarga los 250KB en cada recarga/sesión.
+_TEMPLATE_CACHE = {}  # name -> (contenido, etag)
+
+
+def _cached_template(name: str):
+    if name not in _TEMPLATE_CACHE:
+        content = (TEMPLATES_DIR / name).read_text(encoding="utf-8")
+        etag = '"' + hashlib.md5(content.encode("utf-8")).hexdigest()[:16] + '"'
+        _TEMPLATE_CACHE[name] = (content, etag)
+    return _TEMPLATE_CACHE[name]
+
+
+def _html_with_etag(name: str, if_none_match: str | None) -> Response:
+    content, etag = _cached_template(name)
+    headers = {"ETag": etag, "Cache-Control": "private, must-revalidate"}
+    if if_none_match and if_none_match == etag:
+        return Response(status_code=304, headers=headers)
+    return HTMLResponse(content=content, headers=headers)
+
+
+@app.get("/")
+def dashboard(request: Request,
+             if_none_match: str | None = Header(default=None, alias="If-None-Match")):
     token = request.cookies.get("fide_token", "")
     if not token:
         return RedirectResponse(url="/login", status_code=302)
@@ -194,4 +220,4 @@ def dashboard(request: Request):
     if not session:
         return RedirectResponse(url="/login", status_code=302)
 
-    return (TEMPLATES_DIR / "dashboard.html").read_text(encoding="utf-8")
+    return _html_with_etag("dashboard.html", if_none_match)
