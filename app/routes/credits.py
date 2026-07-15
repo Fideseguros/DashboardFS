@@ -6,21 +6,27 @@ from fastapi import APIRouter, Depends, Query, Request, Response, HTTPException,
 from fastapi.responses import StreamingResponse
 from app.database import get_connection
 from app.auth.middleware import require_auth, require_superadmin
+from app.build_version import BUILD_VERSION
 from app.crypto import decrypt, mask_identificacion, mask_cliente
 from app.audit import log_audit, get_client_ip
 
 
 def _active_batch_etag(conn) -> str:
     """ETag basado en el último sync exitoso del batch activo de cartera.
-    Cuando admin sube una nueva cartera, el id sube → etag cambia → cache invalida."""
+    Cuando admin sube una nueva cartera, el id sube → etag cambia → cache invalida.
+
+    Incluye BUILD_VERSION: el enmascarado de PII y demás transformaciones se
+    aplican al leer, así que un deploy que las cambie debe invalidar la caché
+    del navegador aunque los datos en BD sean los mismos (ver
+    app/build_version.py)."""
     row = conn.execute(
         "SELECT id, completed_at FROM sync_logs "
         "WHERE source='manual_upload' AND status='success' "
         "ORDER BY id DESC LIMIT 1"
     ).fetchone()
     if not row:
-        return '"no-batch"'
-    return f'"batch-{row["id"]}-{row["completed_at"] or ""}"'
+        return f'"no-batch-{BUILD_VERSION}"'
+    return f'"batch-{row["id"]}-{row["completed_at"] or ""}-{BUILD_VERSION}"'
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
 

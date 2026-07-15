@@ -10,6 +10,7 @@ import re
 from fastapi import APIRouter, Depends, UploadFile, File, Request, Response, Header
 from app.database import get_db, get_connection
 from app.auth.middleware import require_auth, require_superadmin
+from app.build_version import BUILD_VERSION
 from app.crypto import encrypt, decrypt, mask_identificacion, mask_cliente
 from app.sync.upload_helpers import (
     upload_session,
@@ -22,8 +23,14 @@ from app.sync.upload_helpers import (
 def _source_etag(conn, *sources, extra="") -> str:
     """ETag para endpoints de lista: cambia cuando se sube un nuevo archivo
     en cualquiera de los `sources`. `extra` (ej. rol) distingue variantes de
-    contenido (plaintext vs enmascarado) para no servir cache cruzada."""
-    parts = []
+    contenido (plaintext vs enmascarado) para no servir cache cruzada.
+
+    Incluye BUILD_VERSION porque la normalización (estados, máscaras, signos)
+    se aplica AL LEER: si solo dependiéramos de los datos, un fix de lógica
+    no cambiaría el ETag y el navegador seguiría con el JSON viejo vía 304.
+    Ver app/build_version.py para el caso real que motivó esto.
+    """
+    parts = [f"b:{BUILD_VERSION}"]
     for src in sources:
         row = conn.execute(
             "SELECT id, completed_at FROM sync_logs WHERE source=? AND status='success' "
