@@ -164,6 +164,30 @@ async def add_security_headers(request: Request, call_next):
         "base-uri 'self'; "
         "form-action 'self'"
     )
+
+    # ---- Caché de respuestas con PII ----
+    # La app autentica por COOKIE, no por header Authorization. Eso importa:
+    # la regla del RFC 9111 §3.5 que impide a las cachés compartidas almacenar
+    # respuestas autenticadas aplica solo a Authorization. Una respuesta 200 de
+    # /api/* sin Cache-Control es candidata a "heuristic freshness" (§4.2.2), o
+    # sea que un proxy puede guardarla y servírsela a otra persona.
+    #
+    # Hoy Railway no cachea, así que no es explotable — pero un proxy corporativo
+    # con inspección TLS (común en el sector financiero) o un CDN puesto adelante
+    # más adelante convertiría esto en una fuga de cédulas y nombres. Es barato
+    # cerrarlo ahora.
+    #
+    # Default no-store para todo /api/*; los endpoints que sí quieren caché
+    # (los que sirven ETag) ya setearon su propio Cache-Control y lo respetamos.
+    # Vary: Cookie en todos, para que ninguna caché comparta una respuesta entre
+    # sesiones distintas (el contenido cambia por rol: plaintext vs enmascarado).
+    if request.url.path.startswith("/api/"):
+        if "cache-control" not in response.headers:
+            response.headers["Cache-Control"] = "no-store"
+        vary = [v.strip() for v in response.headers.get("Vary", "").split(",") if v.strip()]
+        if not any(v.lower() == "cookie" for v in vary):
+            vary.append("Cookie")  # GZipMiddleware ya pudo poner Accept-Encoding
+            response.headers["Vary"] = ", ".join(vary)
     return response
 
 

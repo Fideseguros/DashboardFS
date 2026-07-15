@@ -11,22 +11,29 @@ from app.crypto import decrypt, mask_identificacion, mask_cliente
 from app.audit import log_audit, get_client_ip
 
 
-def _active_batch_etag(conn) -> str:
+def _active_batch_etag(conn, role: str = "") -> str:
     """ETag basado en el último sync exitoso del batch activo de cartera.
     Cuando admin sube una nueva cartera, el id sube → etag cambia → cache invalida.
 
     Incluye BUILD_VERSION: el enmascarado de PII y demás transformaciones se
     aplican al leer, así que un deploy que las cambie debe invalidar la caché
     del navegador aunque los datos en BD sean los mismos (ver
-    app/build_version.py)."""
+    app/build_version.py).
+
+    `role` va DENTRO de las comillas: un entity-tag es DQUOTE *etagc DQUOTE
+    (RFC 9110 §8.8.3) y nada puede ir después de la comilla de cierre. Antes se
+    concatenaba fuera ('"batch-1-..."-superadmin'), y un intermediario que
+    parsee conforme al RFC descartaría el sufijo del rol. No filtraba caché
+    entre roles (el servidor compara el string completo, así que fallaba en
+    seguro perdiendo el 304), pero era frágil."""
     row = conn.execute(
         "SELECT id, completed_at FROM sync_logs "
         "WHERE source='manual_upload' AND status='success' "
         "ORDER BY id DESC LIMIT 1"
     ).fetchone()
     if not row:
-        return f'"no-batch-{BUILD_VERSION}"'
-    return f'"batch-{row["id"]}-{row["completed_at"] or ""}-{BUILD_VERSION}"'
+        return f'"no-batch-{BUILD_VERSION}-{role}"'
+    return f'"batch-{row["id"]}-{row["completed_at"] or ""}-{BUILD_VERSION}-{role}"'
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
 
@@ -116,7 +123,7 @@ def get_credits(
         no_filters = not any([estado, linea, calificacion, aliado, ciudad,
                               mora_min is not None, mora_max is not None])
         if no_filters:
-            etag = _active_batch_etag(conn) + f'-{role}'
+            etag = _active_batch_etag(conn, role)
             if if_none_match and if_none_match == etag:
                 # No fue modificado desde la última vez que el cliente lo pidió
                 response.status_code = 304
