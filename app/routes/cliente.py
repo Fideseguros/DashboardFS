@@ -141,8 +141,16 @@ def ficha_cliente(request: Request, identificacion: str = Query(..., min_length=
             solicitudes.append(d)
 
         # ---------- Proceso jurídico ----------
+        # SOLO superadmin. /api/juridico es require_superadmin porque el detalle
+        # del litigio (juzgado, medida cautelar, probabilidad, naturaleza) es la
+        # PII más sensible que maneja la app. Sin este gate, la ficha sería una
+        # puerta trasera: un viewer que conozca una cédula obtendría por aquí
+        # exactamente lo que el endpoint dedicado le niega.
+        # Se omite la consulta entera (no solo el enmascarado) para que 'juridico'
+        # tampoco alimente el flag 'encontrado' — si no, sería un oráculo de
+        # "esta persona tiene proceso judicial", dato sensible en sí mismo.
         juridico = []
-        if b_jur:
+        if b_jur and is_super:
             for r in conn.execute(
                 "SELECT identificacion, nombre, naturaleza_litigio, avance, "
                 "probabilidad, medida_cautelar, juzgado "
