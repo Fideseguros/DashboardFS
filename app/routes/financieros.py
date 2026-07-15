@@ -270,7 +270,8 @@ def summary(year: int, _user=Depends(require_auth)):
         # Agregados por mes a partir de la base. NO recalculamos la utilidad —
         # usamos las filas REALES del Excel (códigos sintéticos 539999 y 999999),
         # que el contador ya cuadró con sus decimales y signos.
-        # gastos_op excluye 54 (impuesto de renta) que aparece después en el ER.
+        # Gastos excluye 54 (impuesto de renta), que en el ER va después de la
+        # utilidad antes de impuesto, no dentro de los gastos operacionales.
         #
         # INGRESOS: preferimos 'Total 4 INGRESOS' del contador (ingresos_excel).
         # Sumar los detalles 4xxx a secas da un valor INFLADO porque el grupo
@@ -288,10 +289,12 @@ def summary(year: int, _user=Depends(require_auth)):
                 SUM(CASE WHEN substr(cuenta_code,1,1)='4' AND is_total=0
                          THEN (CASE WHEN substr(cuenta_code,1,4)='4175' THEN -valor ELSE valor END)
                          ELSE 0 END) as ingresos_calc,
+                SUM(CASE WHEN length(cuenta_code)=2 AND substr(cuenta_code,1,1)='5'
+                          AND cuenta_code!='54' AND is_total=1 THEN valor ELSE 0 END) as gastos_excel,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='5'
                           AND substr(cuenta_code,1,2)!='54'
                           AND cuenta_code NOT IN ('539999','999999')
-                          AND is_total=0 THEN valor ELSE 0 END) as gastos_op,
+                          AND is_total=0 THEN valor ELSE 0 END) as gastos_calc,
                 SUM(CASE WHEN substr(cuenta_code,1,2)='54' AND is_total=0 THEN valor ELSE 0 END) as impuesto_renta,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='6' AND is_total=0 THEN valor ELSE 0 END) as costos,
                 SUM(CASE WHEN substr(cuenta_code,1,1)='7' AND is_total=0 THEN valor ELSE 0 END) as costos_prod,
@@ -306,9 +309,19 @@ def summary(year: int, _user=Depends(require_auth)):
         total_util_antes_excel = total_util_neta_excel = 0.0
         for r in agg:
             d = dict(r)
-            d['gastos'] = d['gastos_op'] or 0
-            # Mismo criterio que la utilidad: la fila del contador manda.
+            # Mismo criterio que la utilidad: la fila del contador manda, y solo
+            # recalculamos si el Excel no la trae. Ingresos y Gastos deben usar
+            # AMBOS el total del contador: si uno usa su fila y el otro suma
+            # detalles, la resta deja de cuadrar contra la utilidad que él mismo
+            # calculó. Caso real: en 2024 el contador arrastró la fórmula
+            # 'Total 5110 = SUM(H86:I90)' abarcando dos columnas, y la col I
+            # tiene un 1.300.000 duplicado que no pertenece a ningún mes. Su
+            # Total 51 cuenta ese valor dos veces; nuestro parser (que solo lee
+            # la columna del mes) no. Sumando detalles, la tarjeta de Gastos
+            # discrepaba 1.300.000 contra 'Utilidad antes de impuesto'.
+            # Con los totales, los 3 años (2024/2025/2026) reconcilian al peso.
             d['ingresos'] = (d.get('ingresos_excel') or 0) or (d.get('ingresos_calc') or 0)
+            d['gastos'] = (d.get('gastos_excel') or 0) or (d.get('gastos_calc') or 0)
             # Si el Excel trae la fila calculada del contador, usar ESA. Si no
             # (archivo viejo, o el contador no la diligenció), recalcular.
             ua_excel = d.get('utilidad_antes_excel') or 0
