@@ -2793,16 +2793,16 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 
     <div class="kpi-grid">
       <div class="kpi-card teal">
-        <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero total de pagos cargados desde el archivo de recaudo.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero de pagos recibidos. No cuenta los movimientos que no son recaudo (condonaciones, notas d&eacute;bito, reintegros, cheques devueltos).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></div>
         <div class="kpi-label">Total Pagos</div>
         <div class="kpi-value" id="rcTotal">-</div>
         <div class="kpi-sub" id="rcTotalSub"></div>
       </div>
       <div class="kpi-card mint">
-        <div class="kpi-info">i<span class="kpi-tooltip">Suma de la columna Total: capital + intereses + IVA + gastos. Es el ingreso bruto del per&iacute;odo.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Plata que efectivamente entr&oacute;: capital + intereses + IVA + gastos de los pagos recibidos. Excluye los movimientos que no son recaudo (condonaciones, notas d&eacute;bito por ajuste, reintegros y cheques devueltos), que se muestran aparte como Ajustes.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
-        <div class="kpi-label">Recaudo Total</div>
+        <div class="kpi-label">Recaudo Efectivo</div>
         <div class="kpi-value" id="rcRecaudo">-</div>
         <div class="kpi-sub" id="rcRecaudoSub"></div>
       </div>
@@ -2932,7 +2932,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <div class="kpi-sub" id="slDesemSub"></div>
       </div>
       <div class="kpi-card blue">
-        <div class="kpi-info">i<span class="kpi-tooltip">Porcentaje de solicitudes que terminaron en DESEMBOLSADA sobre el total. Mide la eficiencia del embudo de aprobaci&oacute;n.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">De las solicitudes ya decididas (desembolsadas + anuladas), qu&eacute; porcentaje termin&oacute; desembolsado. Las que siguen en estudio no cuentan: a&uacute;n no han sido aprobadas ni rechazadas.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 5-6"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
         <div class="kpi-label">Tasa de Aceptaci&oacute;n</div>
         <div class="kpi-value" id="slTasaAcept">-</div>
@@ -3009,7 +3009,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 
     <div class="kpi-grid">
       <div class="kpi-card mint">
-        <div class="kpi-info">i<span class="kpi-tooltip">Total de ingresos del a&ntilde;o: suma de todas las cuentas detalle PUC 4xxxx (operacionales + no operacionales) hasta el &uacute;ltimo mes con datos.</span></div>
+        <div class="kpi-info">i<span class="kpi-tooltip">Total de ingresos del a&ntilde;o seg&uacute;n la fila &laquo;Total 4 INGRESOS&raquo; del estado de resultados, neto de devoluciones en ventas, hasta el &uacute;ltimo mes con datos.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
         <div class="kpi-label">Ingresos Totales</div>
         <div class="kpi-value" id="efIngresos">-</div>
@@ -4132,6 +4132,14 @@ function matchesChartFilters(r) {
 function addChartClick(chartId, dimension, labelExtractor) {
   const canvas = document.getElementById(chartId);
   if (!canvas) return;
+  // Guard obligatorio: registerChartClicks() corre en CADA updateCharts(), o sea
+  // en cada cambio de filtro. Los canvas son estáticos en el HTML y Chart.destroy()
+  // no los saca del DOM, así que sin esto se acumula un listener por filtro
+  // aplicado. Con 2+ listeners, un clic aplica el filtro y el siguiente lo
+  // deshace de inmediato: el cross-filter "deja de funcionar" sin error en
+  // consola. Mismo patrón que dataset.persistWired más abajo.
+  if (canvas.dataset.xfilterWired) return;
+  canvas.dataset.xfilterWired = '1';
   canvas.addEventListener('click', (evt) => {
     const chart = charts[chartId];
     if (!chart) return;
@@ -5083,7 +5091,13 @@ async function loadRecaudo() {
     document.getElementById('rcTotal').textContent = fmt(totalPagos);
     document.getElementById('rcTotalSub').textContent = `${fmt(s.total || 0)} nuevos · ${fmt(sLeg.pagos_total || 0)} histórico (${fmt(sLeg.prestamos || 0)} préstamos)`;
     document.getElementById('rcRecaudo').textContent = fmtM(recaudoTotal);
-    document.getElementById('rcRecaudoSub').textContent = `Nuevo: ${fmtM(s.recaudo_total || 0)} · Histórico: ${fmtM(sLeg.valor_total || 0)}`;
+    // Los ajustes (condonaciones, notas débito, reintegros, cheques devueltos) NO
+    // son recaudo, pero se muestran para que la cifra siga siendo reconstruible:
+    // recaudo efectivo + ajustes = total bruto del archivo.
+    const rcAjustes = s.ajustes_total || 0;
+    document.getElementById('rcRecaudoSub').textContent =
+      `Nuevo: ${fmtM(s.recaudo_total || 0)} · Histórico: ${fmtM(sLeg.valor_total || 0)}`
+      + (rcAjustes ? ` · Ajustes: ${fmtM(rcAjustes)}` : '');
     document.getElementById('rcCapital').textContent = fmtM(s.capital_total || 0);
     document.getElementById('rcCapitalSub').textContent = pct(s.capital_total, s.recaudo_total) + ' del recaudo nuevo';
     document.getElementById('rcIntCorr').textContent = fmtM(s.interes_corr || 0);
@@ -5326,9 +5340,19 @@ function renderSolicitudes() {
   document.getElementById('slDesem').textContent = fmt(desembolsadas);
   document.getElementById('slDesemSub').textContent = fmtM(valorDesembolsado) + ' colocados';
 
-  const tasaAcept = total > 0 ? (desembolsadas / total * 100) : 0;
+  // Tasa sobre DECIDIDAS, no sobre el total: las solicitudes en estudio siguen
+  // en trámite y todavía no han sido rechazadas, así que meterlas al denominador
+  // castiga la tasa por tener pipeline vivo (subestimaba ~14,6 puntos: 83,0% vs
+  // 97,6% real). Una solicitud solo cuenta cuando ya se decidió: desembolsada
+  // (aprobada) o anulada (negada/desistida/borrada).
+  const anuladas = filtered.filter(r => r.estado === 'ANULADA').length;
+  const decididas = desembolsadas + anuladas;
+  const tasaAcept = decididas > 0 ? (desembolsadas / decididas * 100) : 0;
   document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
-  document.getElementById('slTasaAceptSub').textContent = `${fmt(desembolsadas)} de ${fmt(total)} solicitudes`;
+  const enEstudio = total - decididas;
+  document.getElementById('slTasaAceptSub').textContent =
+    `${fmt(desembolsadas)} de ${fmt(decididas)} decididas`
+    + (enEstudio > 0 ? ` · ${fmt(enEstudio)} en estudio` : '');
 
   const ticket = desembolsadas > 0 ? (valorDesembolsado / desembolsadas) : 0;
   document.getElementById('slTicketProm').textContent = fmtM(ticket);

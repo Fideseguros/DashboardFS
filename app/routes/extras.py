@@ -248,15 +248,41 @@ def recaudo_list(response: Response, user=Depends(require_auth),
 
 @recaudo.get("/summary")
 def recaudo_summary(_user=Depends(require_auth)):
+    """Recaudo EFECTIVO separado de los ajustes contables.
+
+    El archivo mezcla en la misma columna 'Total' cosas que no son recaudo:
+    condonaciones (cartera perdonada: +1.509.232 en 7 movimientos), notas
+    débito por ajuste (aumentan la deuda: −90.265.892), reintegros y cheques
+    devueltos (reversos). Sumarlas todas daba un "Recaudo Total" con −95,4M
+    de ruido (−2,88%): una condonación sumando a recaudo es contradictorio, y
+    una nota débito no es "recaudo negativo".
+
+    Además había incoherencia entre plataformas: el agregador legacy sí
+    excluye los reversados (ver _aggregate_pagos_legacy), el nuevo no filtraba
+    nada — y 'Nota Debito x Cheque Devuelto' es precisamente un reverso.
+
+    Criterio: es recaudo lo que empieza por 'Pago' (Pago Normal + Pago Con
+    Distribución = plata que efectivamente entró). Todo lo demás se agrega
+    como 'ajustes', que se siguen exponiendo para no perder trazabilidad:
+    recaudo_efectivo + ajustes_total reconstruye el total del archivo.
+    Los desgloses (capital/intereses) se limitan al recaudo efectivo, que es
+    lo único que representa cobro real.
+    """
     conn = get_connection()
     try:
         batch = "(SELECT id FROM sync_logs WHERE source='recaudo_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
+        # UPPER() por si la plataforma cambia la capitalización del tipo.
+        es_pago = "UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%'"
         row = conn.execute(f"""
-            SELECT COUNT(*) as total,
-                COALESCE(SUM(total),0) as recaudo_total,
-                COALESCE(SUM(capital),0) as capital_total,
-                COALESCE(SUM(interes_corriente),0) as interes_corr,
-                COALESCE(SUM(interes_mora),0) as interes_mora
+            SELECT
+                SUM(CASE WHEN {es_pago} THEN 1 ELSE 0 END) as total,
+                COALESCE(SUM(CASE WHEN {es_pago} THEN total ELSE 0 END),0) as recaudo_total,
+                COALESCE(SUM(CASE WHEN {es_pago} THEN capital ELSE 0 END),0) as capital_total,
+                COALESCE(SUM(CASE WHEN {es_pago} THEN interes_corriente ELSE 0 END),0) as interes_corr,
+                COALESCE(SUM(CASE WHEN {es_pago} THEN interes_mora ELSE 0 END),0) as interes_mora,
+                SUM(CASE WHEN {es_pago} THEN 0 ELSE 1 END) as ajustes_n,
+                COALESCE(SUM(CASE WHEN {es_pago} THEN 0 ELSE total END),0) as ajustes_total,
+                COUNT(*) as movimientos_n
             FROM pagos WHERE sync_batch_id = {batch}
         """).fetchone()
         return dict(row) if row else {}

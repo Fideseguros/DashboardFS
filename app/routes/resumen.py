@@ -118,14 +118,21 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
             out["actualizaciones"]["saldo_cartera"] = None
 
         # ---------- Tendencia de saldo (ultimos 2 snapshots) ----------
+        # El % debe calcularse sobre LA MISMA BASE que se muestra en la tarjeta
+        # (línea ~113: saldo + ajuste). Antes se calculaba sobre el saldo crudo
+        # mientras la tarjeta mostraba el ajustado, así que el "▲ X%" no
+        # correspondía al número que tenía al lado: el ajuste es constante en
+        # ambos snapshots, y al no estar en el denominador exageraba la
+        # variación (el ajuste es ~3,8% del saldo capital activo).
         snaps = conn.execute(
             "SELECT saldo_cartera FROM saldo_cartera_snapshots "
             "ORDER BY snapshot_date DESC, id DESC LIMIT 2"
         ).fetchall()
-        if len(snaps) == 2 and (snaps[1]["saldo_cartera"] or 0) > 0:
-            hoy = snaps[0]["saldo_cartera"] or 0
-            ant = snaps[1]["saldo_cartera"] or 0
-            out["saldo_tendencia_pct"] = round((hoy - ant) / ant * 100, 1)
+        if len(snaps) == 2:
+            hoy = (snaps[0]["saldo_cartera"] or 0) + _AJUSTE_CARTERA
+            ant = (snaps[1]["saldo_cartera"] or 0) + _AJUSTE_CARTERA
+            if ant > 0:
+                out["saldo_tendencia_pct"] = round((hoy - ant) / ant * 100, 1)
 
         return out
     finally:
