@@ -14,6 +14,7 @@ from app.build_version import BUILD_VERSION
 from app.crypto import encrypt, decrypt, mask_identificacion, mask_cliente
 from app.sync.upload_helpers import (
     upload_session,
+    check_file_signature,
     to_float as _to_float,
     to_date as _to_date,
     str_or_none as _str_or_none,
@@ -487,7 +488,26 @@ async def solic_upload(request: Request, user=Depends(require_superadmin), file:
         rows = ctx.read_excel()
         if len(rows) > MAX_ROWS:
             raise ValueError(f"Excede {MAX_ROWS} filas")
-        records = [r for r in (_transform_solic_row(row) for row in rows[1:]) if r]
+        # Firma del archivo: sin esto, cualquier Excel entraba con "success" y
+        # el DELETE de abajo borraba la carga buena anterior.
+        hdr_idx = check_file_signature(
+            rows, archivo="Informe de Solicitudes (plataforma nueva)",
+            require=('solicitud origen', 'paso ruta', 'hoja ruta', 'solicitante'),
+            reject=(
+                ('tipo mvto', 'Recaudo/Movimientos'),
+                ('fecha movimiento', 'Recaudo/Movimientos'),
+                ('saldo_capital', 'Cartera'),
+                ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
+                ('naturaleza del litigio', 'Procesos Judiciales'),
+            ),
+        )
+        records = [r for r in (_transform_solic_row(row) for row in rows[hdr_idx + 1:]) if r]
+        if not records:
+            raise ValueError(
+                "El archivo tiene los encabezados correctos pero no trae "
+                "solicitudes. No se importó nada — los datos actuales quedan "
+                "intactos. Revisa los filtros con los que exportaste el reporte."
+            )
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
             conn.execute("DELETE FROM solicitudes WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND id < ?)", (ctx.sync_id,))
@@ -525,23 +545,14 @@ def solic_list(user=Depends(require_auth)):
         conn.close()
 
 
-@solicitudes.get("/summary")
-def solic_summary(_user=Depends(require_auth)):
-    conn = get_connection()
-    try:
-        batch = "(SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
-        row = conn.execute(f"""
-            SELECT COUNT(*) as total,
-                COALESCE(SUM(valor),0) as valor_total,
-                SUM(CASE WHEN estado='DESEMBOLSADA' THEN 1 ELSE 0 END) as desembolsadas,
-                SUM(CASE WHEN estado='DESEMBOLSADA' THEN COALESCE(valor,0) ELSE 0 END) as valor_desembolsado,
-                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN 1 ELSE 0 END) as pipeline,
-                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN COALESCE(valor,0) ELSE 0 END) as valor_pipeline
-            FROM solicitudes WHERE sync_batch_id = {batch}
-        """).fetchone()
-        return dict(row) if row else {}
-    finally:
-        conn.close()
+# NOTA (auditoría jul-2026): aquí existían /summary y /combined-summary, que
+# calculaban sobre la tabla CRUDA con estado='DESEMBOLSADA' literal, sin pasar
+# por _normalize_estado. Resultado: contaban 29 solicitudes ANULADAS como
+# "pipeline" activo e inflaban valor_pipeline en $207,9M (+39%). Ningún
+# consumidor: el dashboard solo usa /combined (que sí normaliza). Endpoint
+# muerto + cifra errónea = trampa cargada para quien lo consuma creyendo en
+# él. Se eliminaron; si se necesita un agregado, derivarlo de la misma
+# normalización que /combined.
 
 
 # ---------- HISTÓRICO de Solicitudes (plataforma vieja, 40 cols) ----------
@@ -817,46 +828,9 @@ def solic_diagnose(_user=Depends(require_auth)):
         conn.close()
 
 
-@solicitudes.get("/combined-summary")
-def solic_combined_summary(_user=Depends(require_auth)):
-    """Totales unión legacy + nueva, con estados normalizados.
-
-    Nueva: DESEMBOLSADA cuenta como tal.
-    Legacy: APROBADA cuenta como desembolsada (mapeo solicitado por líder).
-    Legacy: PENDIENTE se EXCLUYE de todos los conteos (pre-plataforma anterior).
-    """
-    conn = get_connection()
-    try:
-        batch = "(SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND status='success' ORDER BY id DESC LIMIT 1)"
-        new_row = conn.execute(f"""
-            SELECT COUNT(*) as total, COALESCE(SUM(valor),0) as valor_total,
-                SUM(CASE WHEN estado='DESEMBOLSADA' THEN 1 ELSE 0 END) as desembolsadas,
-                SUM(CASE WHEN estado='DESEMBOLSADA' THEN COALESCE(valor,0) ELSE 0 END) as valor_desembolsado,
-                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN 1 ELSE 0 END) as pipeline,
-                SUM(CASE WHEN estado<>'DESEMBOLSADA' AND estado IS NOT NULL THEN COALESCE(valor,0) ELSE 0 END) as valor_pipeline
-            FROM solicitudes WHERE sync_batch_id = {batch}
-        """).fetchone()
-        leg_row = conn.execute("""
-            SELECT COUNT(*) as total, COALESCE(SUM(monto),0) as valor_total,
-                SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN 1 ELSE 0 END) as desembolsadas,
-                SUM(CASE WHEN UPPER(COALESCE(estado,''))='APROBADA' THEN COALESCE(monto,0) ELSE 0 END) as valor_desembolsado
-            FROM solicitudes_legacy
-            WHERE UPPER(COALESCE(estado,'')) <> 'PENDIENTE'
-        """).fetchone()
-        new_d = dict(new_row) if new_row else {}
-        leg_d = dict(leg_row) if leg_row else {}
-        return {
-            'total': (new_d.get('total') or 0) + (leg_d.get('total') or 0),
-            'valor_total': (new_d.get('valor_total') or 0) + (leg_d.get('valor_total') or 0),
-            'desembolsadas': (new_d.get('desembolsadas') or 0) + (leg_d.get('desembolsadas') or 0),
-            'valor_desembolsado': (new_d.get('valor_desembolsado') or 0) + (leg_d.get('valor_desembolsado') or 0),
-            'pipeline': new_d.get('pipeline') or 0,
-            'valor_pipeline': new_d.get('valor_pipeline') or 0,
-            'legacy_total': leg_d.get('total') or 0,
-            'nueva_total': new_d.get('total') or 0,
-        }
-    finally:
-        conn.close()
+# (El endpoint /combined-summary que vivía aquí se eliminó — ver la nota
+#  junto al histórico de solicitudes: SQL crudo que reimplementaba mal la
+#  normalización, sin ningún consumidor.)
 
 
 # ============================================================
@@ -895,7 +869,25 @@ async def jur_upload(request: Request, user=Depends(require_superadmin), file: U
     async with upload_session(request, user, file, source="juridico_upload",
                               max_mb=MAX_UPLOAD_MB) as ctx:
         rows = ctx.read_excel()
-        records = [r for r in (_transform_juridico_row(row) for row in rows[2:]) if r]
+        # El reporte trae una fila de título ("PROCESOS JUDICIALES") antes de
+        # los encabezados; check_file_signature la salta y devuelve el índice
+        # real del header (antes se asumía rows[2:] a ciegas).
+        hdr_idx = check_file_signature(
+            rows, archivo="Informe de Procesos Judiciales",
+            require=('naturaleza del litigio', 'juzgado', 'medida cautelar'),
+            reject=(
+                ('tipo mvto', 'Recaudo/Movimientos'),
+                ('paso ruta', 'Solicitudes'),
+                ('saldo_capital', 'Cartera'),
+                ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
+            ),
+        )
+        records = [r for r in (_transform_juridico_row(row) for row in rows[hdr_idx + 1:]) if r]
+        if not records:
+            raise ValueError(
+                "El archivo tiene los encabezados correctos pero no trae "
+                "procesos. No se importó nada — los datos actuales quedan intactos."
+            )
         cols = list(records[0].keys()) if records else []
         with get_db() as conn:
             conn.execute("DELETE FROM procesos_juridicos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='juridico_upload' AND id < ?)", (ctx.sync_id,))

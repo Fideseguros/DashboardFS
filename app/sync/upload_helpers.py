@@ -112,6 +112,60 @@ def read_excel(content: bytes) -> list[tuple]:
 
 
 # ============================================================
+#             VALIDACIÓN DE FIRMA DEL ARCHIVO
+# ============================================================
+def _norm_header_cell(s):
+    """lower + sin tildes + espacios colapsados, para comparar headers."""
+    import unicodedata
+    s = str(s or '').strip().lower()
+    s = ' '.join(s.split())
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
+
+
+def check_file_signature(rows, *, archivo, require, reject=(), scan_rows=3):
+    """Verifica por FIRMA de encabezados que el Excel subido sea el esperado,
+    ANTES de tocar la base de datos.
+
+    Motivación (auditoría jul-2026): los uploads de Cartera, Solicitudes y
+    Jurídico aceptaban CUALQUIER Excel. Subir el archivo de Recaudo por el
+    botón de cartera respondía "success, 4597 registros" mientras borraba la
+    cartera completa (el DELETE del batch anterior corre antes del INSERT) y
+    guardaba cédulas como estados. Recaudo y Saldo Cartera ya validaban; esto
+    generaliza ese mismo patrón para los demás.
+
+    - require: frases (normalizadas) que deben estar TODAS en la fila de
+      encabezados. Se buscan por 'contains' en las primeras `scan_rows` filas,
+      porque algunos reportes traen una fila de título antes (ej. el de
+      Procesos Judiciales).
+    - reject: pares (frase, nombre_del_otro_reporte). Si aparece, el error
+      dice QUÉ archivo parece ser — más accionable para la gerente que un
+      "formato inválido".
+
+    Devuelve el índice de la fila de encabezados. Lanza ValueError con mensaje
+    apto para mostrar en la UI si el archivo no corresponde.
+    """
+    for i, row in enumerate(rows[:scan_rows]):
+        if not row:
+            continue
+        norm = [_norm_header_cell(c) for c in row if c]
+        for frase, otro in reject:
+            if any(frase in h for h in norm):
+                raise ValueError(
+                    f"Este archivo parece ser el de {otro}, no «{archivo}». "
+                    f"Verifica que estés subiendo el archivo correcto en este botón."
+                )
+        if all(any(frase in h for h in norm) for frase in require):
+            return i
+    ejemplos = ", ".join(f"«{f}»" for f in list(require)[:3])
+    raise ValueError(
+        f"Este archivo no parece ser «{archivo}»: no encontré las columnas "
+        f"esperadas (como {ejemplos}). Verifica que estés subiendo el archivo "
+        f"correcto en este botón."
+    )
+
+
+# ============================================================
 #                   CONVERTERS REUSABLES
 # ============================================================
 def to_float(v):

@@ -59,32 +59,50 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
         b_rec, rec_when = _batch(conn, "recaudo_upload")
         out["actualizaciones"]["recaudo"] = rec_when
         if b_rec:
+            # Mismo criterio que /api/recaudo/summary: solo movimientos 'Pago%'
+            # son recaudo (excluye condonaciones, notas débito, reintegros y
+            # cheques devueltos). Si el home usara SUM(total) crudo, mostraría
+            # una cifra distinta a la pestaña Recaudo para el mismo archivo.
             row = conn.execute(
-                "SELECT COUNT(*) as n, COALESCE(SUM(total),0) as total, "
-                "COALESCE(SUM(capital),0) as capital FROM pagos WHERE sync_batch_id=?",
+                "SELECT SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN 1 ELSE 0 END) as n, "
+                "COALESCE(SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN total ELSE 0 END),0) as total, "
+                "COALESCE(SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN capital ELSE 0 END),0) as capital "
+                "FROM pagos WHERE sync_batch_id=?",
                 (b_rec,)
             ).fetchone()
-            out["recaudo"] = {"movimientos": row["n"], "total": row["total"], "capital": row["capital"]}
+            out["recaudo"] = {"movimientos": row["n"] or 0, "total": row["total"], "capital": row["capital"]}
         else:
             out["recaudo"] = None
 
-        # ---------- Solicitudes ----------
+        # ---------- Solicitudes (solo plataforma nueva) ----------
+        # Usa la MISMA _normalize_estado que /api/solicitudes/combined. Antes
+        # había aquí una tercera copia de las reglas con fuzzy matching propio:
+        # coincidía por casualidad con la pestaña, pero cualquier estado nuevo
+        # de la plataforma haría divergir el home de la pestaña sin aviso
+        # (p.ej. le faltaba 'CENTRAL' y no clasificaba las anuladas).
+        # 'plataforma' se expone para que la UI pueda aclarar que este conteo
+        # NO incluye el histórico legacy (la pestaña Solicitudes sí lo suma).
         b_sol, sol_when = _batch(conn, "solicitudes_upload")
         out["actualizaciones"]["solicitudes"] = sol_when
         if b_sol:
+            from app.routes.extras import _normalize_estado
             rows = conn.execute(
                 "SELECT estado, COUNT(*) as n FROM solicitudes WHERE sync_batch_id=? GROUP BY estado",
                 (b_sol,)
             ).fetchall()
-            desem = en_est = 0
+            desem = en_est = anuladas = 0
             for r in rows:
-                e = (r["estado"] or "").upper()
-                if "DESEMBOLS" in e:
+                e = _normalize_estado(r["estado"], "nueva")
+                if e == "DESEMBOLSADA":
                     desem += r["n"]
-                elif any(k in e for k in ("TRATAMIENTO", "DEVUELTA", "ESTUDIO", "PROCESO", "PENDIENTE")):
+                elif e == "EN ESTUDIO":
                     en_est += r["n"]
+                elif e == "ANULADA":
+                    anuladas += r["n"]
             total_sol = sum(r["n"] for r in rows)
-            out["solicitudes"] = {"total": total_sol, "desembolsadas": desem, "en_estudio": en_est}
+            out["solicitudes"] = {"total": total_sol, "desembolsadas": desem,
+                                  "en_estudio": en_est, "anuladas": anuladas,
+                                  "plataforma": "nueva"}
         else:
             out["solicitudes"] = None
 

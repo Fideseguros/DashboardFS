@@ -2,8 +2,63 @@
 import time
 from datetime import datetime
 from app.database import get_db, CREDIT_FIELDS
+from app.sync.upload_helpers import check_file_signature, _parse_with_zip_xml
 
 MAX_ROWS = 50_000
+
+# Firma del Informe de Cartera (los 3 exports — vieja, nueva, consolidado —
+# comparten estos headers; verificado contra los .xlsx reales). Sin esta
+# validación, subir el archivo equivocado por el botón de cartera respondía
+# "success" mientras reemplazaba la cartera completa con basura (cédulas como
+# estados, $132 billones de desembolso) — el peor fallo posible: silencioso.
+CARTERA_REQUIRE = ('cuenta', 'identificacion', 'cliente', 'estado',
+                   'saldo_capital', 'valor_cuota')
+CARTERA_REJECT = (
+    ('tipo mvto', 'Recaudo/Movimientos'),
+    ('fecha movimiento', 'Recaudo/Movimientos'),
+    ('paso ruta', 'Solicitudes'),
+    ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
+    ('naturaleza del litigio', 'Procesos Judiciales'),
+)
+
+
+def _read_cartera_rows(file_bytes: bytes) -> tuple[list, str]:
+    """Lee el Excel de cartera devolviendo (todas las filas, nombre de hoja).
+
+    Mantiene la selección de hoja 'Cartera_Consolidado' cuando existe. Si
+    openpyxl revienta por estilos corruptos (defecto conocido de algunos
+    exports de la plataforma), cae al parser XML directo — el mismo fallback
+    que ya usan los demás módulos vía read_excel().
+    """
+    import openpyxl
+    import io
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+        sheet_name = "Cartera_Consolidado" if "Cartera_Consolidado" in wb.sheetnames else wb.sheetnames[0]
+        ws = wb[sheet_name]
+        rows = list(ws.iter_rows(values_only=True))
+        wb.close()
+        return rows, sheet_name
+    except Exception:
+        return _parse_with_zip_xml(file_bytes), "(hoja 1, parser XML)"
+
+
+def _validated_cartera_rows(file_bytes: bytes) -> tuple[list, str]:
+    """Lee + valida firma. Devuelve (filas de datos sin el header, hoja)."""
+    all_rows, sheet_name = _read_cartera_rows(file_bytes)
+    hdr_idx = check_file_signature(
+        all_rows, archivo="Informe de Cartera",
+        require=CARTERA_REQUIRE, reject=CARTERA_REJECT,
+    )
+    rows = all_rows[hdr_idx + 1:]
+    if len(rows) > MAX_ROWS:
+        raise ValueError(f"Archivo excede el límite de {MAX_ROWS} filas")
+    if not rows:
+        raise ValueError(
+            "El archivo tiene los encabezados correctos pero no trae filas de "
+            "datos. No se importó nada — la cartera actual queda intacta."
+        )
+    return rows, sheet_name
 
 # Campos que se actualizan desde el archivo de la plataforma NUEVA (cartera nueva)
 # sobre la cartera BASE (cartera vieja). El resto de campos se preserva del base.
@@ -49,8 +104,6 @@ def _cleanup_old_batches(conn, current_sync_id: int):
 
 def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
     """Import cartera data from an in-memory Excel file. Raises on failure."""
-    import openpyxl
-    import io
     from app.acano.transformer import transform_excel_batch
 
     # Create the sync_log first so failures are recorded.
@@ -64,22 +117,22 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
 
     start = time.time()
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
-        sheet_name = "Cartera_Consolidado" if "Cartera_Consolidado" in wb.sheetnames else wb.sheetnames[0]
-        ws = wb[sheet_name]
-
-        rows = []
-        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-            if i >= MAX_ROWS:
-                raise ValueError(f"Archivo excede el límite de {MAX_ROWS} filas")
-            rows.append(row)
-        wb.close()
+        rows, sheet_name = _validated_cartera_rows(file_bytes)
 
         records = transform_excel_batch(rows)
 
         # Skip rows with no identificacion/cliente/estado — usually empty trailing rows.
         records = [r for r in records
                    if r.get("identificacion") and r.get("cliente") and r.get("estado")]
+        if not records:
+            # Sin este guard, un archivo "válido pero vacío" reemplazaba el
+            # batch activo con nada y el dashboard quedaba en blanco con un
+            # mensaje de éxito.
+            raise ValueError(
+                "El archivo no trae créditos válidos (0 filas con "
+                "identificación, cliente y estado). No se importó nada — la "
+                "cartera actual queda intacta."
+            )
 
         with get_db() as conn:
             _insert_credits(conn, records, sync_id)
@@ -128,8 +181,6 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
     migran a este nuevo batch (para que las queries del dashboard, que
     apuntan al último 'manual_upload' exitoso, sigan viendo todo).
     """
-    import openpyxl
-    import io
     from app.acano.transformer import transform_excel_batch
 
     with get_db() as conn:
@@ -142,20 +193,16 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
 
     start = time.time()
     try:
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
-        sheet_name = "Cartera_Consolidado" if "Cartera_Consolidado" in wb.sheetnames else wb.sheetnames[0]
-        ws = wb[sheet_name]
-
-        rows = []
-        for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True)):
-            if i >= MAX_ROWS:
-                raise ValueError(f"Archivo excede el límite de {MAX_ROWS} filas")
-            rows.append(row)
-        wb.close()
+        rows, sheet_name = _validated_cartera_rows(file_bytes)
 
         new_records = transform_excel_batch(rows)
         # Necesitamos cuenta como clave de matching; descartamos filas vacías.
         new_records = [r for r in new_records if r.get("cuenta") and r.get("identificacion")]
+        if not new_records:
+            raise ValueError(
+                "El archivo no trae créditos válidos (0 filas con cuenta e "
+                "identificación). No se actualizó nada — la cartera queda intacta."
+            )
 
         updated_count = 0
         inserted_count = 0
