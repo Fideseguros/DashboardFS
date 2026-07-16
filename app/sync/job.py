@@ -43,13 +43,18 @@ def _read_cartera_rows(file_bytes: bytes) -> tuple[list, str]:
         return _parse_with_zip_xml(file_bytes), "(hoja 1, parser XML)"
 
 
-def _validated_cartera_rows(file_bytes: bytes) -> tuple[list, str]:
-    """Lee + valida firma. Devuelve (filas de datos sin el header, hoja)."""
+def _validated_cartera_rows(file_bytes: bytes) -> tuple[list, list, str]:
+    """Lee + valida firma. Devuelve (fila de encabezados, filas de datos, hoja).
+
+    El encabezado se devuelve aparte porque el transformer resuelve los índices
+    de columna POR NOMBRE a partir de él (inmune a que la plataforma inserte
+    columnas)."""
     all_rows, sheet_name = _read_cartera_rows(file_bytes)
     hdr_idx = check_file_signature(
         all_rows, archivo="Informe de Cartera",
         require=CARTERA_REQUIRE, reject=CARTERA_REJECT,
     )
+    header = all_rows[hdr_idx]
     rows = all_rows[hdr_idx + 1:]
     if len(rows) > MAX_ROWS:
         raise ValueError(f"Archivo excede el límite de {MAX_ROWS} filas")
@@ -58,7 +63,7 @@ def _validated_cartera_rows(file_bytes: bytes) -> tuple[list, str]:
             "El archivo tiene los encabezados correctos pero no trae filas de "
             "datos. No se importó nada — la cartera actual queda intacta."
         )
-    return rows, sheet_name
+    return header, rows, sheet_name
 
 # Campos que se actualizan desde el archivo de la plataforma NUEVA (cartera nueva)
 # sobre la cartera BASE (cartera vieja). El resto de campos se preserva del base.
@@ -117,9 +122,9 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
 
     start = time.time()
     try:
-        rows, sheet_name = _validated_cartera_rows(file_bytes)
+        header, rows, sheet_name = _validated_cartera_rows(file_bytes)
 
-        records = transform_excel_batch(rows)
+        records = transform_excel_batch(rows, header)
 
         # Skip rows with no identificacion/cliente/estado — usually empty trailing rows.
         records = [r for r in records
@@ -193,9 +198,9 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
 
     start = time.time()
     try:
-        rows, sheet_name = _validated_cartera_rows(file_bytes)
+        header, rows, sheet_name = _validated_cartera_rows(file_bytes)
 
-        new_records = transform_excel_batch(rows)
+        new_records = transform_excel_batch(rows, header)
         # Necesitamos cuenta como clave de matching; descartamos filas vacías.
         new_records = [r for r in new_records if r.get("cuenta") and r.get("identificacion")]
         if not new_records:

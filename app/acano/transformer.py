@@ -1,7 +1,11 @@
 """Transform raw Excel rows into our internal schema (with PII encryption)."""
+import logging
+import unicodedata
 from datetime import datetime
 from app.crypto import encrypt
-from .config import EXCEL_COL_MAP
+from .config import CARTERA_COLUMNS
+
+_log = logging.getLogger("fide.transformer")
 
 
 DATE_FIELDS = {
@@ -53,9 +57,58 @@ def _normalize_number(val):
     return val
 
 
-def transform_excel_row(row: tuple) -> dict:
+def _norm_header(s):
+    """minúsculas, sin tildes, '_'/espacios colapsados a un solo espacio."""
+    s = str(s or '').strip().lower().replace('_', ' ')
+    s = ' '.join(s.split())
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
+
+
+def resolve_column_map(header_row) -> dict:
+    """Devuelve {campo_interno: índice} ubicando cada columna por su NOMBRE.
+
+    Inmune a inserción/reordenamiento de columnas. Lanza ValueError si falta
+    un campo CRÍTICO (el archivo no es una cartera válida). Los campos
+    opcionales ausentes se registran en el log y quedan sin mapear (None), sin
+    tumbar el upload por una columna secundaria renombrada.
+    """
+    norm = [_norm_header(h) for h in header_row]
+    norm_index = {}
+    for i, h in enumerate(norm):
+        norm_index.setdefault(h, i)  # primera aparición gana
+
+    colmap = {}
+    faltan_criticos = []
+    faltan_opcionales = []
+    for campo, (nombres, critico) in CARTERA_COLUMNS.items():
+        idx = next((norm_index[n] for n in nombres if n in norm_index), None)
+        if idx is not None:
+            colmap[campo] = idx
+        elif critico:
+            faltan_criticos.append(f"{campo} (esperaba «{nombres[0]}»)")
+        else:
+            faltan_opcionales.append(campo)
+
+    if faltan_criticos:
+        # No caemos a índices fijos: un mapeo silencioso equivocado es
+        # justamente el bug que esta migración elimina. Mejor error claro.
+        # (En el flujo normal check_file_signature ya validó estas columnas
+        # antes de llegar aquí, así que esto casi nunca se dispara.)
+        raise ValueError(
+            "El archivo de cartera no tiene las columnas obligatorias: "
+            + ", ".join(faltan_criticos)
+            + ". Verifica que sea el Informe de Cartera correcto."
+        )
+    if faltan_opcionales:
+        _log.info("Cartera: columnas opcionales no encontradas (quedan vacías): %s",
+                  ", ".join(faltan_opcionales))
+    return colmap
+
+
+def transform_excel_row(row: tuple, colmap: dict) -> dict:
     record = {}
-    for col_idx, our_key in EXCEL_COL_MAP.items():
+    for our_key, col_idx in colmap.items():
         val = row[col_idx] if col_idx < len(row) else None
         if our_key in DATE_FIELDS:
             val = _normalize_date(val)
@@ -69,5 +122,8 @@ def transform_excel_row(row: tuple) -> dict:
     return record
 
 
-def transform_excel_batch(rows: list[tuple]) -> list[dict]:
-    return [transform_excel_row(r) for r in rows]
+def transform_excel_batch(rows: list[tuple], header_row) -> list[dict]:
+    """rows = filas de datos (sin encabezado). header_row = la fila de títulos,
+    usada para resolver los índices por nombre una sola vez."""
+    colmap = resolve_column_map(header_row)
+    return [transform_excel_row(r, colmap) for r in rows]
