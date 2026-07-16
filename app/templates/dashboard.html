@@ -3503,6 +3503,29 @@ let filteredData = [];
 async function apiGet(url) {
   return fetch(url, { credentials: 'same-origin' });
 }
+// fetch JSON que NO disfraza errores de "sin datos".
+// Antes: `.then(r => r.ok ? r.json() : [])` — un 502 durante un deploy de
+// Railway (o un 500, o la sesión caída) se convertía en lista vacía y la
+// pestaña pintaba "Sin información" siendo mentira (reporte de gerencia:
+// pestañas vacías intermitentes que se arreglaban al refrescar).
+// Ahora: 1 reintento tras 1.5s para absorber el parpadeo de un deploy y, si
+// persiste, LANZA — así se activa el catch de cada pestaña, que ya tiene
+// mensaje correcto ("No se pudieron cargar… reintenta") + toast.
+async function fetchJson(url, _retry = true) {
+  let res;
+  try {
+    res = await fetch(url, { credentials: 'same-origin' });
+  } catch (e) {   // caída de red
+    if (_retry) { await new Promise(r => setTimeout(r, 1500)); return fetchJson(url, false); }
+    throw e;
+  }
+  if (res.status === 401) { window.location.href = '/login'; throw new Error('sesión expirada'); }
+  if (!res.ok) {
+    if (_retry && res.status >= 500) { await new Promise(r => setTimeout(r, 1500)); return fetchJson(url, false); }
+    throw new Error(`HTTP ${res.status} en ${url}`);
+  }
+  return res.json();
+}
 // Setea los KPI cards con los valores pre-calculados por el servidor
 // (endpoint /api/credits/kpis). Aplica SOLO en la carga inicial sin filtros;
 // cuando el usuario filtra, updateKPIs() recalcula en cliente sobre filteredData.
@@ -5110,10 +5133,10 @@ async function loadRecaudo() {
   showTableSkeleton('tblRecaudoLegacy', 6, 4);
   try {
     const [s, l, sLeg, lLeg] = await Promise.all([
-      fetch('/api/recaudo/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/recaudo', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
-      fetch('/api/recaudo/legacy-summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/recaudo/legacy', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
+      fetchJson('/api/recaudo/summary'),
+      fetchJson('/api/recaudo'),
+      fetchJson('/api/recaudo/legacy-summary'),
+      fetchJson('/api/recaudo/legacy'),
     ]);
     // KPIs sumando legacy + nuevo
     const totalPagos = (s.total || 0) + (sLeg.pagos_total || 0);
@@ -5265,8 +5288,7 @@ async function loadSolicitudes() {
   renderUploadStatus('solicitudes');
   showTableSkeleton('tblSolicitudes', 8, 6);
   try {
-    const data = await fetch('/api/solicitudes/combined', { credentials: 'same-origin' })
-      .then(r => r.ok ? r.json() : []);
+    const data = await fetchJson('/api/solicitudes/combined');
     _slRawData = Array.isArray(data) ? data : [];
     // Reset filters al recargar
     _slFilters = {};
@@ -5501,8 +5523,8 @@ async function loadJuridico() {
     // del listado que ya trae cartera_match/saldo por proceso — antes se
     // pedía /cartera-summary que re-descifraba TODA la cartera (duplicado).
     const [s, l] = await Promise.all([
-      fetch('/api/juridico/summary', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : {}),
-      fetch('/api/juridico', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : [])
+      fetchJson('/api/juridico/summary'),
+      fetchJson('/api/juridico')
     ]);
     window._jrData = l || [];   // para exportar a CSV
     const _matched = (l || []).filter(r => r.cartera_match);
@@ -5622,8 +5644,8 @@ async function loadFinancieros() {
   if (!year) { _efClearKpis(); return; }
   try {
     const [s, rows] = await Promise.all([
-      fetch(`/api/estados-financieros/summary?year=${year}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : null),
-      fetch(`/api/estados-financieros?year=${year}`, { credentials: 'same-origin' }).then(r => r.ok ? r.json() : []),
+      fetchJson(`/api/estados-financieros/summary?year=${year}`),
+      fetchJson(`/api/estados-financieros?year=${year}`),
     ]);
     if (!s) { _efClearKpis(); return; }
 
@@ -5675,7 +5697,12 @@ async function loadFinancieros() {
 
     // Tabla jerárquica
     renderFinTable(rows);
-  } catch (e) { console.error('loadFinancieros', e); }
+  } catch (e) {
+    // Sin esto, un error de red/servidor dejaba la pestaña "muda": solo
+    // console.error, y la gerente veía datos viejos o vacío sin explicación.
+    console.error('loadFinancieros', e);
+    showToast('Error al cargar Estados Financieros. Verifica tu conexión e intenta de nuevo.', 'err');
+  }
 }
 
 // Estado persistente del expand/collapse de la tabla financieros.
