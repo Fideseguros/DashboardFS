@@ -1387,8 +1387,12 @@ body {
     min-width: 0;
     width: 100%;
     max-width: 100%;
-    padding: 0.42rem 0.55rem;
-    font-size: 0.78rem;
+    padding: 0.5rem 0.55rem;
+    /* 16px exactos: por debajo de eso, Safari iOS hace zoom automático al
+       tocar el control y descuadra la vista. Mismo criterio que
+       .table-search-input. Sube un poco el tamaño visual, pero evita el
+       zoom molesto en cada filtro/fecha que toca la gerente. */
+    font-size: 16px;
     border-width: 1px;
   }
   /* El botón Limpiar va a ancho completo en su propia fila */
@@ -1545,6 +1549,23 @@ body {
   .kpi-sub { font-size: 0.6rem; }
   /* En pantallas muy estrechas (≤480px), filtros a 1 columna */
   .filters { grid-template-columns: 1fr; }
+}
+
+/* Objetivos táctiles mínimos en dispositivos de dedo (teléfono/tablet).
+   pointer: coarse apunta al método de entrada, no al ancho, así que cubre
+   también el móvil en horizontal. La paginación de Cartera (~26px) y los
+   botones (~30px) eran difíciles de acertar con el dedo; 44px es el mínimo
+   recomendado. No toca escritorio con mouse, donde el tamaño compacto va bien. */
+@media (pointer: coarse) {
+  .pagination button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 8px 14px;
+  }
+  .btn {
+    min-height: 44px;
+    padding: 10px 18px;
+  }
 }
 
 /* Tooltip KPI: ajustar ancho/posición en móvil para no cortarse */
@@ -2846,7 +2867,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           </div>
         </div>
         <div class="table-wrapper" style="max-height:480px;">
-          <table class="data-table compact" id="tblRecaudo">
+          <table class="data-table compact cards-mobile" id="tblRecaudo">
             <thead><tr>
               <th>Fecha</th>
               <th>Cliente</th>
@@ -2964,7 +2985,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           </div>
         </div>
         <div class="table-wrapper" style="max-height:480px;">
-          <table class="data-table compact" id="tblSolicitudes">
+          <table class="data-table compact cards-mobile" id="tblSolicitudes">
             <thead><tr>
               <th>Solicitud</th>
               <th>Solicitante</th>
@@ -3752,7 +3773,9 @@ function fmtM(n) {
     const m = n / 1e6;
     // For >= 1000M show with thousands separator and no decimals (e.g. $3.200 M).
     if (Math.abs(m) >= 1000) return '$' + new Intl.NumberFormat('es-CO').format(Math.round(m)) + ' M';
-    return '$' + m.toFixed(1) + ' M';
+    // Un decimal, pero con COMA (locale es-CO). toFixed usaría punto y "$3.2 M"
+    // se confunde con el separador de miles que sí usa punto ("$3.200 M").
+    return '$' + m.toLocaleString('es-CO', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + ' M';
   }
   return '$' + fmt(n);
 }
@@ -5168,15 +5191,15 @@ async function loadRecaudo() {
     const tb = document.querySelector('#tblRecaudo tbody');
     tb.innerHTML = l.slice(0, 1500).map(p => `
       <tr>
-        <td>${esc(p.fecha_movimiento) || '-'}</td>
-        <td>${esc(p.cliente) || '-'}</td>
-        <td>${esc(p.cuenta) || '-'}</td>
-        <td>${esc(p.aliado) || '-'}</td>
-        <td>${esc(p.tipo_mvto) || '-'}</td>
-        <td class="num">${fmtCurrency(p.capital)}</td>
-        <td class="num">${fmtCurrency(p.interes_corriente)}</td>
-        <td class="num">${fmtCurrency(p.interes_mora)}</td>
-        <td class="num"><strong>${fmtCurrency(p.total)}</strong></td>
+        <td data-label="Fecha">${esc(p.fecha_movimiento) || '-'}</td>
+        <td data-label="Cliente">${esc(p.cliente) || '-'}</td>
+        <td data-label="Cuenta">${esc(p.cuenta) || '-'}</td>
+        <td data-label="Aliado">${esc(p.aliado) || '-'}</td>
+        <td data-label="Tipo">${esc(p.tipo_mvto) || '-'}</td>
+        <td class="num" data-label="Capital">${fmtCurrency(p.capital)}</td>
+        <td class="num" data-label="Interés">${fmtCurrency(p.interes_corriente)}</td>
+        <td class="num" data-label="Mora">${fmtCurrency(p.interes_mora)}</td>
+        <td class="num" data-label="Total"><strong>${fmtCurrency(p.total)}</strong></td>
       </tr>
     `).join('');
     if (!l.length) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de recaudo para comenzar.</td></tr>';
@@ -5441,14 +5464,14 @@ function renderSolicitudes() {
   } else {
     tb.innerHTML = filtered.slice(0, 1500).map(x => `
       <tr>
-        <td><strong>${esc(x.solicitud) || '-'}</strong></td>
-        <td>${esc(x.solicitante) || '-'}</td>
-        <td>${esc(x.linea) || '-'}</td>
-        <td class="num">${fmtCurrency(x.valor)}</td>
-        <td>${esc(x.estado) || '-'}</td>
-        <td>${esc(x.paso_ruta) || '-'}</td>
-        <td>${esc(x.oficina) || '-'}</td>
-        <td>${esc(x.fecha_solicitud) || '-'}</td>
+        <td data-label="Solicitud"><strong>${esc(x.solicitud) || '-'}</strong></td>
+        <td data-label="Solicitante">${esc(x.solicitante) || '-'}</td>
+        <td data-label="Línea">${esc(x.linea) || '-'}</td>
+        <td class="num" data-label="Valor">${fmtCurrency(x.valor)}</td>
+        <td data-label="Estado">${esc(x.estado) || '-'}</td>
+        <td data-label="Paso">${esc(x.paso_ruta) || '-'}</td>
+        <td data-label="Oficina">${esc(x.oficina) || '-'}</td>
+        <td data-label="Fecha">${esc(x.fecha_solicitud) || '-'}</td>
       </tr>
     `).join('');
   }
