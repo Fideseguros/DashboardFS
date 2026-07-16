@@ -90,7 +90,7 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
                 "SELECT estado, COUNT(*) as n FROM solicitudes WHERE sync_batch_id=? GROUP BY estado",
                 (b_sol,)
             ).fetchall()
-            desem = en_est = anuladas = 0
+            desem = en_est = anuladas = negadas = 0
             for r in rows:
                 e = _normalize_estado(r["estado"], "nueva")
                 if e == "DESEMBOLSADA":
@@ -99,10 +99,12 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
                     en_est += r["n"]
                 elif e == "ANULADA":
                     anuladas += r["n"]
+                elif e == "NEGADA":
+                    negadas += r["n"]
             total_sol = sum(r["n"] for r in rows)
             out["solicitudes"] = {"total": total_sol, "desembolsadas": desem,
                                   "en_estudio": en_est, "anuladas": anuladas,
-                                  "plataforma": "nueva"}
+                                  "negadas": negadas, "plataforma": "nueva"}
         else:
             out["solicitudes"] = None
 

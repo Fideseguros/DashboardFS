@@ -647,18 +647,23 @@ SOLIC_NUEVA_REMAP = {
     # Sin este mapeo, ~15% de las solicitudes del archivo quedaban con un
     # nombre técnico que la gerente no reconocía como "En estudio".
     'TRATAMIENTO DE DATOS ACEPTADO': 'EN ESTUDIO',
-    # Pedido gerencia: en la plataforma nueva, NEGADA (y demás formas de
-    # rechazo/cancelación) cuentan como ANULADA — igual que en legacy, para
-    # que el estado sea consistente entre ambas plataformas.
-    'NEGADA':    'ANULADA',
-    'RECHAZADA': 'ANULADA',
+    # Pedido gerencia (jul-2026): NEGADA es su propia categoría, NO se agrupa
+    # con ANULADA. La distinción es de negocio: NEGADA = el banco rechazó el
+    # crédito (riesgo, centrales) → mide la tasa de negación; ANULADA = el
+    # cliente desistió o se borró el registro. Antes se unían todas en ANULADA
+    # y la gerencia no podía ver las negadas.
+    'NEGADA':    'NEGADA',
+    'RECHAZADA': 'NEGADA',
     'DESISTIDA': 'ANULADA',
     'BORRADA':   'ANULADA',
 }
 SOLIC_LEGACY_REMAP = {
     'APROBADA':   'DESEMBOLSADA',
     'BORRADA':    'ANULADA',
-    'NEGADA':     'ANULADA',
+    # NEGADA/RECHAZADA como categoría propia también en legacy, para que
+    # "Negada" sea uniforme entre ambas plataformas (ver SOLIC_NUEVA_REMAP).
+    'NEGADA':     'NEGADA',
+    'RECHAZADA':  'NEGADA',
     'DESISTIDA':  'ANULADA',
     # Iter 2 (pedido líder): las que en legacy quedaron como "Iniciada" o
     # "En Estudio" pasan también a ANULADA — no se considera pipeline activo
@@ -695,9 +700,12 @@ def _normalize_estado(estado, source: str) -> str | None:
     # Nueva plataforma — match exacto primero
     if key in SOLIC_NUEVA_REMAP:
         return SOLIC_NUEVA_REMAP[key]
-    # Rechazo / cancelación → ANULADA (consistente con legacy). Se evalúa
-    # antes que EN ESTUDIO porque son estados finales.
-    if 'NEGAD' in key or 'RECHAZ' in key or 'DESIST' in key or 'BORRAD' in key:
+    # Estados finales (se evalúan antes que EN ESTUDIO). NEGADA/RECHAZADA es su
+    # propia categoría (rechazo del banco); DESISTIDA/BORRADA/CANCELADA cuentan
+    # como ANULADA (baja del cliente o del registro).
+    if 'NEGAD' in key or 'RECHAZ' in key:
+        return 'NEGADA'
+    if 'DESIST' in key or 'BORRAD' in key or 'CANCEL' in key:
         return 'ANULADA'
     # Fuzzy fallback: cualquier estado intermedio del pipeline cuenta como
     # EN ESTUDIO.

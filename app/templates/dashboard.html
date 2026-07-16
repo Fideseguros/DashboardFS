@@ -3633,6 +3633,14 @@ const CHART_COLORS = [
 const CALIF_COLORS = {
   'A': '#0f7b6c', 'B': '#5aa199', 'C': '#c29200', 'D': '#b8680f', 'E': '#3e3e3e'
 };
+// Color fijo por estado de solicitud (no por orden de aparición, que hacía
+// bailar los colores entre vistas). Semántico y sin rojo (restricción):
+// desembolsada=verde aprobado, en estudio=azul en proceso, anulada=gris baja,
+// negada=naranja severidad (rechazo del banco, distinto de la baja del cliente).
+const ESTADO_COLORS = {
+  'DESEMBOLSADA': '#0f7b6c', 'EN ESTUDIO': '#0062a3',
+  'ANULADA': '#A19F9D', 'NEGADA': '#b8680f', 'N/A': '#d8d8d8'
+};
 const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
 // Gradiente ascendente de gravedad sin rojo: verde → amarillo → ámbar → naranja → marrón → charcoal
 const MORA_COLORS = ['#0f7b6c', '#7a9f6e', '#c29200', '#b8680f', '#8a4810', '#4a2b0c', '#1c1917'];
@@ -5368,8 +5376,12 @@ function renderSolicitudes() {
   // castiga la tasa por tener pipeline vivo (subestimaba ~14,6 puntos: 83,0% vs
   // 97,6% real). Una solicitud solo cuenta cuando ya se decidió: desembolsada
   // (aprobada) o anulada (negada/desistida/borrada).
+  // Decididas = ya tienen resolución final: desembolsada (aprobada), anulada
+  // (baja del cliente) o negada (rechazo del banco). Las tres cuentan en el
+  // denominador; solo "en estudio" queda fuera por seguir en trámite.
   const anuladas = filtered.filter(r => r.estado === 'ANULADA').length;
-  const decididas = desembolsadas + anuladas;
+  const negadas = filtered.filter(r => r.estado === 'NEGADA').length;
+  const decididas = desembolsadas + anuladas + negadas;
   const tasaAcept = decididas > 0 ? (desembolsadas / decididas * 100) : 0;
   document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
   const enEstudio = total - decididas;
@@ -5394,7 +5406,7 @@ function renderSolicitudes() {
       labels: estLabels,
       datasets: [{
         data: estLabels.map(k => estMap[k]),
-        backgroundColor: CHART_COLORS,
+        backgroundColor: estLabels.map((k, i) => ESTADO_COLORS[k] || CHART_COLORS[i % CHART_COLORS.length]),
         borderWidth: 3, borderColor: '#fff'
       }]
     },
