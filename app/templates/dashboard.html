@@ -2370,8 +2370,11 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       </div>
     </div>
 
-    <!-- Alertas -->
-    <div id="reAlertas"></div>
+    <!-- Alertas: se quitó el banner por pedido del usuario (jul-2026) — con el
+         ICV crónicamente alto salía siempre y se percibía como un aviso rojo
+         permanente. El dato sigue visible en la tarjeta "Cartera en Mora"
+         (ICV coloreado). El endpoint sigue enviando 'alertas' por si se
+         quiere reactivar. -->
 
     <!-- Cifras clave -->
     <div class="re-grid" id="reGrid">
@@ -7113,7 +7116,6 @@ function _reBadge(mod, activos) {
 
 async function loadResumenEjecutivo() {
   const grid = document.getElementById('reGrid');
-  const alertasEl = document.getElementById('reAlertas');
   grid.innerHTML = '<div class="re-loading">Cargando resumen…</div>';
   const filtros = _reGetFilters();
   try { localStorage.setItem('fideReFilters', JSON.stringify(filtros)); } catch (e) {}
@@ -7122,10 +7124,8 @@ async function loadResumenEjecutivo() {
     const d = await fetchJson('/api/resumen/ejecutivo' + (qs ? '?' + qs : ''));
     _rePopulateOptions(d.filtro_opciones);
 
-    // Alertas
-    alertasEl.innerHTML = (d.alertas || []).map(a =>
-      `<div class="re-alerta ${a.nivel}"><span class="re-alerta-icon">⚠</span>${esc(a.texto)}</div>`
-    ).join('');
+    // (El banner de alertas se quitó por pedido del usuario — ver comentario
+    //  en el HTML del tab. d.alertas se ignora aquí a propósito.)
 
     let cards = '';
 
