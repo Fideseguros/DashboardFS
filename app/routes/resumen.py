@@ -20,40 +20,92 @@ def _batch(conn, source):
 
 
 @router.get("/ejecutivo")
-def resumen_ejecutivo(_user=Depends(require_auth)):
-    """Cifras consolidadas de todos los modulos para el home."""
+def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
+                      ciudad: str | None = None, calificacion: str | None = None,
+                      _user=Depends(require_auth)):
+    """Cifras consolidadas de todos los modulos para el home.
+
+    FILTROS (pedido gerencia jul-2026): acepta los mismos filtros de la
+    pestaña Cartera. Cada módulo honra los que su tabla PUEDE aplicar
+    (verificado con los archivos reales que los valores coinciden entre
+    módulos — aliado de recaudo es subconjunto del de cartera, y línea usa
+    los mismos 4 valores en cartera/recaudo/solicitudes):
+      - cartera:     linea, aliado, ciudad, calificacion
+      - recaudo:     linea (col linea_credito), aliado
+      - solicitudes: linea
+      - juridico y saldo_cartera: NINGUNO (vienen de archivos sin esas
+        dimensiones) — siempre globales.
+    Cada bloque expone 'aplica': [filtros que ese módulo honra], para que la
+    UI marque las tarjetas globales/parciales y no aparente un filtrado que
+    no ocurrió.
+    """
+    linea = (linea or "").strip() or None
+    aliado = (aliado or "").strip() or None
+    ciudad = (ciudad or "").strip() or None
+    calificacion = (calificacion or "").strip() or None
+    filtros_activos = {k: v for k, v in
+                       [("linea", linea), ("aliado", aliado),
+                        ("ciudad", ciudad), ("calificacion", calificacion)] if v}
     conn = get_connection()
     try:
-        out = {"actualizaciones": {}, "alertas": []}
+        out = {"actualizaciones": {}, "alertas": [],
+               "filtros": filtros_activos}
 
         # ---------- Cartera ----------
         b_cart, cart_when = _batch(conn, "manual_upload")
         out["actualizaciones"]["cartera"] = cart_when
         if b_cart:
+            conds, params = ["sync_batch_id=?"], [b_cart]
+            if linea:
+                conds.append("linea=?"); params.append(linea)
+            if aliado:
+                conds.append("aliado=?"); params.append(aliado)
+            if ciudad:
+                conds.append("ciudad=?"); params.append(ciudad)
+            if calificacion:
+                conds.append("TRIM(calificacion)=?"); params.append(calificacion)
             row = conn.execute(
                 "SELECT COUNT(*) as total, "
                 "SUM(CASE WHEN estado='ACTIVO' THEN 1 ELSE 0 END) as activos, "
                 "SUM(CASE WHEN estado='ACTIVO' THEN saldo_capital ELSE 0 END) as saldo_activo, "
                 "SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0)>30 THEN 1 ELSE 0 END) as mora_count, "
                 "SUM(CASE WHEN estado='ACTIVO' AND COALESCE(dias_mora,0)>30 THEN saldo_capital ELSE 0 END) as mora_saldo "
-                "FROM credits WHERE sync_batch_id=?", (b_cart,)
+                f"FROM credits WHERE {' AND '.join(conds)}", params
             ).fetchone()
             d = dict(row)
             saldo_act = d["saldo_activo"] or 0
-            icv = (d["mora_saldo"] / saldo_act * 100) if saldo_act > 0 else 0
+            icv = ((d["mora_saldo"] or 0) / saldo_act * 100) if saldo_act > 0 else 0
             out["cartera"] = {
                 "total": d["total"] or 0, "activos": d["activos"] or 0,
                 "saldo_activo": saldo_act, "mora_count": d["mora_count"] or 0,
                 "mora_saldo": d["mora_saldo"] or 0, "icv_pct": round(icv, 2),
+                "aplica": ["linea", "aliado", "ciudad", "calificacion"],
             }
+            # Alertas de ICV: si hay filtros, la alerta describe el SEGMENTO
+            # filtrado, no la cartera total — se aclara en el texto.
+            scope = " (con los filtros aplicados)" if filtros_activos else ""
             if icv > 8:
                 out["alertas"].append({"nivel": "alta",
-                    "texto": f"ICV en {icv:.1f}% - por encima del umbral recomendado (5%)."})
+                    "texto": f"ICV en {icv:.1f}%{scope} - por encima del umbral recomendado (5%)."})
             elif icv > 5:
                 out["alertas"].append({"nivel": "media",
-                    "texto": f"ICV en {icv:.1f}% - vigilar, cerca del limite."})
+                    "texto": f"ICV en {icv:.1f}%{scope} - vigilar, cerca del limite."})
         else:
             out["cartera"] = None
+
+        # Opciones para poblar los selects del filtro en el home (sin PII:
+        # son nombres de línea/aliado/ciudad y letras de calificación).
+        # Siempre del batch completo, para que el select no se encoja al filtrar.
+        if b_cart:
+            def _opts(col):
+                return [r[0] for r in conn.execute(
+                    f"SELECT DISTINCT {col} FROM credits WHERE sync_batch_id=? "
+                    f"AND {col} IS NOT NULL AND TRIM({col})!='' ORDER BY {col}",
+                    (b_cart,))]
+            out["filtro_opciones"] = {
+                "linea": _opts("linea"), "aliado": _opts("aliado"),
+                "ciudad": _opts("ciudad"), "calificacion": _opts("TRIM(calificacion)"),
+            }
 
         # ---------- Recaudo ----------
         b_rec, rec_when = _batch(conn, "recaudo_upload")
@@ -63,14 +115,22 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
             # son recaudo (excluye condonaciones, notas débito, reintegros y
             # cheques devueltos). Si el home usara SUM(total) crudo, mostraría
             # una cifra distinta a la pestaña Recaudo para el mismo archivo.
+            # Filtros que pagos SÍ puede honrar: linea (col linea_credito) y
+            # aliado. Ciudad/calificación no existen aquí.
+            conds, params = ["sync_batch_id=?"], [b_rec]
+            if linea:
+                conds.append("linea_credito=?"); params.append(linea)
+            if aliado:
+                conds.append("aliado=?"); params.append(aliado)
             row = conn.execute(
                 "SELECT SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN 1 ELSE 0 END) as n, "
                 "COALESCE(SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN total ELSE 0 END),0) as total, "
                 "COALESCE(SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN capital ELSE 0 END),0) as capital "
-                "FROM pagos WHERE sync_batch_id=?",
-                (b_rec,)
+                f"FROM pagos WHERE {' AND '.join(conds)}",
+                params
             ).fetchone()
-            out["recaudo"] = {"movimientos": row["n"] or 0, "total": row["total"], "capital": row["capital"]}
+            out["recaudo"] = {"movimientos": row["n"] or 0, "total": row["total"], "capital": row["capital"],
+                              "aplica": ["linea", "aliado"]}
         else:
             out["recaudo"] = None
 
@@ -86,9 +146,14 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
         out["actualizaciones"]["solicitudes"] = sol_when
         if b_sol:
             from app.routes.extras import _normalize_estado
+            # Filtro que solicitudes SÍ puede honrar: linea (mismos 4 valores
+            # de producto que cartera, verificado con los archivos reales).
+            conds, params = ["sync_batch_id=?"], [b_sol]
+            if linea:
+                conds.append("linea=?"); params.append(linea)
             rows = conn.execute(
-                "SELECT estado, COUNT(*) as n FROM solicitudes WHERE sync_batch_id=? GROUP BY estado",
-                (b_sol,)
+                f"SELECT estado, COUNT(*) as n FROM solicitudes WHERE {' AND '.join(conds)} GROUP BY estado",
+                params
             ).fetchall()
             desem = en_est = anuladas = negadas = 0
             for r in rows:
@@ -104,7 +169,8 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
             total_sol = sum(r["n"] for r in rows)
             out["solicitudes"] = {"total": total_sol, "desembolsadas": desem,
                                   "en_estudio": en_est, "anuladas": anuladas,
-                                  "negadas": negadas, "plataforma": "nueva"}
+                                  "negadas": negadas, "plataforma": "nueva",
+                                  "aplica": ["linea"]}
         else:
             out["solicitudes"] = None
 
@@ -117,7 +183,10 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
                 "SUM(CASE WHEN LOWER(probabilidad) LIKE '%probable%' THEN 1 ELSE 0 END) as probables "
                 "FROM procesos_juridicos WHERE sync_batch_id=?", (b_jur,)
             ).fetchone()
-            out["juridico"] = {"total": row["total"] or 0, "probables": row["probables"] or 0}
+            # aplica vacío: el informe de procesos no trae línea/aliado/ciudad,
+            # así que esta tarjeta es SIEMPRE global aunque haya filtros.
+            out["juridico"] = {"total": row["total"] or 0, "probables": row["probables"] or 0,
+                               "aplica": []}
         else:
             out["juridico"] = None
 
@@ -128,13 +197,16 @@ def resumen_ejecutivo(_user=Depends(require_auth)):
         ).fetchone()
         from app.routes.saldo_cartera import _AJUSTE_CARTERA
         if sc:
+            # aplica vacío: el Resumen Estado Cuenta es un total del archivo,
+            # sin desglose por línea/aliado — siempre global.
             out["saldo_cartera"] = {
                 "fecha": sc["snapshot_date"],
                 "valor": (sc["saldo_cartera"] or 0) + _AJUSTE_CARTERA,
+                "aplica": [],
             }
             out["actualizaciones"]["saldo_cartera"] = sc["snapshot_date"]
         else:
-            out["saldo_cartera"] = {"fecha": None, "valor": _AJUSTE_CARTERA}
+            out["saldo_cartera"] = {"fecha": None, "valor": _AJUSTE_CARTERA, "aplica": []}
             out["actualizaciones"]["saldo_cartera"] = None
 
         # ---------- Tendencia de saldo (ultimos 2 snapshots) ----------
