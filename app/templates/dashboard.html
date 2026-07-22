@@ -1838,6 +1838,23 @@ select:focus-visible {
 .re-badge.global   { background: #ececec; color: #5a5a5a; }
 .re-badge.parcial  { background: #f6ecd4; color: #8a6400; }
 .re-badge.filtrado { background: var(--fide-teal-tint, #d9f2f0); color: var(--fide-teal-deeper, #00564f); }
+
+/* Evolución Mensual: chips comparativos (mes vs mes anterior / año anterior) */
+.re-evo-chips {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin: 2px 0 10px;
+  font-size: 0.74rem; color: var(--neutral-600);
+}
+.re-evo-chip {
+  background: var(--neutral-50, #f7f8f8);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.re-evo-chip .up   { color: #0f7b6c; font-weight: 700; }
+.re-evo-chip .down { color: #b8680f; font-weight: 700; }
+.re-evo-note { font-size: 0.66rem; color: var(--neutral-500); margin-top: 6px; }
 .re-card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -2387,6 +2404,22 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     <!-- Cifras clave -->
     <div class="re-grid" id="reGrid">
       <div class="re-loading">Cargando resumen&hellip;</div>
+    </div>
+
+    <!-- Evolución Mensual (inteligencia de tiempo, pedido gerencia jul-2026):
+         series por mes sobre un eje sin huecos, respetando los filtros de
+         arriba. Cada serie usa su fecha natural: desembolso / pago / solicitud. -->
+    <div class="chart-card" id="reEvoCard" style="margin-top:14px;">
+      <h3>Evoluci&oacute;n Mensual
+        <span style="font-weight:400;font-size:0.7rem;color:var(--neutral-500);">
+          &nbsp;desembolsos &middot; recaudo &middot; solicitudes &mdash; respeta los filtros de arriba
+        </span>
+      </h3>
+      <div class="re-evo-chips" id="reEvoChips"></div>
+      <div style="position:relative;height:300px;">
+        <canvas id="chartReEvo"></canvas>
+      </div>
+      <div class="re-evo-note">El &uacute;ltimo mes puede estar incompleto si el archivo se carg&oacute; a mitad de mes.</div>
     </div>
   </div>
 
@@ -7232,12 +7265,92 @@ async function loadResumenEjecutivo() {
     document.getElementById('reFecha').textContent = nf
       ? `Estado consolidado · filtrado por ${Object.entries(dims).map(([k,v]) => `${RE_FILTER_LABELS[k]}: ${v}`).join(' · ')}`
       : 'Estado consolidado · actualizado ahora';
+    // Evolución mensual: se carga aparte para no bloquear las tarjetas
+    loadEvolucionMensual(filtros);
   } catch (e) {
     console.error('loadResumenEjecutivo', e);
     grid.innerHTML = '<div class="re-loading">No se pudo cargar el resumen. Revisa tu conexión e intenta de nuevo.</div>';
     showToast('Error al cargar el Resumen Ejecutivo.', 'err');
   }
 }
+// ---- Evolución Mensual (inteligencia de tiempo del home) ----
+let _reEvoChart = null;
+const _MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+function _reEvoLbl(m) { return _MESES_ES[parseInt(m.slice(5,7),10)-1] + ' ' + m.slice(2,4); }
+// Chip comparativo: variación % del último mes vs otro mes (si existe).
+function _reEvoChip(nombre, arr, campo, esValor) {
+  const n = arr.length;
+  if (n < 2) return '';
+  const cur = arr[n-1], prev = arr[n-2];
+  // mismo mes del año anterior, si está en el rango
+  const mesYA = (parseInt(cur.mes.slice(0,4),10)-1) + cur.mes.slice(4);
+  const ya = arr.find(x => x.mes === mesYA);
+  const fmtV = v => esValor ? fmtM(v) : fmt(v);
+  const delta = (a, b) => {
+    if (!b) return null;
+    const d = (a-b)/b*100;
+    const cls = d >= 0 ? 'up' : 'down';
+    return `<span class="${cls}">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(1)}%</span>`;
+  };
+  let html = `<span class="re-evo-chip"><b>${nombre}</b> ${_reEvoLbl(cur.mes)}: ${fmtV(cur[campo])}`;
+  const dPrev = delta(cur[campo], prev[campo]);
+  if (dPrev) html += ` · ${dPrev} vs ${_reEvoLbl(prev.mes)}`;
+  const dYA = ya ? delta(cur[campo], ya[campo]) : null;
+  if (dYA) html += ` · ${dYA} vs ${_reEvoLbl(ya.mes)}`;
+  return html + '</span>';
+}
+async function loadEvolucionMensual(filtros) {
+  const chips = document.getElementById('reEvoChips');
+  const canvas = document.getElementById('chartReEvo');
+  if (!canvas) return;
+  try {
+    const qs = new URLSearchParams(filtros).toString();
+    const d = await fetchJson('/api/resumen/evolucion-mensual' + (qs ? '?' + qs : ''));
+    const arr = d.meses || [];
+    if (_reEvoChart) { _reEvoChart.destroy(); _reEvoChart = null; }
+    if (!arr.length) {
+      if (chips) chips.innerHTML = '<span class="re-evo-chip">Sin datos con fecha para graficar en este rango.</span>';
+      return;
+    }
+    if (chips) chips.innerHTML =
+      _reEvoChip('Recaudo', arr, 'recaudo', true) +
+      _reEvoChip('Desembolsos', arr, 'desembolsos_valor', true) +
+      _reEvoChip('Solicitudes', arr, 'solicitudes_n', false);
+    _reEvoChart = new Chart(canvas, {
+      data: {
+        labels: arr.map(x => _reEvoLbl(x.mes)),
+        datasets: [
+          { type: 'bar', label: 'Desembolsos', data: arr.map(x => x.desembolsos_valor),
+            backgroundColor: FIDE.blue + 'cc', borderRadius: 3, yAxisID: 'y' },
+          { type: 'bar', label: 'Recaudo', data: arr.map(x => x.recaudo),
+            backgroundColor: FIDE.teal + 'cc', borderRadius: 3, yAxisID: 'y' },
+          { type: 'line', label: 'Solicitudes (#)', data: arr.map(x => x.solicitudes_n),
+            borderColor: '#5a6a6e', backgroundColor: '#5a6a6e', borderWidth: 2,
+            pointRadius: 3, tension: 0.3, yAxisID: 'y1' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (ctx) =>
+            ctx.dataset.yAxisID === 'y'
+              ? `${ctx.dataset.label}: ${fmtM(ctx.parsed.y)}`
+              : `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
+        },
+        scales: {
+          y: { ticks: { callback: v => fmtM(v) } },
+          y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0 } },
+        }
+      }
+    });
+  } catch (e) {
+    console.error('loadEvolucionMensual', e);
+    if (chips) chips.innerHTML = '<span class="re-evo-chip">No se pudo cargar la evolución mensual. Intenta actualizar.</span>';
+  }
+}
+
 // Navegar a un tab desde una tarjeta del resumen
 function _reGo(tabName) {
   const t = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');

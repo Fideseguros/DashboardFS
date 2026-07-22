@@ -260,3 +260,120 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
         return out
     finally:
         conn.close()
+
+
+@router.get("/evolucion-mensual")
+def evolucion_mensual(linea: str | None = None, aliado: str | None = None,
+                      ciudad: str | None = None, calificacion: str | None = None,
+                      desde: str | None = None, hasta: str | None = None,
+                      meses: int = 12,
+                      _user=Depends(require_auth)):
+    """Inteligencia de tiempo para el home: series MENSUALES de los 3 módulos
+    con fecha, sobre una columna vertebral de meses SIN huecos (equivalente a
+    la tabla calendario de un modelo Power BI, generada al vuelo — un mes sin
+    actividad aparece en cero en vez de desaparecer del eje).
+
+    Series (cada una por su fecha natural, misma semántica que los filtros
+    del resumen):
+      - desembolsos: créditos con fecha_desembolso en el mes (n y valor).
+      - recaudo:     pagos 'Pago%' con fecha_movimiento en el mes (valor).
+      - solicitudes: radicadas con fecha_solicitud en el mes (n).
+
+    Honra los mismos filtros que /ejecutivo, cada módulo según sus columnas
+    (cartera todos; recaudo línea+aliado; solicitudes línea). Sin desde/hasta,
+    muestra los últimos `meses` (default 12, tope 36) contados desde el mes
+    más reciente con datos en cualquiera de los 3 módulos.
+    """
+    from datetime import date as _date
+    linea = (linea or "").strip() or None
+    aliado = (aliado or "").strip() or None
+    ciudad = (ciudad or "").strip() or None
+    calificacion = (calificacion or "").strip() or None
+
+    def _fecha_valida(s):
+        s = (s or "").strip()
+        try:
+            return _date.fromisoformat(s).isoformat()
+        except ValueError:
+            return None
+    desde = _fecha_valida(desde)
+    hasta = _fecha_valida(hasta)
+    meses = max(1, min(int(meses or 12), 36))
+
+    conn = get_connection()
+    try:
+        b_cart, _ = _batch(conn, "manual_upload")
+        b_rec, _ = _batch(conn, "recaudo_upload")
+        b_sol, _ = _batch(conn, "solicitudes_upload")
+
+        def _serie(sql, params):
+            return {r["m"]: r for r in conn.execute(sql, params)}
+
+        # --- Series por mes (substr(fecha,1,7) = 'YYYY-MM') ---
+        cart = rec = sol = {}
+        if b_cart:
+            conds, params = ["sync_batch_id=?", "fecha_desembolso IS NOT NULL"], [b_cart]
+            if linea: conds.append("linea=?"); params.append(linea)
+            if aliado: conds.append("aliado=?"); params.append(aliado)
+            if ciudad: conds.append("ciudad=?"); params.append(ciudad)
+            if calificacion: conds.append("TRIM(calificacion)=?"); params.append(calificacion)
+            cart = _serie(
+                "SELECT substr(fecha_desembolso,1,7) m, COUNT(*) n, "
+                "COALESCE(SUM(valor_credito),0) v FROM credits "
+                f"WHERE {' AND '.join(conds)} GROUP BY m", params)
+        if b_rec:
+            conds, params = ["sync_batch_id=?", "fecha_movimiento IS NOT NULL",
+                             "UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%'"], [b_rec]
+            if linea: conds.append("linea_credito=?"); params.append(linea)
+            if aliado: conds.append("aliado=?"); params.append(aliado)
+            rec = _serie(
+                "SELECT substr(fecha_movimiento,1,7) m, COUNT(*) n, "
+                "COALESCE(SUM(total),0) v FROM pagos "
+                f"WHERE {' AND '.join(conds)} GROUP BY m", params)
+        if b_sol:
+            conds, params = ["sync_batch_id=?", "fecha_solicitud IS NOT NULL"], [b_sol]
+            if linea: conds.append("linea=?"); params.append(linea)
+            sol = _serie(
+                "SELECT substr(fecha_solicitud,1,7) m, COUNT(*) n FROM solicitudes "
+                f"WHERE {' AND '.join(conds)} GROUP BY m", params)
+
+        # --- Columna vertebral de meses, sin huecos ---
+        # Meses 'YYYY-MM' válidos presentes en las series (defensa contra
+        # fechas malformadas que se cuelen del Excel).
+        import re as _re
+        presentes = sorted(m for m in set(cart) | set(rec) | set(sol)
+                           if m and _re.fullmatch(r"\d{4}-\d{2}", m) and "01" <= m[5:7] <= "12")
+        if not presentes:
+            return {"meses": []}
+        fin = hasta[:7] if hasta else presentes[-1]
+        if desde:
+            inicio = desde[:7]
+        else:
+            # últimos `meses` contados desde `fin`
+            y, mm = int(fin[:4]), int(fin[5:7])
+            total = y * 12 + (mm - 1) - (meses - 1)
+            inicio = f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+        spine = []
+        y, mm = int(inicio[:4]), int(inicio[5:7])
+        fy, fmm = int(fin[:4]), int(fin[5:7])
+        while (y, mm) <= (fy, fmm) and len(spine) <= 40:
+            spine.append(f"{y:04d}-{mm:02d}")
+            mm += 1
+            if mm == 13:
+                y, mm = y + 1, 1
+
+        out = []
+        for m in spine:
+            c, r, s = cart.get(m), rec.get(m), sol.get(m)
+            out.append({
+                "mes": m,
+                "desembolsos_n": (c["n"] if c else 0),
+                "desembolsos_valor": (c["v"] if c else 0),
+                "recaudo": (r["v"] if r else 0),
+                "recaudo_n": (r["n"] if r else 0),
+                "solicitudes_n": (s["n"] if s else 0),
+            })
+        return {"meses": out}
+    finally:
+        conn.close()
