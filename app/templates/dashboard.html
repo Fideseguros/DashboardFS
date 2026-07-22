@@ -2350,6 +2350,14 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
          (Saldo por Cobrar, Jurídico) se marcan "Global". -->
     <div class="filters" id="reFilters" style="margin-bottom:10px;">
       <div class="filter-group">
+        <label for="reFDesde">Desde</label>
+        <input type="date" id="reFDesde" onchange="loadResumenEjecutivo()">
+      </div>
+      <div class="filter-group">
+        <label for="reFHasta">Hasta</label>
+        <input type="date" id="reFHasta" onchange="loadResumenEjecutivo()">
+      </div>
+      <div class="filter-group">
         <label for="reFLinea">L&iacute;nea</label>
         <select id="reFLinea" onchange="loadResumenEjecutivo()"><option value="">Todas</option></select>
       </div>
@@ -7057,8 +7065,9 @@ function _reDiasDesde(iso) {
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }
 // ---- Filtros del Resumen Ejecutivo (persisten entre sesiones) ----
-const RE_FILTER_IDS = { linea: 'reFLinea', aliado: 'reFAliado', ciudad: 'reFCiudad', calificacion: 'reFCalif' };
-const RE_FILTER_LABELS = { linea: 'Línea', aliado: 'Aliado', ciudad: 'Ciudad', calificacion: 'Calificación' };
+const RE_FILTER_IDS = { desde: 'reFDesde', hasta: 'reFHasta', linea: 'reFLinea',
+                        aliado: 'reFAliado', ciudad: 'reFCiudad', calificacion: 'reFCalif' };
+const RE_FILTER_LABELS = { fecha: 'Fecha', linea: 'Línea', aliado: 'Aliado', ciudad: 'Ciudad', calificacion: 'Calificación' };
 function _reGetFilters() {
   const f = {};
   for (const [k, id] of Object.entries(RE_FILTER_IDS)) {
@@ -7066,6 +7075,17 @@ function _reGetFilters() {
     if (v) f[k] = v;
   }
   return f;
+}
+// desde/hasta son dos inputs pero UNA dimensión de filtro ("Fecha") de cara a
+// los badges y al subtítulo. Aquí se colapsan.
+function _reDims(filtros) {
+  const dims = {};
+  for (const [k, v] of Object.entries(filtros)) {
+    if (k === 'desde' || k === 'hasta') {
+      dims.fecha = `${filtros.desde || '…'} → ${filtros.hasta || '…'}`;
+    } else dims[k] = v;
+  }
+  return dims;
 }
 function reLimpiarFiltros() {
   Object.values(RE_FILTER_IDS).forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -7085,13 +7105,17 @@ function _rePopulateOptions(opts) {
     el.value = cur;
   }
   _reOptsLoaded = true;
-  // Restaurar filtros guardados de la sesión anterior (tras poblar opciones)
+  // Restaurar filtros guardados de la sesión anterior (tras poblar opciones).
+  // Los selects validan que la opción exista; los input date se setean directo.
   try {
     const saved = JSON.parse(localStorage.getItem('fideReFilters') || '{}');
     let changed = false;
     for (const [k, id] of Object.entries(RE_FILTER_IDS)) {
       const el = document.getElementById(id);
-      if (el && saved[k] && [...el.options].some(o => o.value === saved[k])) {
+      if (!el || !saved[k]) continue;
+      if (el.tagName === 'SELECT') {
+        if ([...el.options].some(o => o.value === saved[k])) { el.value = saved[k]; changed = true; }
+      } else {
         el.value = saved[k]; changed = true;
       }
     }
@@ -7118,6 +7142,8 @@ async function loadResumenEjecutivo() {
   const grid = document.getElementById('reGrid');
   grid.innerHTML = '<div class="re-loading">Cargando resumen…</div>';
   const filtros = _reGetFilters();
+  // Para badges/subtítulo: desde+hasta cuentan como una sola dimensión "Fecha"
+  const dims = _reDims(filtros);
   try { localStorage.setItem('fideReFilters', JSON.stringify(filtros)); } catch (e) {}
   try {
     const qs = new URLSearchParams(filtros).toString();
@@ -7137,7 +7163,7 @@ async function loadResumenEjecutivo() {
         trend = `<div class="re-trend" style="color:${up ? '#0f7b6c' : '#b8680f'};">${up ? '▲' : '▼'} ${Math.abs(d.saldo_tendencia_pct)}% vs anterior</div>`;
       }
       cards += `<div class="re-card ok" onclick="_reGo('cartera-360')">
-        <div class="re-lbl">Saldo por Cobrar ${_reBadge(d.saldo_cartera, filtros)}</div>
+        <div class="re-lbl">Saldo por Cobrar ${_reBadge(d.saldo_cartera, dims)}</div>
         <div class="re-val">${fmtM(d.saldo_cartera.valor)}</div>
         <div class="re-sub">${d.saldo_cartera.fecha ? 'al ' + (_reFechaCorta(d.saldo_cartera.fecha) || d.saldo_cartera.fecha) : 'sin archivo'}</div>
         ${trend}
@@ -7149,12 +7175,12 @@ async function loadResumenEjecutivo() {
       const c = d.cartera;
       const icvColor = c.icv_pct > 8 ? '#b8680f' : c.icv_pct > 5 ? '#c29200' : '#0f7b6c';
       cards += `<div class="re-card" onclick="_reGo('cartera-360')">
-        <div class="re-lbl">Cartera Activa ${_reBadge(c, filtros)}</div>
+        <div class="re-lbl">Cartera Activa ${_reBadge(c, dims)}</div>
         <div class="re-val">${fmt(c.activos)}</div>
         <div class="re-sub">de ${fmt(c.total)} créditos · saldo ${fmtM(c.saldo_activo)}</div>
       </div>`;
       cards += `<div class="re-card riesgo" onclick="verClientesEnMora()">
-        <div class="re-lbl">Cartera en Mora (+30d) ${_reBadge(c, filtros)}</div>
+        <div class="re-lbl">Cartera en Mora (+30d) ${_reBadge(c, dims)}</div>
         <div class="re-val">${fmt(c.mora_count)}</div>
         <div class="re-sub">${fmtM(c.mora_saldo)} · <span style="color:${icvColor};font-weight:800;">ICV ${c.icv_pct}%</span></div>
       </div>`;
@@ -7163,7 +7189,7 @@ async function loadResumenEjecutivo() {
     // Recaudo
     if (d.recaudo) {
       cards += `<div class="re-card ok" onclick="_reGo('recaudo')">
-        <div class="re-lbl">Recaudo (período) ${_reBadge(d.recaudo, filtros)}</div>
+        <div class="re-lbl">Recaudo (período) ${_reBadge(d.recaudo, dims)}</div>
         <div class="re-val">${fmtM(d.recaudo.total)}</div>
         <div class="re-sub">${fmt(d.recaudo.movimientos)} movimientos · capital ${fmtM(d.recaudo.capital)}</div>
       </div>`;
@@ -7173,7 +7199,7 @@ async function loadResumenEjecutivo() {
     if (d.solicitudes) {
       const s = d.solicitudes;
       cards += `<div class="re-card" onclick="_reGo('solicitudes')">
-        <div class="re-lbl">Solicitudes ${_reBadge(s, filtros)}</div>
+        <div class="re-lbl">Solicitudes ${_reBadge(s, dims)}</div>
         <div class="re-val">${fmt(s.en_estudio)}</div>
         <div class="re-sub">en estudio · ${fmt(s.desembolsadas)} desembolsadas de ${fmt(s.total)}</div>
       </div>`;
@@ -7182,7 +7208,7 @@ async function loadResumenEjecutivo() {
     // Jurídico
     if (d.juridico && d.juridico.total > 0) {
       cards += `<div class="re-card riesgo" onclick="_reGo('juridico')">
-        <div class="re-lbl">Cobro Jurídico ${_reBadge(d.juridico, filtros)}</div>
+        <div class="re-lbl">Cobro Jurídico ${_reBadge(d.juridico, dims)}</div>
         <div class="re-val">${fmt(d.juridico.total)}</div>
         <div class="re-sub">procesos activos · ${fmt(d.juridico.probables)} probables</div>
       </div>`;
@@ -7202,9 +7228,9 @@ async function loadResumenEjecutivo() {
     upsHtml += '</div>';
 
     grid.innerHTML = cards + upsHtml;
-    const nf = Object.keys(filtros).length;
+    const nf = Object.keys(dims).length;
     document.getElementById('reFecha').textContent = nf
-      ? `Estado consolidado · filtrado por ${Object.entries(filtros).map(([k,v]) => `${RE_FILTER_LABELS[k]}: ${v}`).join(' · ')}`
+      ? `Estado consolidado · filtrado por ${Object.entries(dims).map(([k,v]) => `${RE_FILTER_LABELS[k]}: ${v}`).join(' · ')}`
       : 'Estado consolidado · actualizado ahora';
   } catch (e) {
     console.error('loadResumenEjecutivo', e);

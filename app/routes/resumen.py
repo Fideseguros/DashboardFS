@@ -22,6 +22,7 @@ def _batch(conn, source):
 @router.get("/ejecutivo")
 def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
                       ciudad: str | None = None, calificacion: str | None = None,
+                      desde: str | None = None, hasta: str | None = None,
                       _user=Depends(require_auth)):
     """Cifras consolidadas de todos los modulos para el home.
 
@@ -30,22 +31,49 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
     (verificado con los archivos reales que los valores coinciden entre
     módulos — aliado de recaudo es subconjunto del de cartera, y línea usa
     los mismos 4 valores en cartera/recaudo/solicitudes):
-      - cartera:     linea, aliado, ciudad, calificacion
-      - recaudo:     linea (col linea_credito), aliado
-      - solicitudes: linea
+      - cartera:     linea, aliado, ciudad, calificacion, fecha (desembolso)
+      - recaudo:     linea (col linea_credito), aliado, fecha (movimiento)
+      - solicitudes: linea, fecha (solicitud)
       - juridico y saldo_cartera: NINGUNO (vienen de archivos sin esas
         dimensiones) — siempre globales.
+    La FECHA (desde/hasta, YYYY-MM-DD) filtra por la fecha natural de cada
+    módulo: en cartera es fecha_desembolso (misma semántica que el filtro de
+    la pestaña Cartera), en recaudo fecha_movimiento y en solicitudes
+    fecha_solicitud. Las tres columnas están normalizadas a YYYY-MM-DD al
+    ingerir, así que la comparación de strings es un rango correcto.
     Cada bloque expone 'aplica': [filtros que ese módulo honra], para que la
     UI marque las tarjetas globales/parciales y no aparente un filtrado que
     no ocurrió.
     """
+    from datetime import date as _date
     linea = (linea or "").strip() or None
     aliado = (aliado or "").strip() or None
     ciudad = (ciudad or "").strip() or None
     calificacion = (calificacion or "").strip() or None
+
+    def _fecha_valida(s):
+        """Solo fechas ISO reales (rechaza '2026-13-99', no solo el formato).
+        El input type=date del navegador ya lo garantiza; esto es defensa
+        del lado servidor."""
+        s = (s or "").strip()
+        try:
+            return _date.fromisoformat(s).isoformat()
+        except ValueError:
+            return None
+    desde = _fecha_valida(desde)
+    hasta = _fecha_valida(hasta)
     filtros_activos = {k: v for k, v in
                        [("linea", linea), ("aliado", aliado),
                         ("ciudad", ciudad), ("calificacion", calificacion)] if v}
+    if desde or hasta:
+        filtros_activos["fecha"] = f"{desde or '…'} → {hasta or '…'}"
+
+    def _fecha_conds(col, conds, params):
+        """Añade el rango de fecha sobre la columna natural del módulo."""
+        if desde:
+            conds.append(f"{col} >= ?"); params.append(desde)
+        if hasta:
+            conds.append(f"{col} <= ?"); params.append(hasta)
     conn = get_connection()
     try:
         out = {"actualizaciones": {}, "alertas": [],
@@ -64,6 +92,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
                 conds.append("ciudad=?"); params.append(ciudad)
             if calificacion:
                 conds.append("TRIM(calificacion)=?"); params.append(calificacion)
+            _fecha_conds("fecha_desembolso", conds, params)
             row = conn.execute(
                 "SELECT COUNT(*) as total, "
                 "SUM(CASE WHEN estado='ACTIVO' THEN 1 ELSE 0 END) as activos, "
@@ -79,7 +108,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
                 "total": d["total"] or 0, "activos": d["activos"] or 0,
                 "saldo_activo": saldo_act, "mora_count": d["mora_count"] or 0,
                 "mora_saldo": d["mora_saldo"] or 0, "icv_pct": round(icv, 2),
-                "aplica": ["linea", "aliado", "ciudad", "calificacion"],
+                "aplica": ["linea", "aliado", "ciudad", "calificacion", "fecha"],
             }
             # Alertas de ICV: si hay filtros, la alerta describe el SEGMENTO
             # filtrado, no la cartera total — se aclara en el texto.
@@ -122,6 +151,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
                 conds.append("linea_credito=?"); params.append(linea)
             if aliado:
                 conds.append("aliado=?"); params.append(aliado)
+            _fecha_conds("fecha_movimiento", conds, params)
             row = conn.execute(
                 "SELECT SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN 1 ELSE 0 END) as n, "
                 "COALESCE(SUM(CASE WHEN UPPER(COALESCE(tipo_mvto,'')) LIKE 'PAGO%' THEN total ELSE 0 END),0) as total, "
@@ -130,7 +160,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
                 params
             ).fetchone()
             out["recaudo"] = {"movimientos": row["n"] or 0, "total": row["total"], "capital": row["capital"],
-                              "aplica": ["linea", "aliado"]}
+                              "aplica": ["linea", "aliado", "fecha"]}
         else:
             out["recaudo"] = None
 
@@ -151,6 +181,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
             conds, params = ["sync_batch_id=?"], [b_sol]
             if linea:
                 conds.append("linea=?"); params.append(linea)
+            _fecha_conds("fecha_solicitud", conds, params)
             rows = conn.execute(
                 f"SELECT estado, COUNT(*) as n FROM solicitudes WHERE {' AND '.join(conds)} GROUP BY estado",
                 params
@@ -170,7 +201,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
             out["solicitudes"] = {"total": total_sol, "desembolsadas": desem,
                                   "en_estudio": en_est, "anuladas": anuladas,
                                   "negadas": negadas, "plataforma": "nueva",
-                                  "aplica": ["linea"]}
+                                  "aplica": ["linea", "fecha"]}
         else:
             out["solicitudes"] = None
 
