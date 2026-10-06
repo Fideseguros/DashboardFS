@@ -68,13 +68,31 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL DEFAULT 'viewer',
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now')),
-    last_login TEXT
+    last_login TEXT,
+    -- Verificación en dos pasos (TOTP), opt-in por usuario
+    totp_secret TEXT,                 -- cifrado con app.crypto.encrypt
+    totp_enabled INTEGER DEFAULT 0,
+    totp_recovery TEXT                -- JSON: lista de sha256 de los códigos de recuperación
 );
 
+-- sessions.token guarda el sha256 hex del token aleatorio, nunca el token en claro.
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     ip TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    last_seen_at TEXT,                -- expiración deslizante por inactividad
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Login en dos pasos: credenciales ya validadas, falta el código TOTP.
+-- token_hash = sha256 del pending_token entregado al cliente. Vive 5 min.
+CREATE TABLE IF NOT EXISTS login_pending (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    ip TEXT,
+    failed INTEGER NOT NULL DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -361,9 +379,20 @@ def _migrate_existing_schema(conn):
     cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
     if "role" not in cols:
         conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'viewer'")
+    # 2FA (TOTP) opt-in por usuario
+    if "totp_secret" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+    if "totp_enabled" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN totp_enabled INTEGER DEFAULT 0")
+    if "totp_recovery" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN totp_recovery TEXT")
     sess_cols = [r[1] for r in conn.execute("PRAGMA table_info(sessions)").fetchall()]
     if "ip" not in sess_cols:
         conn.execute("ALTER TABLE sessions ADD COLUMN ip TEXT")
+    # Expiración deslizante. Las sesiones previas a esta migración quedan
+    # inválidas de todos modos (el token ahora se guarda hasheado).
+    if "last_seen_at" not in sess_cols:
+        conn.execute("ALTER TABLE sessions ADD COLUMN last_seen_at TEXT")
     log_cols = [r[1] for r in conn.execute("PRAGMA table_info(sync_logs)").fetchall()]
     if "uploaded_by" not in log_cols:
         conn.execute("ALTER TABLE sync_logs ADD COLUMN uploaded_by INTEGER")

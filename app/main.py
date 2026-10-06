@@ -13,6 +13,8 @@ from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
 from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente, resumen, audit_events
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
+from app.routes import export, admin_backup
+from app.backup import start_backup_scheduler
 
 # Sin /docs, /redoc ni /openapi.json: exponían el mapa completo de la API a
 # cualquiera sin autenticar. Para desarrollo local: FIDE_ENABLE_DOCS=1.
@@ -40,6 +42,8 @@ app.include_router(habeas_data.router)
 app.include_router(cliente.router)
 app.include_router(resumen.router)
 app.include_router(audit_events.router)
+app.include_router(export.router)
+app.include_router(admin_backup.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -140,6 +144,7 @@ def _startup():
     # Backfill de PII enmascarada para acelerar /api/credits.
     # Solo corre si hay filas pendientes — idempotente.
     backfill_masked_pii()
+    start_backup_scheduler()  # hilo daemon; no corre con APP_ENV=test
 
 
 @asynccontextmanager
@@ -248,11 +253,16 @@ def dashboard(request: Request,
     if not token:
         return RedirectResponse(url="/login", status_code=302)
 
+    # El token se guarda hasheado (ver app.auth.middleware.hash_token) y la
+    # sesión también vence por inactividad (SESSION_IDLE_MINUTES).
+    from app.auth.middleware import hash_token
+    from app.config import SESSION_IDLE_MINUTES
     conn = get_connection()
     try:
         session = conn.execute(
-            "SELECT 1 FROM sessions WHERE token = ? AND expires_at > datetime('now')",
-            (token,)
+            "SELECT 1 FROM sessions WHERE token = ? AND expires_at > datetime('now') "
+            "AND COALESCE(last_seen_at, created_at) > datetime('now', ?)",
+            (hash_token(token), f"-{int(SESSION_IDLE_MINUTES)} minutes")
         ).fetchone()
     finally:
         conn.close()

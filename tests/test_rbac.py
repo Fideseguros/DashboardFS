@@ -68,7 +68,7 @@ def test_admin_can_create_user(admin_client):
     """superadmin SÍ puede crear usuarios."""
     res = admin_client.post("/api/users", json={
         "username": "nuevo_user",
-        "password": "newpass123",
+        "password": "newpass-seguro-2026",
         "role": "viewer",
         "display_name": "Nuevo",
     })

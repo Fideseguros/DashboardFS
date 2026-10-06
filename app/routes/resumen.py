@@ -3,9 +3,11 @@ todos los modulos + que se actualizo y cuando. Todo con SQL agregado
 (sin descifrar PII) -> respuesta rapida para el home de la gerente.
 """
 import logging
-from fastapi import APIRouter, Depends
-from app.database import get_connection
-from app.auth.middleware import require_auth
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel, Field
+from app.database import get_connection, get_db
+from app.auth.middleware import require_auth, require_superadmin
+from app.audit import log_audit, get_client_ip
 
 router = APIRouter(prefix="/api/resumen", tags=["resumen"])
 _log = logging.getLogger("fide.resumen")
@@ -17,6 +19,55 @@ def _batch(conn, source):
         "ORDER BY id DESC LIMIT 1", (source,)
     ).fetchone()
     return (r["id"], r["completed_at"]) if r else (None, None)
+
+
+# ---------- Metas del tablero (kv_store) ----------
+# Las define el superadmin en Panel de Configuración; el home las usa para el
+# medidor de ICV, las líneas de meta de la evolución mensual y las alertas.
+_METAS_DEFAULT = {"icv_meta": 5.0, "recaudo_meta_mensual": None, "desembolso_meta_mensual": None}
+
+
+def _leer_metas(conn) -> dict:
+    import json as _json
+    row = conn.execute("SELECT value FROM kv_store WHERE key = 'metas_tablero'").fetchone()
+    metas = dict(_METAS_DEFAULT)
+    if row:
+        try:
+            data = _json.loads(row["value"]) or {}
+            for k in _METAS_DEFAULT:
+                if k in data:
+                    metas[k] = data[k]
+        except Exception:
+            pass
+    return metas
+
+
+class MetasIn(BaseModel):
+    icv_meta: float | None = Field(default=None, ge=0, le=100)
+    recaudo_meta_mensual: float | None = Field(default=None, ge=0, le=1e15)
+    desembolso_meta_mensual: float | None = Field(default=None, ge=0, le=1e15)
+
+
+@router.get("/metas")
+def metas_get(_user=Depends(require_auth)):
+    conn = get_connection()
+    try:
+        return _leer_metas(conn)
+    finally:
+        conn.close()
+
+
+@router.put("/metas")
+def metas_put(body: MetasIn, request: Request, user=Depends(require_superadmin)):
+    import json as _json
+    metas = {"icv_meta": body.icv_meta if body.icv_meta is not None else _METAS_DEFAULT["icv_meta"],
+             "recaudo_meta_mensual": body.recaudo_meta_mensual,
+             "desembolso_meta_mensual": body.desembolso_meta_mensual}
+    with get_db() as conn:
+        conn.execute("INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES ('metas_tablero', ?, datetime('now'))",
+                     (_json.dumps(metas),))
+    log_audit(user["user_id"], user["username"], "metas_update", _json.dumps(metas), get_client_ip(request) or "")
+    return metas
 
 
 @router.get("/ejecutivo")
@@ -77,7 +128,7 @@ def resumen_ejecutivo(linea: str | None = None, aliado: str | None = None,
     conn = get_connection()
     try:
         out = {"actualizaciones": {}, "alertas": [],
-               "filtros": filtros_activos}
+               "filtros": filtros_activos, "metas": _leer_metas(conn)}
 
         # ---------- Cartera ----------
         b_cart, cart_when = _batch(conn, "manual_upload")

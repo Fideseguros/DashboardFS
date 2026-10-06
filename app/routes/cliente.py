@@ -18,6 +18,22 @@ from app.audit import log_audit, get_client_ip
 router = APIRouter(prefix="/api/cliente", tags=["cliente"])
 _log = logging.getLogger("fide.cliente")
 
+# Límite de consultas de ficha por usuario y hora (roles distintos de
+# superadmin). Sin esto un viewer puede recorrer cédulas sin freno y usar la
+# ficha como oráculo de "¿esta persona es cliente?". Se cuenta sobre
+# audit_logs (action='cliente_ficha') para que sobreviva reinicios del
+# contenedor.
+FICHA_MAX_POR_HORA = 30
+
+
+def _consultas_ultima_hora(conn, user_id) -> int:
+    r = conn.execute(
+        "SELECT COUNT(*) AS n FROM audit_logs WHERE user_id = ? "
+        "AND action = 'cliente_ficha' AND created_at >= datetime('now', '-1 hour')",
+        (user_id,)
+    ).fetchone()
+    return int(r["n"] if r else 0)
+
 
 def _norm_id(s):
     """Solo dígitos, sin ceros a la izquierda (para cruzar variantes)."""
@@ -49,6 +65,15 @@ def ficha_cliente(request: Request, identificacion: str = Query(..., min_length=
 
     conn = get_connection()
     try:
+        if not is_super and _consultas_ultima_hora(conn, user["user_id"]) >= FICHA_MAX_POR_HORA:
+            log_audit(user["user_id"], user["username"], "cliente_ficha_rate_limited",
+                      f"id={identificacion}", get_client_ip(request) or "unknown")
+            raise HTTPException(
+                status_code=429,
+                detail=f"Límite de {FICHA_MAX_POR_HORA} consultas de ficha por hora alcanzado. "
+                       "Intenta de nuevo más tarde."
+            )
+
         b_cart = _active_batch(conn, "manual_upload")
         b_rec = _active_batch(conn, "recaudo_upload")
         b_sol = _active_batch(conn, "solicitudes_upload")
