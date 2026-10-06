@@ -56,28 +56,18 @@ def test_diagnose_requires_superadmin(viewer_client):
     assert viewer_client.get("/api/solicitudes/diagnose").status_code == 403
 
 
-def test_client_ip_uses_last_forwarded_hop():
+def test_client_ip_penultimo_salto_railway():
+    """Railway añade UN salto (su edge público) al final del XFF: el cliente es el penúltimo."""
     from app.audit import get_client_ip
 
-    class _Req:
-        headers = {"x-forwarded-for": "6.6.6.6, 10.0.0.1, 190.1.2.3"}
-        client = None
+    def req(xff):
+        class _R:
+            headers = {"x-forwarded-for": xff}
+            client = None
+        return _R()
 
-    assert get_client_ip(_Req()) == "190.1.2.3"
-
-
-def test_client_ip_skips_railway_internal_hops():
-    """Railway añade su proxy interno (CGNAT 100.64/10) al final del XFF."""
-    from app.audit import get_client_ip
-
-    class _Req:
-        headers = {"x-forwarded-for": "6.6.6.6, 190.1.2.3, 100.64.0.7"}
-        client = None
-
-    assert get_client_ip(_Req()) == "190.1.2.3"
-
-    class _Req2:
-        headers = {"x-forwarded-for": "190.1.2.3"}
-        client = None
-
-    assert get_client_ip(_Req2()) == "190.1.2.3"
+    assert get_client_ip(req("190.1.2.3, 152.233.47.67")) == "190.1.2.3"
+    # el cliente intenta inyectar una IP falsa: va a la izquierda y se ignora
+    assert get_client_ip(req("6.6.6.6, 190.1.2.3, 152.233.47.67")) == "190.1.2.3"
+    # sin proxy (desarrollo local)
+    assert get_client_ip(req("190.1.2.3")) == "190.1.2.3"
