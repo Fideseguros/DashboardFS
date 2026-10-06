@@ -87,14 +87,35 @@ def _write_fallback(user_id, username, action, details, ip, error):
         )
 
 
+def _es_ip_privada(ip: str) -> bool:
+    """True para IPs privadas, loopback, link-local o CGNAT (100.64/10): son
+    saltos internos del proxy, nunca el cliente real."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip.split("%")[0])
+    except ValueError:
+        return False
+    return (a.is_private or a.is_loopback or a.is_link_local or a.is_reserved
+            or a in ipaddress.ip_network("100.64.0.0/10"))
+
+
 def get_client_ip(request: Request) -> str:
     """Return the client IP, honoring X-Forwarded-For when behind a proxy."""
-    # Tomamos el ÚLTIMO valor: es el que agrega el proxy de Railway (confiable).
-    # El primero lo puede escribir el propio cliente y le serviría para
-    # saltarse el límite de intentos por IP y falsear la auditoría.
+    # El PRIMER valor lo puede escribir el propio cliente (le serviría para
+    # saltarse el límite de intentos por IP y falsear la auditoría), así que
+    # se lee de derecha a izquierda: el último salto lo agrega el proxy de
+    # Railway. Verificado en producción (6-oct-2026): Railway añade ADEMÁS la
+    # IP interna de su propio proxy (100.64.x.x, cambia por petición), por lo
+    # que se saltan los saltos privados/CGNAT del final y se toma el primero
+    # que sea una IP pública.
     xff = request.headers.get("x-forwarded-for", "")
     if xff:
-        return xff.split(",")[-1].strip()
+        hops = [h.strip() for h in xff.split(",") if h.strip()]
+        for hop in reversed(hops):
+            if not _es_ip_privada(hop):
+                return hop
+        if hops:
+            return hops[0]
     real_ip = request.headers.get("x-real-ip", "")
     if real_ip:
         return real_ip.strip()

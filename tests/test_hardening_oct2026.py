@@ -64,3 +64,20 @@ def test_client_ip_uses_last_forwarded_hop():
         client = None
 
     assert get_client_ip(_Req()) == "190.1.2.3"
+
+
+def test_client_ip_skips_railway_internal_hops():
+    """Railway añade su proxy interno (CGNAT 100.64/10) al final del XFF."""
+    from app.audit import get_client_ip
+
+    class _Req:
+        headers = {"x-forwarded-for": "6.6.6.6, 190.1.2.3, 100.64.0.7"}
+        client = None
+
+    assert get_client_ip(_Req()) == "190.1.2.3"
+
+    class _Req2:
+        headers = {"x-forwarded-for": "190.1.2.3"}
+        client = None
+
+    assert get_client_ip(_Req2()) == "190.1.2.3"
