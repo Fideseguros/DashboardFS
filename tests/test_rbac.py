@@ -24,7 +24,7 @@ AUTH_ANY = [
     ("GET", "/api/recaudo", {}),
     ("GET", "/api/recaudo/summary", {}),
     ("GET", "/api/solicitudes", {}),
-    ("GET", "/api/solicitudes/summary", {}),
+    ("GET", "/api/solicitudes/combined", {}),
     ("GET", "/api/sync/status", {}),
 ]
 

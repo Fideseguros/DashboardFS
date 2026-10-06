@@ -26,12 +26,15 @@ def _init_fernet() -> Fernet | None:
         return _FERNET
     _INIT_DONE = True
     key_env = os.getenv("FIELD_ENCRYPTION_KEY", "").strip()
-    app_env = os.getenv("APP_ENV", "development").lower()
+    # Seguro por defecto: sin llave la app NO arranca, salvo que se pida
+    # explícitamente texto plano (solo desarrollo local o pytest).
+    allow_plain = os.getenv("ALLOW_PLAINTEXT_PII", "0") == "1" or         os.getenv("APP_ENV", "").lower() in ("development", "test")
     if not key_env:
-        if app_env == "production":
+        if not allow_plain:
             raise RuntimeError(
-                "FIELD_ENCRYPTION_KEY no está configurada en producción. "
-                "Los datos PII no pueden almacenarse en texto plano."
+                "FIELD_ENCRYPTION_KEY no está configurada. Los datos PII no "
+                "pueden almacenarse en texto plano. (Para desarrollo local: "
+                "ALLOW_PLAINTEXT_PII=1)"
             )
         _log.warning("FIELD_ENCRYPTION_KEY vacía — PII se guardará en texto plano (modo dev).")
         return None

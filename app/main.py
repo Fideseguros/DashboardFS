@@ -4,16 +4,23 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.gzip import GZipMiddleware
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import os
 import hashlib
 import logging
 from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
-from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente, resumen
+from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente, resumen, audit_events
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
 
-app = FastAPI(title="Fide Seguros Dashboard", version="2.0.0")
+# Sin /docs, /redoc ni /openapi.json: exponían el mapa completo de la API a
+# cualquiera sin autenticar. Para desarrollo local: FIDE_ENABLE_DOCS=1.
+_DOCS = os.getenv("FIDE_ENABLE_DOCS", "0") == "1"
+app = FastAPI(title="Fide Seguros Dashboard", version="2.1.0",
+              docs_url="/docs" if _DOCS else None,
+              redoc_url=None,
+              openapi_url="/openapi.json" if _DOCS else None)
 
 # Comprime respuestas JSON > 500 bytes. Los endpoints de cartera/recaudo/
 # solicitudes devuelven listas grandes que se reducen 70-90% con gzip.
@@ -32,6 +39,7 @@ app.include_router(saldo_cartera.router)
 app.include_router(habeas_data.router)
 app.include_router(cliente.router)
 app.include_router(resumen.router)
+app.include_router(audit_events.router)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -125,14 +133,22 @@ def _cleanup_old_data():
         _log.exception("retention cleanup failed (non-fatal)")
 
 
-@app.on_event("startup")
-def startup():
+def _startup():
     init_db()
     _bootstrap_admin()
     _cleanup_old_data()
     # Backfill de PII enmascarada para acelerar /api/credits.
     # Solo corre si hay filas pendientes — idempotente.
     backfill_masked_pii()
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    _startup()
+    yield
+
+
+app.router.lifespan_context = _lifespan
 
 
 @app.middleware("http")

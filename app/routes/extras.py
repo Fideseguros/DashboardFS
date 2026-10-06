@@ -787,7 +787,7 @@ def solic_combined(response: Response, user=Depends(require_auth),
 
 
 @solicitudes.get("/diagnose")
-def solic_diagnose(_user=Depends(require_auth)):
+def solic_diagnose(_user=Depends(require_superadmin)):
     """Diagnóstico: muestra qué estados crudos hay en la BD y cómo los
     normaliza _normalize_estado. Permite verificar desde el navegador
     (sin DevTools) si el mapeo funciona después de un upload.

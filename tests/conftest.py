@@ -10,33 +10,42 @@ import tempfile
 import pytest
 
 
+# El entorno se fija AQUÍ, al importar conftest (pytest lo importa antes que
+# cualquier módulo de tests). Antes vivía en un fixture de sesión, pero
+# tests/test_audit.py hace `from app.audit import ...` en la cabecera, lo que
+# importaba app.database durante la COLECCIÓN con DATABASE_PATH aún sin
+# fijar: la suite completa terminaba apuntando a data/fide.db (la BD real del
+# repo) y los tests de sesión fallaban con 401 al correr todos juntos.
+_TMPDIR = tempfile.mkdtemp(prefix="fide-test-")
+_DB_PATH = os.path.join(_TMPDIR, "test.db")
+os.environ["DATABASE_PATH"] = _DB_PATH
+os.environ["FIELD_ENCRYPTION_KEY"] = "test-encryption-key-for-pytest-only"
+os.environ["APP_ENV"] = "test"
+os.environ["COOKIE_SECURE"] = "0"
+os.environ["LOGIN_MAX_ATTEMPTS"] = "5"
+os.environ["LOGIN_LOCKOUT_MINUTES"] = "15"
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _isolate_env():
-    """Antes de importar nada de app.*, fijar el entorno de prueba."""
-    tmpdir = tempfile.mkdtemp(prefix="fide-test-")
-    db_path = os.path.join(tmpdir, "test.db")
-    os.environ["DATABASE_PATH"] = db_path
-    os.environ["FIELD_ENCRYPTION_KEY"] = "test-encryption-key-for-pytest-only"
-    os.environ["APP_ENV"] = "test"
-    os.environ["COOKIE_SECURE"] = "0"
-    os.environ["LOGIN_MAX_ATTEMPTS"] = "5"
-    os.environ["LOGIN_LOCKOUT_MINUTES"] = "15"
     yield
-    # cleanup
-    try:
-        if os.path.exists(db_path):
-            os.unlink(db_path)
-    except Exception:
-        pass
+    for suffix in ("", "-wal", "-shm"):
+        try:
+            if os.path.exists(_DB_PATH + suffix):
+                os.unlink(_DB_PATH + suffix)
+        except Exception:
+            pass
 
 
 @pytest.fixture
 def db():
     """BD fresca para cada test. Recrea el schema."""
     from app.database import init_db, get_connection, DATABASE_PATH
-    # Borrar la BD si existe
-    if os.path.exists(DATABASE_PATH):
-        os.unlink(DATABASE_PATH)
+    assert DATABASE_PATH == _DB_PATH, "app.database no está usando la BD temporal de pruebas"
+    # Borrar la BD si existe (también WAL/SHM para no arrastrar estado)
+    for suffix in ("", "-wal", "-shm"):
+        if os.path.exists(DATABASE_PATH + suffix):
+            os.unlink(DATABASE_PATH + suffix)
     init_db()
     conn = get_connection()
     yield conn

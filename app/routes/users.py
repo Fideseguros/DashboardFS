@@ -70,8 +70,9 @@ def create_user(body: UserCreate, request: Request, user=Depends(require_superad
             (username, _hash(body.password), body.display_name.strip(), body.role)
         )
         new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        log_audit(user["user_id"], user["username"], "user_create",
-                  f"id={new_id} username={username} role={body.role}", ip)
+    # Fuera del `with`: log_audit abre otra conexión y esperaría el lock de escritura.
+    log_audit(user["user_id"], user["username"], "user_create",
+              f"id={new_id} username={username} role={body.role}", ip)
     return {"id": new_id, "ok": True}
 
 
@@ -110,8 +111,8 @@ def update_user(user_id: int, body: UserUpdate, request: Request, user=Depends(r
 
         params.append(user_id)
         conn.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = ?", params)
-        log_audit(user["user_id"], user["username"], "user_update",
-                  f"id={user_id} fields={','.join(u.split(' ')[0] for u in updates)}", ip)
+    log_audit(user["user_id"], user["username"], "user_update",
+              f"id={user_id} fields={','.join(u.split(' ')[0] for u in updates)}", ip)
     return {"ok": True}
 
 
@@ -127,6 +128,6 @@ def delete_user(user_id: int, request: Request, user=Depends(require_superadmin)
         # Preserve audit/history by soft-deleting: deactivate + remove sessions
         conn.execute("UPDATE users SET is_active = 0 WHERE id = ?", (user_id,))
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-        log_audit(user["user_id"], user["username"], "user_deactivate",
-                  f"id={user_id} username={target['username']}", ip)
+    log_audit(user["user_id"], user["username"], "user_deactivate",
+              f"id={user_id} username={target['username']}", ip)
     return {"ok": True}

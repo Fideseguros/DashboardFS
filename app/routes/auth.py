@@ -58,48 +58,63 @@ def login(req: LoginRequest, request: Request, response: Response):
     ip = get_client_ip(request) or "unknown"
     username = (req.username or "").strip()[:_USERNAME_MAX]
 
+    # Fase 1: validar y REGISTRAR el intento en su propia transacción.
+    # Antes, el `raise HTTPException` ocurría dentro del `with get_db()`,
+    # lo que disparaba rollback y borraba el intento fallido: el límite de
+    # intentos (429) nunca se alcanzaba. Ahora el intento queda guardado
+    # pase lo que pase, y los HTTPException se lanzan fuera del bloque.
+    error: HTTPException | None = None
+    user = None
     with get_db() as conn:
         _cleanup_stale(conn)
 
         if _is_ip_locked(conn, ip) or _is_user_locked(conn, username):
+            error = HTTPException(
+                status_code=429,
+                detail=f"Demasiados intentos fallidos. Intenta en {LOGIN_LOCKOUT_MINUTES} minutos.")
+        else:
+            user = conn.execute(
+                "SELECT * FROM users WHERE username = ? AND is_active = 1",
+                (username,)
+            ).fetchone()
+
+            # Constant-time credential check: if user is None, compare against dummy hash
+            # so response timing does not reveal whether the username exists.
+            hash_to_check = user["password_hash"].encode("utf-8") if user else _DUMMY_HASH
+            password_ok = _bcrypt.checkpw(req.password.encode("utf-8"), hash_to_check)
+            valid = bool(user and password_ok)
+
+            _record_attempt(conn, ip, username, valid)
+            if not valid:
+                error = HTTPException(status_code=401, detail="Credenciales invalidas")
+
+    # log_audit abre su propia conexión: llamarlo FUERA del `with` evita que
+    # espere el busy_timeout (5 s) por el lock de escritura de la conexión anterior.
+    if error is not None:
+        if error.status_code == 429:
             log_audit(None, username, "login_blocked_rate_limit",
-                      f"bloqueo por intentos repetidos", ip)
-            raise HTTPException(status_code=429,
-                                detail=f"Demasiados intentos fallidos. Intenta en {LOGIN_LOCKOUT_MINUTES} minutos.")
+                      "bloqueo por intentos repetidos", ip)
+        else:
+            log_audit(user["id"] if user else None, username, "login_failed",
+                      "credenciales inválidas", ip)
+        raise error
 
-        user = conn.execute(
-            "SELECT * FROM users WHERE username = ? AND is_active = 1",
-            (username,)
-        ).fetchone()
-
-        # Constant-time credential check: if user is None, compare against dummy hash
-        # so response timing does not reveal whether the username exists.
-        hash_to_check = user["password_hash"].encode("utf-8") if user else _DUMMY_HASH
-        password_ok = _bcrypt.checkpw(req.password.encode("utf-8"), hash_to_check)
-        valid = bool(user and password_ok)
-
-        _record_attempt(conn, ip, username, valid)
-
-        if not valid:
-            log_audit(user["id"] if user else None, username, "login_failed", "credenciales inválidas", ip)
-            raise HTTPException(status_code=401, detail="Credenciales invalidas")
-
-        token = secrets.token_urlsafe(32)
-        expires = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
-
+    # Fase 2: crear la sesión.
+    token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=SESSION_EXPIRY_HOURS)
+    invalidated = 0
+    with get_db() as conn:
         # Auditoría A5: invalidar sesiones previas del mismo usuario.
         # Si un laptop quedó comprometido con sesión viva, un re-login
         # desde el equipo legítimo cierra la sesión hostil al instante.
-        # Política: single-session por usuario. Si necesita multi-device,
-        # cambiar a 'cerrar todas las sesiones de hace >X horas'.
+        # Política: single-session por usuario.
         old_sessions = conn.execute(
             "SELECT COUNT(*) as cnt FROM sessions WHERE user_id = ?",
             (user["id"],)
         ).fetchone()
-        if old_sessions and old_sessions["cnt"] > 0:
+        invalidated = old_sessions["cnt"] if old_sessions else 0
+        if invalidated:
             conn.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
-            log_audit(user["id"], user["username"], "session_invalidated",
-                      f"sesiones previas cerradas: {old_sessions['cnt']}", ip)
 
         conn.execute(
             "INSERT INTO sessions (token, user_id, ip, expires_at) VALUES (?, ?, ?, ?)",
@@ -109,7 +124,11 @@ def login(req: LoginRequest, request: Request, response: Response):
             "UPDATE users SET last_login = ? WHERE id = ?",
             (datetime.utcnow().isoformat(), user["id"])
         )
-        log_audit(user["id"], user["username"], "login_success", "", ip)
+
+    if invalidated:
+        log_audit(user["id"], user["username"], "session_invalidated",
+                  f"sesiones previas cerradas: {invalidated}", ip)
+    log_audit(user["id"], user["username"], "login_success", "", ip)
 
     response.set_cookie(
         key="fide_token",
@@ -139,8 +158,8 @@ def logout(request: Request, response: Response):
                 "JOIN users u ON u.id = s.user_id WHERE s.token = ?", (token,)
             ).fetchone()
             conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-            if row:
-                log_audit(row["user_id"], row["username"], "logout", "", ip)
+        if row:
+            log_audit(row["user_id"], row["username"], "logout", "", ip)
     response.delete_cookie("fide_token", path="/")
     return {"ok": True}
 

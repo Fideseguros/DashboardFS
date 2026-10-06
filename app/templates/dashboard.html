@@ -21,6 +21,7 @@
   /* --- Paleta corporativa neutral (Power BI-like) --- */
   --neutral-900: #201F1E;      /* títulos */
   --neutral-700: #323130;      /* texto principal */
+  --neutral-600: #484644;      /* texto secundario fuerte (antes sin definir) */
   --neutral-500: #605E5C;      /* secundario */
   --neutral-300: #A19F9D;      /* terciario / labels */
   --neutral-200: #D2D0CE;      /* bordes activos */
@@ -3577,13 +3578,6 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
 </div>
 
 <script>
-// Performance: reduce el tiempo de animación inicial de Chart.js para que el
-// dashboard se sienta más responsive (default 1000ms → 250ms). Reduce el FCP
-// percibido sin afectar la legibilidad de los charts.
-if (typeof Chart !== 'undefined') {
-  Chart.defaults.animation.duration = 250;
-  Chart.defaults.responsiveAnimationDuration = 0;
-}
 
 let RAW_DATA = [];
 let filteredData = [];
@@ -4923,10 +4917,16 @@ function downloadCSV(rows, headers, keys, filename) {
   rows.forEach(r => {
     csv += keys.map(k => {
       let v = r[k] == null ? '' : String(r[k]);
+      // Inyección de fórmulas: un nombre que venga del Excel empezando por
+      // = + - @ (o tab / CR) se ejecutaría al abrir el CSV. Se neutraliza con '.
+      if (/^[=+\-@\t\r]/.test(v) && !/^-?\d+([.,]\d+)?$/.test(v)) v = "'" + v;
       if (v.includes(',') || v.includes('"') || v.includes('\n')) v = '"' + v.replace(/"/g, '""') + '"';
       return v;
     }).join(',') + '\n';
   });
+  // Trazabilidad Habeas Data: cada descarga queda en audit_logs.
+  fetch('/api/audit/export', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ archivo: filename, filas: rows.length, columnas: keys }) }).catch(() => {});
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -5761,7 +5761,7 @@ async function loadFinancieros() {
 
     // Chart evolución
     if (_efChart) { _efChart.destroy(); _efChart = null; }
-    const months = (s.by_month || []).map(b => `Mes ${b.month}`);
+    const months = (s.by_month || []).map(b => _MESES_ES[(parseInt(b.month, 10) || 1) - 1] || `Mes ${b.month}`);
     _efChart = new Chart(document.getElementById('chartFinEvol'), {
       type: 'bar',
       data: {
@@ -6326,9 +6326,15 @@ function renderAnalitica() {
 
   // ============ Chart: Aging bar (barras horizontales) ============
   Object.keys(_anCharts).forEach(k => { _anCharts[k]?.destroy?.(); });
-  const labels = BUCKETS.map(b => b.label);
-  const saldos = BUCKETS.map(b => agingSaldo[b.key]);
-  const counts = BUCKETS.map(b => agingCount[b.key]);
+  // Solo los buckets EN MORA: "Al día" (≈90% del saldo) ya está en el KPI
+  // de arriba y, dentro de la gráfica, aplastaba la escala hasta volver
+  // invisibles los rangos que sí importan (y sus etiquetas se montaban
+  // sobre el eje).
+  const MORA_BUCKETS = BUCKETS.filter(b => b.key !== 'b0');
+  const MORA_COLORS = BUCKET_COLORS.slice(1);
+  const labels = MORA_BUCKETS.map(b => b.label);
+  const saldos = MORA_BUCKETS.map(b => agingSaldo[b.key]);
+  const counts = MORA_BUCKETS.map(b => agingCount[b.key]);
   _anCharts.aging = new Chart(document.getElementById('chartAging'), {
     type: 'bar',
     data: {
@@ -6336,7 +6342,7 @@ function renderAnalitica() {
       datasets: [{
         label: 'Saldo Capital',
         data: saldos,
-        backgroundColor: BUCKET_COLORS,
+        backgroundColor: MORA_COLORS,
         borderRadius: 4,
       }]
     },
@@ -6344,10 +6350,11 @@ function renderAnalitica() {
       indexAxis: 'y',
       responsive: true,
       maintainAspectRatio: false,
+      layout: { padding: { right: 120 } },
       onClick: (evt, els) => {
         if (!els.length) return;
         const idx = els[0].index;
-        const bucket = BUCKETS[idx];
+        const bucket = MORA_BUCKETS[idx];
         if (!bucket) return;
         openAgingDrill(bucket.key, bucket.label);
       },
@@ -6367,19 +6374,20 @@ function renderAnalitica() {
           }
         },
         datalabels: {
-          anchor: 'end', align: 'right',
-          color: '#1a1a1a',
-          font: { size: 11, weight: 700 },
-          formatter: (v) => {
+          anchor: 'end', align: 'end', offset: 6, clip: false,
+          color: '#323130',
+          font: { size: 12, weight: 700 },
+          formatter: (v, ctx) => {
+            if (!v) return '';
             const pct = saldoTotal > 0 ? (v / saldoTotal * 100) : 0;
-            if (pct < 0.5) return '';
-            return pct.toFixed(1) + '%';
+            return fmtM(v) + ' · ' + pct.toFixed(1) + '% · ' + counts[ctx.dataIndex] + ' cr.';
           }
         }
       },
       scales: {
-        x: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } },
-        y: { grid: { display: false } }
+        x: { ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' },
+             title: { display: true, text: 'Saldo capital en mora' } },
+        y: { grid: { display: false }, title: { display: true, text: 'Días de mora' } }
       }
     },
     plugins: [ChartDataLabels]
@@ -6784,12 +6792,18 @@ async function deactivateUser(id, username) {
 }
 
 // ---- TABLE SORT ----
-document.querySelectorAll('.data-table th').forEach(th=>{
+// Solo los encabezados con data-col de la tabla de Detalle ordenan; antes el
+// handler se enganchaba a TODAS las tablas y lanzaba TypeError al hacer clic
+// en cualquier otro encabezado (sin .sort-icon).
+document.querySelectorAll('#dataTable th[data-col]').forEach(th=>{
   th.addEventListener('click',()=>{
     const col=th.dataset.col;
     if(sortCol===col)sortDir*=-1; else{ sortCol=col; sortDir=1; }
-    document.querySelectorAll('.data-table th .sort-icon').forEach(s=>s.textContent='\u2195');
-    th.querySelector('.sort-icon').textContent = sortDir===1?'\u2191':'\u2193';
+    document.querySelectorAll('#dataTable th .sort-icon').forEach(s=>s.textContent='\u2195');
+    const ico = th.querySelector('.sort-icon');
+    if (ico) ico.textContent = sortDir===1?'\u2191':'\u2193';
+    document.querySelectorAll('#dataTable th[data-col]').forEach(h=>h.removeAttribute('aria-sort'));
+    th.setAttribute('aria-sort', sortDir===1?'ascending':'descending');
     updateTable();
   });
 });
@@ -7058,8 +7072,10 @@ loadData = async function() { await _origLoadData(); _enableKpiTooltipTaps(); };
 
 // Load data from API (replaces static embedded data)
 loadData();
-// El home es el Resumen Ejecutivo — cargarlo al inicio (independiente de loadData)
-loadResumenEjecutivo();
+// El home es el Resumen Ejecutivo — cargarlo al inicio (independiente de loadData).
+// Diferido un tick: RE_FILTER_IDS (const) se declara más abajo y llamarlo aquí
+// de forma síncrona lanzaba "Cannot access before initialization" en cada carga.
+setTimeout(loadResumenEjecutivo, 0);
 async function doLogout() {
   try {
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });

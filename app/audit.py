@@ -89,9 +89,12 @@ def _write_fallback(user_id, username, action, details, ip, error):
 
 def get_client_ip(request: Request) -> str:
     """Return the client IP, honoring X-Forwarded-For when behind a proxy."""
+    # Tomamos el ÚLTIMO valor: es el que agrega el proxy de Railway (confiable).
+    # El primero lo puede escribir el propio cliente y le serviría para
+    # saltarse el límite de intentos por IP y falsear la auditoría.
     xff = request.headers.get("x-forwarded-for", "")
     if xff:
-        return xff.split(",")[0].strip()
+        return xff.split(",")[-1].strip()
     real_ip = request.headers.get("x-real-ip", "")
     if real_ip:
         return real_ip.strip()
