@@ -213,8 +213,17 @@ async def add_security_headers(request: Request, call_next):
 
 
 @app.get("/api/health")
-def health():
-    return {"status": "ok", "service": "fide-dashboard"}
+def health(request: Request):
+    # Diagnóstico del proxy: devuelve SOLO la IP que la app atribuye al
+    # propio llamador y cuántos saltos trae X-Forwarded-For (sin exponer las
+    # IPs internas). Permite verificar que el límite de intentos por IP esté
+    # contando la IP correcta detrás del proxy de Railway.
+    from app.audit import get_client_ip
+    xff = request.headers.get("x-forwarded-for", "")
+    return {"status": "ok", "service": "fide-dashboard",
+            "client_ip": get_client_ip(request),
+            "xff_hops": len([h for h in xff.split(",") if h.strip()]),
+            "has_real_ip": bool(request.headers.get("x-real-ip"))}
 
 
 @app.get("/login")
