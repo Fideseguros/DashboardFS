@@ -6890,6 +6890,12 @@ async function iniciar2fa() {
     setTimeout(() => document.getElementById('segCode').focus(), 50);
   } catch (e) { showToast('Error de conexión', 'err'); }
 }
+let _segRecovery = [];
+function copiarRecovery() {
+  if (!navigator.clipboard) { showToast('Tu navegador no permite copiar; anótalos a mano', 'warn'); return; }
+  navigator.clipboard.writeText(_segRecovery.join('
+')).then(() => showToast('Códigos copiados', 'ok'));
+}
 async function confirmar2fa() {
   const code = (document.getElementById('segCode').value || '').trim();
   const err = document.getElementById('segErr');
@@ -6898,11 +6904,12 @@ async function confirmar2fa() {
   const d = await res.json().catch(() => ({}));
   if (!res.ok) { err.textContent = d.detail || 'Código incorrecto'; return; }
   const codes = (d.recovery_codes || []);
+  _segRecovery = codes;
   document.getElementById('segBody').innerHTML = `
     <p><span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);">Activada</span> Desde tu pr&oacute;ximo ingreso se pedir&aacute; el c&oacute;digo.</p>
     <p style="margin-top:10px;"><strong>Guarda estos c&oacute;digos de recuperaci&oacute;n</strong> en un lugar seguro (impr&iacute;melos o gu&aacute;rdalos en tu gestor de contrase&ntilde;as). Cada uno sirve una sola vez si pierdes el tel&eacute;fono. <u>No se volver&aacute;n a mostrar.</u></p>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:12px 0;font-family:Consolas,monospace;font-size:1.05rem;letter-spacing:1px;user-select:all;">${codes.map(c => `<div>${esc(c)}</div>`).join('')}</div>
-    <div class="user-form-buttons"><button class="btn btn-reset" onclick="navigator.clipboard && navigator.clipboard.writeText(${JSON.stringify(codes.join('\n'))}).then(()=>showToast('Códigos copiados','ok'))">Copiar</button><button class="btn btn-export" onclick="closeSeguridad()">Listo, los guard&eacute;</button></div>`;
+    <div class="user-form-buttons"><button class="btn btn-reset" onclick="copiarRecovery()">Copiar</button><button class="btn btn-export" onclick="closeSeguridad()">Listo, los guard&eacute;</button></div>`;
   showToast('Verificación en dos pasos activada', 'ok');
   if (typeof loadUsers === 'function' && document.getElementById('usersTableBody')) loadUsers();
 }
