@@ -604,36 +604,45 @@ body {
   width: 232px;
   background: white;
   border-right: 1px solid var(--border);
-  padding: 16px 12px 24px;
+  padding: 12px 12px 12px;
   position: sticky;
   top: 0;
   align-self: stretch;
   max-height: 100vh;
   overflow-y: auto;
+  /* El menú debe caber sin scroll en un portátil (768px de alto). Si en una
+   * pantalla muy baja no cabe, la barra es fina y solo aparece al pasar el
+   * ratón, en vez de la barra gris gruesa. */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
 }
+.sidebar:hover { scrollbar-color: var(--neutral-200) transparent; }
+.sidebar::-webkit-scrollbar { width: 6px; }
+.sidebar::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+.sidebar:hover::-webkit-scrollbar-thumb { background: var(--neutral-200); }
 .sidebar-header {
   font-size: 0.78rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-secondary);
-  padding: 0 8px 8px;
+  padding: 0 8px 6px;
   border-bottom: 1px solid var(--border-soft);
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 .nav-group {
-  margin-bottom: 16px;
+  margin-bottom: 6px;
 }
 .nav-group-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.7px;
   color: var(--fide-teal-deeper);
-  padding: 8px 8px 4px;
+  padding: 8px 8px 2px;
   margin-bottom: 4px;
 }
 .nav-group-label .cat-icon {
@@ -647,8 +656,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 10px;
-  margin: 1px 0;
+  padding: 5px 10px;
+  margin: 0;
   cursor: pointer;
   font-weight: 500;
   font-size: 0.9rem;
@@ -1968,6 +1977,20 @@ select:focus-visible {
 .re-card .re-val { font-size: 1.5rem; font-weight: 900; color: var(--neutral-900); line-height: 1.1; }
 .re-card .re-sub { font-size: 0.86rem; color: var(--neutral-600); margin-top: 6px; font-weight: 600; }
 .re-card .re-trend { font-size: 0.84rem; font-weight: 700; }
+.tabla-nota { font-size: 0.84rem; color: var(--neutral-600); padding: 8px 4px 0; }
+.tabla-nota b { color: var(--neutral-900); }
+.kpi-delta { font-size: 0.84rem; font-weight: 700; margin-top: 6px; color: var(--neutral-600); font-variant-numeric: tabular-nums; }
+.kpi-sub .up { color: #0f7b6c; } .kpi-sub .down { color: #b8680f; }
+.kpi-delta .up { color: #0f7b6c; } .kpi-delta .down { color: #b8680f; } .kpi-delta .flat { color: var(--neutral-500); }
+/* Sub-navegación de Cartera 360 (la página mide varias pantallas) */
+.subnav { position: sticky; top: 0; z-index: 30; display: flex; gap: 6px; flex-wrap: wrap; padding: 8px 0; margin: 0 0 10px; background: var(--bg); }
+.subnav button { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 0.86rem; font-weight: 700; color: var(--neutral-600); cursor: pointer; min-height: 36px; }
+.subnav button:hover, .subnav button.active { background: var(--fide-teal-tint); color: var(--fide-teal-deeper); border-color: var(--fide-teal); }
+/* Buscador en la cabecera (escritorio); el botón flotante queda solo para móvil */
+.header-btn.buscar { display: inline-flex; align-items: center; gap: 6px; }
+.header-btn.buscar svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+@media (min-width: 769px) { .ficha-fab { display: none !important; } }
+@media (max-width: 768px) { .header-btn.buscar { display: none; } }
 .re-loading { color: var(--neutral-500); font-style: italic; padding: 2rem; grid-column: 1/-1; text-align: center; }
 .re-alerta {
   display: flex; align-items: center; gap: 10px;
@@ -2397,6 +2420,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   <div class="header-right">
     <div class="header-actions">
       <span id="userName" style="font-weight:700;"></span>
+      <button onclick="openFicha()" class="header-btn buscar" title="Ficha 360 de un cliente por c&eacute;dula"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>Buscar cliente</button>
       <button onclick="openSeguridad()" class="header-btn" title="Verificaci&oacute;n en dos pasos de tu cuenta">Mi seguridad</button>
       <button onclick="doLogout()" class="header-btn">Salir</button>
     </div>
@@ -2758,6 +2782,13 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   <div class="cross-filter-hint cartera-scope cartera-main-only">
     <span>&#128161;</span> Haz clic en cualquier gr&aacute;fica para filtrar din&aacute;micamente. Vuelve a hacer clic para quitar el filtro.
   </div>
+  <!-- Cartera 360 mide varias pantallas: atajos a cada bloque -->
+  <nav class="subnav cartera-scope cartera-main-only" aria-label="Secciones de Cartera 360">
+    <button onclick="irA('tab-resumen', this)" class="active">Resumen</button>
+    <button onclick="irA('tab-cartera', this)">Composici&oacute;n y riesgo</button>
+    <button onclick="irA('tab-aliados', this)">Aliados</button>
+    <button onclick="irA('tab-detalle', this)">Detalle de cr&eacute;ditos</button>
+  </nav>
 
   <!-- Tab: Resumen -->
   <div class="tab-content" id="tab-resumen">
@@ -3067,6 +3098,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <div class="kpi-label">Recaudo Efectivo</div>
         <div class="kpi-value" id="rcRecaudo">-</div>
         <div class="kpi-sub" id="rcRecaudoSub"></div>
+        <div class="kpi-delta" id="rcDelta"></div>
       </div>
       <div class="kpi-card blue">
         <div class="kpi-info">i<span class="kpi-tooltip">Capital recuperado: porci&oacute;n del pago que reduce el saldo del cr&eacute;dito.</span></div>
@@ -3096,8 +3128,15 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <div class="chart-container"><canvas id="chartRcAliado"></canvas></div>
       </div>
       <div class="chart-card full">
-        <h3><span class="dot"></span> Recaudo vs Desembolso por Mes <span style="font-size:0.78rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(barras = recaudado &middot; l&iacute;nea = desembolsado)</span></h3>
-        <div class="chart-container tall"><canvas id="chartRcMensual"></canvas></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+          <h3 style="margin-bottom:0;"><span class="dot"></span> Recaudo vs Desembolso por Mes <span style="font-size:0.78rem;font-weight:600;color:var(--neutral-500);text-transform:none;letter-spacing:0;margin-left:0.4rem;">(barras = recaudado &middot; l&iacute;nea = desembolsado)</span></h3>
+          <div class="seg" role="group" aria-label="Meses a mostrar">
+            <button class="seg-btn" data-rc-meses="12" onclick="setRcMeses(12)">12 meses</button>
+            <button class="seg-btn active" data-rc-meses="24" onclick="setRcMeses(24)">24 meses</button>
+            <button class="seg-btn" data-rc-meses="0" onclick="setRcMeses(0)">Todo</button>
+          </div>
+        </div>
+        <div class="chart-container tall" style="margin-top:10px;"><canvas id="chartRcMensual"></canvas></div>
       </div>
       <div class="chart-card full">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
@@ -3105,6 +3144,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div style="display:flex;align-items:center;gap:0.5rem;">
             <span id="tblRecaudoSearchCount" style="font-size:0.8rem;color:var(--neutral-500);"></span>
             <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o cliente..." oninput="filterTableRows(this,'tblRecaudo')">
+            <button class="btn btn-export" style="font-size:0.84rem;padding:0.35rem 0.7rem;" onclick="exportRecaudo()" title="Descargar todos los pagos a Excel">Excel</button>
           </div>
         </div>
         <div class="table-wrapper" style="max-height:480px;">
@@ -3130,6 +3170,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div style="display:flex;align-items:center;gap:0.5rem;">
             <span id="tblRecaudoLegacySearchCount" style="font-size:0.8rem;color:var(--neutral-500);"></span>
             <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o cliente..." oninput="filterTableRows(this,'tblRecaudoLegacy')">
+            <button class="btn btn-export" style="font-size:0.84rem;padding:0.35rem 0.7rem;" onclick="exportRecaudoHistorico()" title="Descargar el hist&oacute;rico a Excel">Excel</button>
           </div>
         </div>
         <div class="table-wrapper" style="max-height:480px;">
@@ -3185,6 +3226,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <div class="kpi-label">Total Solicitudes</div>
         <div class="kpi-value" id="slTotal">-</div>
         <div class="kpi-sub" id="slTotalSub"></div>
+        <div class="kpi-delta" id="slDelta"></div>
       </div>
       <div class="kpi-card mint">
         <div class="kpi-info">i<span class="kpi-tooltip">Solicitudes que terminaron en DESEMBOLSADA.</span></div>
@@ -3223,6 +3265,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div style="display:flex;align-items:center;gap:0.5rem;">
             <span id="tblSolicitudesSearchCount" style="font-size:0.8rem;color:var(--neutral-500);"></span>
             <input type="text" class="table-search-input" placeholder="Buscar c&eacute;dula o solicitante..." oninput="filterTableRows(this,'tblSolicitudes')">
+            <button class="btn btn-export" style="font-size:0.84rem;padding:0.35rem 0.7rem;" onclick="exportSolicitudes()" title="Descargar las solicitudes (con los filtros aplicados) a Excel">Excel</button>
           </div>
         </div>
         <div class="table-wrapper" style="max-height:480px;">
@@ -3544,7 +3587,10 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="chart-card full">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.6rem;margin-bottom:0.5rem;">
           <h3 style="margin:0;"><span class="dot"></span> Detalle de Cosechas</h3>
-          <span style="font-size:0.82rem;color:var(--neutral-500);">Ordenado por mes de desembolso, m&aacute;s reciente arriba</span>
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <span style="font-size:0.82rem;color:var(--neutral-500);">Ordenado por mes de desembolso, m&aacute;s reciente arriba</span>
+            <button class="btn btn-export" style="font-size:0.84rem;padding:0.35rem 0.7rem;" onclick="exportCosechas()" title="Descargar la tabla de cosechas a Excel">Excel</button>
+          </div>
         </div>
         <div class="table-wrapper" style="max-height:520px;">
           <table class="data-table compact" id="tblCosechas">
@@ -4067,6 +4113,49 @@ function clearTableSkeleton(tableId, cols, msg) {
   tbody.innerHTML = `<tr><td colspan="${cols}" class="empty-state-cell" style="text-align:center;padding:1.5rem;color:var(--neutral-600);font-style:italic;">${esc(msg)}</td></tr>`;
 }
 
+// Fecha ISO (yyyy-mm-dd[Thh:mm]) → dd/mm/aaaa. Devuelve '' si no es fecha.
+function fmtDate(v) {
+  if (!v) return '';
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(v);
+}
+// Aviso bajo una tabla cuando se muestran menos filas de las que hay.
+// Las tablas largas se recortan (1.500 / 500 / 300 filas) y antes el recorte
+// solo estaba en un comentario del código: el usuario creía ver todo.
+function notaRecorte(tableId, mostradas, total, extra) {
+  const tbl = document.getElementById(tableId); if (!tbl) return;
+  const wrap = tbl.closest('.table-wrapper') || tbl.parentElement;
+  let nota = wrap.parentElement.querySelector('.tabla-nota[data-for="' + tableId + '"]');
+  if (!nota) {
+    nota = document.createElement('div'); nota.className = 'tabla-nota'; nota.dataset.for = tableId;
+    wrap.insertAdjacentElement('afterend', nota);
+  }
+  if (total > mostradas) {
+    nota.innerHTML = `Mostrando <b>${fmt(mostradas)}</b> de <b>${fmt(total)}</b> registros (los más recientes). ${extra || 'Usa el buscador o descarga el Excel para ver todos.'}`;
+    nota.style.display = '';
+  } else {
+    nota.innerHTML = `${fmt(total)} registros`;
+    nota.style.display = total ? '' : 'none';
+  }
+}
+// Variación del último mes COMPLETO contra el anterior, sobre un mapa {YYYY-MM: valor}.
+// Devuelve HTML listo para una tarjeta KPI ('' si no hay dos meses).
+function deltaUltimoMes(mapa, esValor) {
+  const hoy = new Date();
+  const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+  const meses = Object.keys(mapa).filter(m => /^\d{4}-\d{2}$/.test(m) && m !== mesActual).sort();
+  if (meses.length < 2) return '';
+  const cur = meses[meses.length - 1], prev = meses[meses.length - 2];
+  const a = mapa[cur] || 0, b = mapa[prev] || 0;
+  const f = v => esValor ? fmtM(v) : fmt(v);
+  let html = `${_reEvoLbl(cur)}: <b>${f(a)}</b>`;
+  if (b) {
+    const d = (a - b) / b * 100;
+    const cls = Math.abs(d) < 0.5 ? 'flat' : (d >= 0 ? 'up' : 'down');
+    html += ` <span class="${cls}">${cls === 'flat' ? '=' : (d >= 0 ? '▲' : '▼')} ${Math.abs(d).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span> vs ${_reEvoLbl(prev)}`;
+  }
+  return html;
+}
 function fmt(n) {
   if (n == null || isNaN(n)) return '-';
   return new Intl.NumberFormat('es-CO').format(Math.round(n));
@@ -5197,6 +5286,36 @@ function exportTopClientes() {
 }
 
 // Exporta las cuotas proyectadas (proyección de pagos) del período.
+// Exportaciones de Recaudo, Solicitudes y Cosechas (Excel con formato).
+function exportRecaudo() {
+  const rows = (window._rcRows || []).map(p => ({ fecha: p.fecha_movimiento, cliente: p.cliente, cuenta: p.cuenta, aliado: p.aliado, tipo: p.tipo_mvto,
+    capital: p.capital, interes: p.interes_corriente, mora: p.interes_mora, total: p.total }));
+  downloadCSV(rows, ['Fecha','Cliente','Cuenta','Aliado','Tipo','Capital','Interés','Mora','Total'],
+    ['fecha','cliente','cuenta','aliado','tipo','capital','interes','mora','total'], 'recaudo_pagos',
+    { fecha: 'fecha', capital: 'moneda', interes: 'moneda', mora: 'moneda', total: 'moneda' });
+}
+function exportRecaudoHistorico() {
+  const rows = (window._rcLegRows || []).map(p => ({ id: p.id_prestamo, cliente: p.nombre, pagos: p.num_pagos, total: p.valor_pago_total, mora: p.interes_mora_total, primero: p.fecha_primer_pago, ultimo: p.fecha_ultimo_pago }));
+  downloadCSV(rows, ['Id_Prestamo','Cliente','N_Pagos','Valor_Total','Interes_Mora','Primer_Pago','Ultimo_Pago'],
+    ['id','cliente','pagos','total','mora','primero','ultimo'], 'recaudo_historico',
+    { pagos: 'entero', total: 'moneda', mora: 'moneda', primero: 'fecha', ultimo: 'fecha' });
+}
+function exportSolicitudes() {
+  const rows = (window._slFiltered || []).map(x => ({ solicitud: x.solicitud, solicitante: x.solicitante, linea: x.linea, valor: x.valor, estado: x.estado, paso: x.paso_ruta, oficina: x.oficina, fecha: x.fecha_solicitud, origen: x.source }));
+  downloadCSV(rows, ['Solicitud','Solicitante','Linea','Valor','Estado','Paso','Oficina','Fecha','Plataforma'],
+    ['solicitud','solicitante','linea','valor','estado','paso','oficina','fecha','origen'], 'solicitudes',
+    { valor: 'moneda', fecha: 'fecha' });
+}
+function exportCosechas() {
+  const rows = (window._cosechasRows || []).map(c => {
+    const pct = k => c.saldo > 0 ? +(c[k] / c.saldo * 100).toFixed(1) : 0;
+    return { cosecha: c.ym, creditos: c.count, saldo: c.saldo, al_dia: pct('b0'), m1_30: pct('b1_30'), m31_60: pct('b31_60'), m61_90: pct('b61_90'),
+      m90: +(pct('b91_180') + pct('b181_360') + pct('b360p')).toFixed(1), mora_prom: Math.round(c.saldo > 0 ? c.sumDias / c.saldo : 0) };
+  });
+  downloadCSV(rows, ['Cosecha','N_Creditos','Saldo_Total','Pct_Al_Dia','Pct_1_30','Pct_31_60','Pct_61_90','Pct_90_mas','Mora_Prom_Dias'],
+    ['cosecha','creditos','saldo','al_dia','m1_30','m31_60','m61_90','m90','mora_prom'], 'cosechas',
+    { creditos: 'entero', saldo: 'moneda', al_dia: 'porcentaje', m1_30: 'porcentaje', m31_60: 'porcentaje', m61_90: 'porcentaje', m90: 'porcentaje', mora_prom: 'entero' });
+}
 function exportProyeccion() {
   const data = window._proyeccionData || [];
   if (!data.length) { showToast('No hay cuotas proyectadas en el período', 'warn'); return; }
@@ -5259,8 +5378,8 @@ function updateTable() {
       <td><span class="badge badge-${esc((r.calificacion||'').trim().toLowerCase())}">${esc((r.calificacion||'-').trim())}</span></td>
       <td class="num" style="color:${(parseInt(r.dias_mora)||0)>0?'#b8680f':'#0f7b6c'}; font-weight:700">${fmt(r.dias_mora)}</td>
       <td class="num">${r.tasa_efectiva ? esc(r.tasa_efectiva)+'%':'-'}</td>
-      <td>${esc(r.fecha_desembolso) || '-'}</td>
-      <td>${esc(r.fecha_vencimiento) || '-'}</td>
+      <td>${fmtDate(r.fecha_desembolso) || '-'}</td>
+      <td>${fmtDate(r.fecha_vencimiento) || '-'}</td>
       <td>${esc(r.aliado) || '-'}</td>
       <td>${esc(r.ciudad) || '-'}</td>
     </tr>
@@ -5311,6 +5430,12 @@ function _syncBottomNav(tabName) {
 }
 
 // ---- TABS (nav-tab en sidebar) ----
+function irA(id, btn) {
+  const el = document.getElementById(id); if (!el) return;
+  document.querySelectorAll('.subnav button').forEach(b => b.classList.toggle('active', b === btn));
+  const top = el.getBoundingClientRect().top + window.scrollY - 70;
+  window.scrollTo({ top, behavior: (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'auto' : 'smooth' });
+}
 function activateTab(tab) {
   if (!tab) return;
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
@@ -5328,7 +5453,12 @@ function activateTab(tab) {
     main.dataset.activeGroup = tab.dataset.group || '';
     main.dataset.activeTab = tab.dataset.tab || '';
   }
-  setTimeout(() => Object.values(charts).forEach(c => c.resize()), 50);
+  setTimeout(() => {
+    [charts, _rcCharts, _slCharts, _jrCharts, _anCharts].forEach(reg => {
+      if (reg) Object.values(reg).forEach(c => { try { c && c.resize && c.resize(); } catch (e) {} });
+    });
+    [_efChart, _prChart, _reEvoChart].forEach(c => { try { c && c.resize(); } catch (e) {} });
+  }, 60);
   // Topbar móvil: reflejar el tab activo para no perder contexto.
   const mobileLabel = document.getElementById('mobileTabLabel');
   if (mobileLabel) mobileLabel.textContent = (tab.textContent || 'Menú').trim();
@@ -5439,6 +5569,36 @@ async function renderUploadStatus(modulo) {
 
 // ---------- RECAUDO ----------
 let _rcCharts = {};
+// Gráfica mensual de Recaudo: antes pintaba TODOS los meses desde 2016 (más
+// de 100 barras ilegibles). Ahora 12 / 24 / todo, con 24 por defecto.
+let _rcSeries = null, _rcMeses = 24;
+function setRcMeses(n) {
+  _rcMeses = n;
+  document.querySelectorAll('[data-rc-meses]').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rcMeses, 10) === n));
+  renderRcMensual();
+}
+function renderRcMensual() {
+  if (!_rcSeries) return;
+  const { monMap, desMap } = _rcSeries;
+  let mons = Array.from(new Set([...Object.keys(monMap), ...Object.keys(desMap)])).filter(m => /^\d{4}-\d{2}$/.test(m)).sort();
+  if (_rcMeses > 0) mons = mons.slice(-_rcMeses);
+  if (_rcCharts.mensual) { _rcCharts.mensual.destroy(); delete _rcCharts.mensual; }
+  const el = document.getElementById('chartRcMensual'); if (!el) return;
+  _rcCharts.mensual = new Chart(el, {
+    data:{ labels: mons.map(_reEvoLbl), datasets:[
+      { type:'bar', label:'Recaudado', data: mons.map(m=>monMap[m]||0),
+        backgroundColor: FIDE.teal+'cc', borderRadius:4, order:2 },
+      { type:'line', label:'Desembolsado', data: mons.map(m=>desMap[m]||0),
+        borderColor: FIDE.blue, backgroundColor: FIDE.blue,
+        borderWidth:2, tension:0.3, pointRadius: mons.length > 40 ? 0 : 3, pointHoverRadius:5, order:1 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
+        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } } },
+      scales:{ y:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' }, title:{ display:true, text:'Pesos' } },
+               x:{ grid:{ display:false }, ticks:{ maxRotation: mons.length > 24 ? 60 : 0, autoSkip:true } } } }
+  });
+}
 async function loadRecaudo() {
   renderUploadStatus('recaudo');
   showTableSkeleton('tblRecaudo', 9, 6);
@@ -5493,9 +5653,10 @@ async function loadRecaudo() {
     _rcCharts.aliado = new Chart(document.getElementById('chartRcAliado'), {
       type: 'bar',
       data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
-      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
-        scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } }
+      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 70 } },
+        plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmtM(v) } },
+        scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } },
+      plugins: [ChartDataLabels]
     });
 
     // Evolución mensual: recaudo (barras) vs desembolso (línea) por mes.
@@ -5514,27 +5675,20 @@ async function loadRecaudo() {
       desMap[m] = (desMap[m]||0) + (parseFloat(c.valor_credito)||0);
     });
     // Unión de meses de ambas series, ordenada
-    const mons = Array.from(new Set([...Object.keys(monMap), ...Object.keys(desMap)])).sort();
-    _rcCharts.mensual = new Chart(document.getElementById('chartRcMensual'), {
-      data:{ labels: mons, datasets:[
-        { type:'bar', label:'Recaudado', data: mons.map(m=>monMap[m]||0),
-          backgroundColor: FIDE.teal+'cc', borderRadius:4, order:2 },
-        { type:'line', label:'Desembolsado', data: mons.map(m=>desMap[m]||0),
-          borderColor: FIDE.blue, backgroundColor: FIDE.blue,
-          borderWidth:2, tension:0.3, pointRadius:3, pointHoverRadius:5, order:1 },
-      ]},
-      options:{ responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
-          tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } } },
-        scales:{ y:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, x:{ grid:{ display:false }, ticks:{ maxRotation:45, font:{ size:10 } } } } }
-    });
+    // Variación del último mes completo de recaudo (tarjeta KPI)
+    const rcDeltaEl = document.getElementById('rcDelta');
+    if (rcDeltaEl) rcDeltaEl.innerHTML = deltaUltimoMes(monMap, true);
+    _rcSeries = { monMap, desMap };
+    renderRcMensual();
 
     // Tabla — render amplio (1500) para que la búsqueda por cédula cubra
     // la mayoría del dataset sin paginación server-side.
     const tb = document.querySelector('#tblRecaudo tbody');
+    window._rcRows = l; window._rcLegRows = lLeg;
+    notaRecorte('tblRecaudo', Math.min(1500, l.length), l.length);
     tb.innerHTML = l.slice(0, 1500).map(p => `
       <tr>
-        <td data-label="Fecha">${esc(p.fecha_movimiento) || '-'}</td>
+        <td data-label="Fecha">${fmtDate(p.fecha_movimiento) || '-'}</td>
         <td data-label="Cliente">${esc(p.cliente) || '-'}</td>
         <td data-label="Cuenta">${esc(p.cuenta) || '-'}</td>
         <td data-label="Aliado">${esc(p.aliado) || '-'}</td>
@@ -5550,6 +5704,7 @@ async function loadRecaudo() {
     // Tabla histórica (legacy agrupada por id_prestamo)
     const tbLeg = document.querySelector('#tblRecaudoLegacy tbody');
     if (tbLeg) {
+      notaRecorte('tblRecaudoLegacy', Math.min(500, lLeg.length), lLeg.length);
       tbLeg.innerHTML = lLeg.slice(0, 500).map(p => `
         <tr>
           <td><strong>${esc(p.id_prestamo) || '-'}</strong></td>
@@ -5557,7 +5712,7 @@ async function loadRecaudo() {
           <td class="num">${fmt(p.num_pagos || 0)}</td>
           <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
           <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
-          <td>${esc(p.fecha_primer_pago) || '-'}</td>
+          <td>${fmtDate(p.fecha_primer_pago) || '-'}</td>
         </tr>
       `).join('');
       if (!lLeg.length) {
@@ -5794,13 +5949,23 @@ function renderSolicitudes() {
         const label = lnLabels[els[0].index];
         toggleSlChartFilter('linea', label);
       },
-      plugins: { legend: { display: false }, datalabels: { display: false } },
-      scales: { x: { grid: { color: '#F3F2F1' } }, y: { grid: { display: false } } }
-    }
+      layout: { padding: { right: 50 } },
+      plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', offset: 4, clip: false, color: '#323130', font: { size: 12, weight: 700 }, formatter: v => fmt(v) } },
+      scales: { x: { grid: { color: '#F3F2F1' }, ticks: { precision: 0 } }, y: { grid: { display: false } } }
+    },
+    plugins: [ChartDataLabels]
   });
+
+  // Variación de solicitudes radicadas: último mes completo vs anterior
+  const slMes = {};
+  filtered.forEach(x => { const m = String(x.fecha_solicitud || '').slice(0, 7); if (/^\d{4}-\d{2}$/.test(m)) slMes[m] = (slMes[m] || 0) + 1; });
+  const slDeltaEl = document.getElementById('slDelta');
+  if (slDeltaEl) slDeltaEl.innerHTML = deltaUltimoMes(slMes, false);
 
   // ============ Tabla ============
   const tb = document.querySelector('#tblSolicitudes tbody');
+  window._slFiltered = filtered;
+  notaRecorte('tblSolicitudes', Math.min(1500, filtered.length), filtered.length);
   if (!tb) return;
   if (!filtered.length) {
     const msg = Object.keys(_slFilters).length
@@ -5817,7 +5982,7 @@ function renderSolicitudes() {
         <td data-label="Estado">${esc(x.estado) || '-'}</td>
         <td data-label="Paso">${esc(x.paso_ruta) || '-'}</td>
         <td data-label="Oficina">${esc(x.oficina) || '-'}</td>
-        <td data-label="Fecha">${esc(x.fecha_solicitud) || '-'}</td>
+        <td data-label="Fecha">${fmtDate(x.fecha_solicitud) || '-'}</td>
       </tr>
     `).join('');
   }
@@ -5881,12 +6046,14 @@ async function loadJuridico() {
     _jrCharts.juzgado = new Chart(document.getElementById('chartJrJuzgado'), {
       type:'bar',
       data:{ labels: topJuz.map(j=>j[0].length>40?j[0].substring(0,40)+'…':j[0]), datasets:[{ label:'Procesos', data: topJuz.map(j=>j[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
-      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{ legend:{ display:false }, datalabels:{ display:false } },
-        scales:{ x:{ grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false }, ticks:{ font:{ size:10 } } } } }
+      options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 30 } },
+        plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmt(v) } },
+        scales:{ x:{ grid:{ color:'#F3F2F1' }, ticks:{ precision:0, stepSize:1 } }, y:{ grid:{ display:false }, ticks:{ font:{ size:12 } } } } },
+      plugins: [ChartDataLabels]
     });
 
     const tb = document.querySelector('#tblJuridico tbody');
+    notaRecorte('tblJuridico', Math.min(300, l.length), l.length);
     tb.innerHTML = l.slice(0, 300).map(x => {
       const probColor = (x.probabilidad||'').toLowerCase().includes('probab')
         ? 'background:var(--fide-teal-tint);color:var(--fide-teal-dark)'
@@ -5955,27 +6122,43 @@ async function loadFinancieros() {
   const year = document.getElementById('efYear').value;
   if (!year) { _efClearKpis(); return; }
   try {
-    const [s, rows] = await Promise.all([
+    const [s, rows, sPrev] = await Promise.all([
       fetchJson(`/api/estados-financieros/summary?year=${year}`),
       fetchJson(`/api/estados-financieros?year=${year}`),
+      fetchJson(`/api/estados-financieros/summary?year=${parseInt(year, 10) - 1}`).catch(() => null),
     ]);
     if (!s) { _efClearKpis(); return; }
 
+    // Mismo período del año anterior: solo los meses que este año ya tiene
+    // cargados (ene–mar 2026 se compara con ene–mar 2025, no con todo 2025).
+    const mesesAct = new Set((s.by_month || []).map(b => parseInt(b.month, 10)));
+    const prevMismo = (sPrev && sPrev.by_month ? sPrev.by_month : []).filter(b => mesesAct.has(parseInt(b.month, 10)));
+    const sumPrev = k => prevMismo.reduce((t, b) => t + (b[k] || 0), 0);
+    const prevIng = sumPrev('ingresos');
+    const prevGas = prevMismo.reduce((t, b) => t + (b.gastos || 0) + (b.costos || 0) + (b.costos_prod || 0), 0);
+    const prevUti = sumPrev('utilidad');
+    const yoy = (act, prev, invertir) => {
+      if (!prevMismo.length || !prev) return '';
+      const d = (act - prev) / Math.abs(prev) * 100;
+      const bueno = invertir ? d <= 0 : d >= 0;
+      return ` <span class="${bueno ? 'up' : 'down'}" style="font-weight:800;">${d >= 0 ? '▲' : '▼'} ${Math.abs(d).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span> vs mismo período ${parseInt(year, 10) - 1}`;
+    };
+
     // KPIs
     document.getElementById('efIngresos').textContent = fmtM(s.ingresos_total);
-    document.getElementById('efIngresosSub').textContent =
-      `${s.meses_con_datos} mes(es) · Prom: ${fmtM(s.ingresos_promedio_mensual)}`;
+    document.getElementById('efIngresosSub').innerHTML =
+      `${s.meses_con_datos} mes(es) · Prom: ${fmtM(s.ingresos_promedio_mensual)}` + yoy(s.ingresos_total, prevIng, false);
     document.getElementById('efGastos').textContent = fmtM(s.gastos_total);
-    document.getElementById('efGastosSub').textContent =
-      `Prom: ${fmtM(s.gastos_promedio_mensual)}`;
+    document.getElementById('efGastosSub').innerHTML =
+      `Prom: ${fmtM(s.gastos_promedio_mensual)}` + yoy(s.gastos_total + (s.costos_total || 0), prevGas, true);
     const utEl = document.getElementById('efUtilidad');
     utEl.textContent = fmtM(s.utilidad_total);
     utEl.style.color = s.utilidad_total >= 0 ? '#0f7b6c' : '#b8680f';
     // Sub muestra: Antes de impuesto + Impuesto de renta, para ver el efecto fiscal
     const antesImp = s.utilidad_antes_impuesto_total ?? s.utilidad_total;
     const impRenta = s.impuesto_renta_total ?? 0;
-    document.getElementById('efUtilidadSub').textContent =
-      `Antes impto: ${fmtM(antesImp)} · Impto renta: ${fmtM(impRenta)}`;
+    document.getElementById('efUtilidadSub').innerHTML =
+      `Antes impto: ${fmtM(antesImp)} · Impto renta: ${fmtM(impRenta)}` + yoy(s.utilidad_total, prevUti, false);
     const mEl = document.getElementById('efMargen');
     mEl.textContent = `${(s.margen_pct || 0).toFixed(1)}%`;
     mEl.style.color = (s.margen_pct || 0) >= 0 ? '#0f7b6c' : '#b8680f';
@@ -5991,8 +6174,11 @@ async function loadFinancieros() {
         labels: months,
         datasets: [
           { label: 'Ingresos', data: (s.by_month||[]).map(b=>b.ingresos), backgroundColor: FIDE.teal+'cc', borderRadius: 3 },
-          { label: 'Gastos', data: (s.by_month||[]).map(b=>(b.gastos||0)+(b.costos||0)+(b.costos_prod||0)), backgroundColor: '#b8680f'+'cc', borderRadius: 3 },
+          { label: 'Gastos', data: (s.by_month||[]).map(b=>(b.gastos||0)+(b.costos||0)+(b.costos_prod||0)), backgroundColor: '#8a8886'+'cc', borderRadius: 3 },
           { label: 'Utilidad', data: (s.by_month||[]).map(b=>b.utilidad), type: 'line', borderColor: FIDE.blue, borderWidth: 2.5, pointRadius: 4, pointBackgroundColor: FIDE.blue, tension: 0.3 },
+          ...(prevMismo.length ? [{ label: `Ingresos ${parseInt(year, 10) - 1}`, type: 'line',
+              data: (s.by_month||[]).map(b => { const p = prevMismo.find(x => parseInt(x.month, 10) === parseInt(b.month, 10)); return p ? p.ingresos : null; }),
+              borderColor: FIDE.tealDark, borderDash: [6, 4], borderWidth: 2, pointRadius: 3, pointBackgroundColor: FIDE.tealDark, tension: 0.3 }] : []),
         ]
       },
       options: {
@@ -6367,7 +6553,7 @@ function openAgingDrill(bucketKey, bucketLabel) {
       <td class="num">${fmtCurrency(r.saldo_capital)}</td>
       <td class="num" style="color:${(parseInt(r.dias_mora)||0)>30?'#b8680f':'#0f7b6c'};font-weight:700;">${fmt(r.dias_mora || 0)}</td>
       <td>${esc(r.aliado) || '-'}</td>
-      <td>${esc(r.fecha_desembolso) || '-'}</td>
+      <td>${fmtDate(r.fecha_desembolso) || '-'}</td>
     </tr>
   `).join('');
   if (sorted.length > 200) {
@@ -6684,6 +6870,7 @@ function renderAnalitica() {
     if (!cohorts.length) {
       tb.innerHTML = '<tr><td colspan="9">Sin cohortes con saldo significativo.</td></tr>';
     } else {
+      window._cosechasRows = cohorts;
       tb.innerHTML = cohorts.map(c => {
         const pct = (k) => c.saldo > 0 ? (c[k] / c.saldo * 100) : 0;
         const moraPromCohort = c.saldo > 0 ? (c.sumDias / c.saldo) : 0;
@@ -6789,7 +6976,7 @@ function renderProyeccion() {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { position: 'top' },
-          datalabels: { display: false },
+          datalabels: { anchor: 'end', align: 'end', offset: 2, clip: false, color: '#323130', font: { size: 11, weight: 700 }, formatter: v => v ? fmtM(v) : '' },
           tooltip: { callbacks: {
             title: items => `${monthName} ${items[0].label}, ${yyyy}`,
             label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}`
@@ -6848,20 +7035,18 @@ function renderProyeccion() {
 
   // Tabla detallada (siempre)
   const sorted = [...inWindow].sort((a, b) => a._venc_date - b._venc_date).slice(0, 300);
-  window._proyeccionData = sorted;   // para exportar a CSV
+  window._proyeccionData = sorted;   // para exportar
+  notaRecorte('tblProyeccion', sorted.length, inWindow.length, 'Descarga el Excel para ver todas las cuotas del período.');
   const tb = document.querySelector('#tblProyeccion tbody');
   if (tb) {
-    const fmtDate = d => {
-      const yy = d.getFullYear(), mm = pad2(d.getMonth()+1), dd = pad2(d.getDate());
-      return `${yy}-${mm}-${dd}`;
-    };
+    const fmtDateLocal = d => `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()}`;
     tb.innerHTML = sorted.map(r => {
       const dm = parseInt(r.dias_mora) || 0;
       const estadoPill = dm > 0
         ? `<span class="role-pill" style="background:#fbf2d3;color:#c29200;">${dm}d mora</span>`
         : '<span class="role-pill" style="background:var(--fide-teal-tint);color:var(--fide-teal-dark);">AL DÍA</span>';
       return `<tr>
-        <td>${fmtDate(r._venc_date)}</td>
+        <td>${fmtDateLocal(r._venc_date)}</td>
         <td>${estadoPill}</td>
         <td>${esc(r.cliente) || '-'}</td>
         <td>${esc(r.linea) || '-'}</td>
@@ -8095,7 +8280,7 @@ async function buscarFicha() {
     if (!f.pagos.length) html += '<p class="ficha-empty">Sin pagos en el período cargado.</p>';
     f.pagos.slice(0, 8).forEach(p => {
       html += `<div class="ficha-card">
-        <div class="fc-row"><span class="lbl">${esc(p.fecha_movimiento) || '-'}</span><span class="val">${fmtCurrency(p.total)}</span></div>
+        <div class="fc-row"><span class="lbl">${fmtDate(p.fecha_movimiento) || '-'}</span><span class="val">${fmtCurrency(p.total)}</span></div>
         <div class="fc-row"><span class="lbl">${esc(p.tipo_mvto) || ''}</span><span class="val" style="font-weight:500;color:var(--neutral-600);">cap ${fmtCurrency(p.capital)} · int ${fmtCurrency(p.interes_corriente)}</span></div>
       </div>`;
     });
@@ -8108,7 +8293,7 @@ async function buscarFicha() {
       f.pagos_legacy.forEach(p => {
         html += `<div class="ficha-card">
           <div class="fc-row"><span class="lbl">Préstamo ${esc(p.id_prestamo)}</span><span class="val">${fmt(p.num_pagos || 0)} pagos · ${fmtCurrency(p.valor_pago_total)}</span></div>
-          <div class="fc-row"><span class="lbl">Período</span><span class="val" style="font-weight:500;">${esc(p.fecha_primer_pago) || '?'} → ${esc(p.fecha_ultimo_pago) || '?'}</span></div>
+          <div class="fc-row"><span class="lbl">Período</span><span class="val" style="font-weight:500;">${fmtDate(p.fecha_primer_pago) || '?'} → ${fmtDate(p.fecha_ultimo_pago) || '?'}</span></div>
           <div class="fc-row"><span class="lbl">Cancelado</span><span class="val">${esc(p.prestamo_cancelado) || '-'}</span></div>
         </div>`;
       });
@@ -8122,7 +8307,7 @@ async function buscarFicha() {
       html += `<div class="ficha-card">
         <div class="fc-row"><span class="lbl">${esc(s.solicitud || s.id_solicitud) || '-'}${s._legacy ? ' (hist.)' : ''}</span><span class="val"><span class="ficha-badge ${s.estado === 'DESEMBOLSADA' ? 'ok' : 'warn'}">${esc(s.estado) || '-'}</span></span></div>
         <div class="fc-row"><span class="lbl">${esc(s.linea || s.producto) || '-'}</span><span class="val">${fmtCurrency(s.valor || s.monto)}</span></div>
-        <div class="fc-row"><span class="lbl">Fecha</span><span class="val" style="font-weight:500;">${esc(s.fecha_solicitud) || '-'}</span></div>
+        <div class="fc-row"><span class="lbl">Fecha</span><span class="val" style="font-weight:500;">${fmtDate(s.fecha_solicitud) || '-'}</span></div>
       </div>`;
     });
     html += '</div>';
