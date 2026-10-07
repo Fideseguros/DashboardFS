@@ -2344,6 +2344,47 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     <div class="loader-text">Cargando cartera&hellip;</div>
   </div>
 </div>
+<script>
+// Vigilante de carga: si algo falla antes de que lleguen los datos, el usuario
+// ve QUÉ falló (y un botón para recargar) en vez de un spinner eterno. Va en
+// su propio <script>, antes del principal, para sobrevivir a un error allí.
+(function () {
+  function mostrar(titulo, detalle) {
+    var card = document.querySelector('#initialLoader .loader-card');
+    if (!card || document.getElementById('initialLoader').style.display === 'none') return;
+    card.innerHTML = '<div style="font-size:1.05rem;font-weight:800;color:#b8680f;margin-bottom:8px;">' + titulo + '</div>' +
+      '<div style="font-size:0.9rem;color:#323130;line-height:1.45;max-width:520px;word-break:break-word;">' + detalle + '</div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+      '<button onclick="location.reload(true)" style="background:#00a79d;color:#fff;border:none;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer;">Recargar</button>' +
+      '<button onclick="document.getElementById('initialLoader').style.display='none'" style="background:#fff;color:#323130;border:1px solid #D2D0CE;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer;">Ver el tablero igual</button></div>';
+  }
+  function esc(t) { return String(t || '').replace(/[<>&]/g, function (c) { return { '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]; }); }
+  window.addEventListener('error', function (e) {
+    var src = e.filename ? (' (' + e.filename.split('/').pop() + ':' + e.lineno + ')') : '';
+    if (e.target && e.target.tagName === 'SCRIPT') {
+      mostrar('No se pudo cargar una librería', 'El navegador no pudo descargar <b>' + esc((e.target.src || '').split('/').slice(2, 3).join('')) + '</b>. ' +
+        'Suele ser la red, un antivirus o un bloqueador. Revisa la conexión y recarga.');
+      return;
+    }
+    mostrar('Error al iniciar el tablero', esc(e.message || 'Error desconocido') + esc(src) + '<br><span style="color:#605E5C;">Envía una captura de este mensaje al administrador.</span>');
+  }, true);
+  window.addEventListener('unhandledrejection', function (e) {
+    var r = e.reason; var m = (r && (r.message || r.detail)) || String(r || '');
+    mostrar('Error al cargar los datos', esc(m) + '<br><span style="color:#605E5C;">Envía una captura de este mensaje al administrador.</span>');
+  });
+  setTimeout(function () {
+    if (typeof Chart === 'undefined') {
+      mostrar('No se pudo cargar la librería de gráficas', 'El navegador no descargó <b>cdn.jsdelivr.net</b> (Chart.js). Revisa la conexión, un antivirus o un bloqueador de contenido, y recarga.');
+    }
+  }, 4000);
+  setTimeout(function () {
+    var el = document.getElementById('initialLoader');
+    if (el && el.style.display !== 'none' && el.querySelector('.loader-spinner')) {
+      mostrar('Está tardando más de lo normal', 'Llevamos 25 segundos esperando los datos de cartera. Puede ser la conexión. Recarga la página o entra igual al tablero.');
+    }
+  }, 25000);
+})();
+</script>
 
 <div class="header">
   <div class="header-left">
