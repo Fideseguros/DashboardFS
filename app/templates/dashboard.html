@@ -1977,6 +1977,21 @@ select:focus-visible {
 .re-card .re-val { font-size: 1.5rem; font-weight: 900; color: var(--neutral-900); line-height: 1.1; }
 .re-card .re-sub { font-size: 0.86rem; color: var(--neutral-600); margin-top: 6px; font-weight: 600; }
 .re-card .re-trend { font-size: 0.84rem; font-weight: 700; }
+/* Comparar con año anterior (interruptor) */
+.yoy-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 0.88rem; font-weight: 700; color: var(--neutral-700); cursor: pointer; user-select: none; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); min-height: 36px; }
+.yoy-toggle input { appearance: none; width: 36px; height: 20px; border-radius: 999px; background: var(--neutral-200); position: relative; cursor: pointer; transition: background 0.15s; margin: 0; }
+.yoy-toggle input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.yoy-toggle input:checked { background: var(--fide-teal); }
+.yoy-toggle input:checked::after { left: 18px; }
+.yoy-toggle:has(input:checked) { border-color: var(--fide-teal); background: var(--fide-teal-tint); color: var(--fide-teal-deeper); }
+.kpi-yoy { font-size: 0.84rem; font-weight: 700; margin-top: 6px; color: var(--neutral-600); font-variant-numeric: tabular-nums; line-height: 1.35; }
+.kpi-yoy .up { color: #0f7b6c; } .kpi-yoy .down { color: #b8680f; } .kpi-yoy .flat { color: var(--neutral-500); }
+.kpi-yoy .prev { color: var(--neutral-500); font-weight: 600; }
+/* Tarjeta con filtro activo (clic en la tarjeta = filtro en la lista) */
+.kpi-card.kpi-clickable { cursor: pointer; }
+.kpi-card.kpi-active { outline: 2px solid var(--fide-teal); background: var(--fide-teal-tint); }
+.kpi-card.kpi-active::before { content: 'FILTRO ACTIVO'; position: absolute; left: 12px; bottom: 8px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.6px; color: var(--fide-teal-deeper); }
+.sel-periodo { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 0.88rem; font-weight: 600; background: var(--card); min-height: 36px; cursor: pointer; }
 .tabla-nota { font-size: 0.84rem; color: var(--neutral-600); padding: 8px 4px 0; }
 .tabla-nota b { color: var(--neutral-900); }
 .kpi-delta { font-size: 0.84rem; font-weight: 700; margin-top: 6px; color: var(--neutral-600); font-variant-numeric: tabular-nums; }
@@ -2511,7 +2526,8 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
           <div class="module-meta"><span id="reFecha">Estado consolidado de todos los m&oacute;dulos</span></div>
         </div>
       </div>
-      <div style="display:flex;gap:0.5rem;">
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <span class="yoy-slot"></span>
         <button class="btn btn-reset" style="font-size:0.88rem;" onclick="openGlosario()" title="¿Qu&eacute; significan los t&eacute;rminos?">Glosario</button>
         <button class="btn btn-export" style="font-size:0.88rem;" onclick="loadResumenEjecutivo()">Actualizar</button>
       </div>
@@ -2611,6 +2627,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       </div>
     </div>
     <div class="module-actions">
+      <span class="yoy-slot"></span>
       <!-- Acción primaria: actualizar diariamente con archivo de plataforma nueva -->
       <button id="btnUpdateCartera" onclick="document.getElementById('fileCarteraUpdate').click()" style="display:none;" class="btn btn-primary-action admin-only" title="Actualiza solo las columnas naranja desde el archivo de la plataforma nueva. Las cuentas que no aparezcan se conservan.">⟳ Actualizar Cartera</button>
       <input type="file" id="fileCarteraUpdate" accept=".xlsx,.xls" style="display:none;" onchange="uploadCarteraUpdate(this.files[0])">
@@ -2681,14 +2698,15 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   <div class="kpi-grid cartera-scope cartera-main-only">
     <!-- GRUPO 1: VOLUMEN -->
     <div class="kpi-group-label">Volumen</div>
-    <div class="kpi-card teal">
+    <div class="kpi-card teal kpi-clickable" id="kpiCardTotal" onclick="xfCarteraEstado('')" title="Quitar el filtro de estado (ver todos)">
       <div class="kpi-info">i<span class="kpi-tooltip">Cantidad total de cr&eacute;ditos registrados en el per&iacute;odo filtrado (activos + cancelados).</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 14h3M7 18h1"/></svg></div>
       <div class="kpi-label">Total Cr&eacute;ditos</div>
       <div class="kpi-value" id="kpiTotal">-</div>
       <div class="kpi-sub" id="kpiTotalSub"></div>
+      <div class="kpi-yoy" id="kpiTotalYoy"></div>
     </div>
-    <div class="kpi-card mint">
+    <div class="kpi-card mint kpi-clickable" id="kpiCardActivos" onclick="xfCarteraEstado('ACTIVO')" title="Ver solo los cr&eacute;ditos activos en la lista">
       <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos actualmente vigentes. Representan la cartera activa de la entidad.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
       <div class="kpi-label">Cr&eacute;ditos Activos</div>
@@ -2701,6 +2719,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="kpi-label">Valor Total Cartera</div>
       <div class="kpi-value" id="kpiValor">-</div>
       <div class="kpi-sub" id="kpiValorSub"></div>
+      <div class="kpi-yoy" id="kpiValorYoy"></div>
     </div>
 
     <!-- GRUPO 2: SALDO Y RENDIMIENTO -->
@@ -2725,18 +2744,19 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       <div class="kpi-label">Cr&eacute;dito Promedio</div>
       <div class="kpi-value" id="kpiTicket">-</div>
       <div class="kpi-sub" id="kpiTicketSub"></div>
+      <div class="kpi-yoy" id="kpiTicketYoy"></div>
     </div>
 
     <!-- GRUPO 3: RIESGO Y CARTERA POR COBRAR -->
     <div class="kpi-group-label">Riesgo y Cartera por Cobrar</div>
-    <div class="kpi-card coral kpi-clickable" onclick="verClientesEnMora()" title="Ver los cr&eacute;ditos en mora (ordenados por d&iacute;as de mora)">
+    <div class="kpi-card coral kpi-clickable" id="kpiCardMora" onclick="xfCarteraMora()" title="Filtrar la lista a los cr&eacute;ditos activos con mora &gt; 30 d&iacute;as">
       <div class="kpi-info">i<span class="kpi-tooltip">Cr&eacute;ditos activos con m&aacute;s de 30 d&iacute;as de mora (la pol&iacute;tica Fideseguros considera 1-30 d&iacute;as como al d&iacute;a). El sub muestra el saldo total en mora y su % sobre el saldo activo. Click para ver la lista.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
       <div class="kpi-label">Cartera en Mora</div>
       <div class="kpi-value" id="kpiMora">-</div>
       <div class="kpi-sub" id="kpiMoraSub"></div>
     </div>
-    <div class="kpi-card coral kpi-clickable" onclick="verClientesEnMora()" title="Ver los cr&eacute;ditos que originan el ICV">
+    <div class="kpi-card coral kpi-clickable" id="kpiCardICV" onclick="xfCarteraMora()" title="Filtrar la lista a los cr&eacute;ditos que originan el ICV">
       <div class="kpi-info">i<span class="kpi-tooltip">&Iacute;ndice de Cartera Vencida: saldo en mora &gt; 30 d&iacute;as / saldo total activo. Es la principal m&eacute;trica de riesgo regulada por la Superfinanciera. Ideal &lt; 5%. Click para ver la lista.</span></div>
       <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z"/><path d="M9 12l2 2 4-4"/></svg></div>
       <div class="kpi-label">ICV (Mora &gt; 30)</div>
@@ -2994,7 +3014,7 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   <!-- Tab: Proyección de Pagos -->
   <div class="tab-content" id="tab-proyeccion">
     <div class="kpi-grid">
-      <div class="kpi-card teal">
+      <div class="kpi-card teal kpi-clickable" id="prCardTotal" onclick="setPrEstado('all')" title="Ver todas las cuotas">
         <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero de cuotas mensuales proyectadas en el per&iacute;odo (una por mes por cada cr&eacute;dito activo con mora &lt; 20).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
         <div class="kpi-label">Cuotas Proyectadas</div>
@@ -3029,6 +3049,11 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         <h3 id="prTitle" style="margin:0;"><span class="dot"></span> Proyecci&oacute;n de Pagos por Mes</h3>
         <div style="display:flex;gap:0.5rem;align-items:center;font-size:0.92rem;" id="prControls">
           <button id="prBackBtn" onclick="prBack()" style="display:none;background:var(--fide-teal-tint);border:1px solid var(--fide-teal);color:var(--fide-teal-dark);padding:0.3rem 0.7rem;border-radius:6px;font-family:inherit;font-weight:700;cursor:pointer;font-size:0.86rem;">&larr; Volver a meses</button>
+          <div class="seg" role="group" aria-label="Estado de las cuotas">
+            <button class="seg-btn active" data-pr-estado="all" onclick="setPrEstado('all')">Todas</button>
+            <button class="seg-btn" data-pr-estado="aldia" onclick="setPrEstado('aldia')">Al d&iacute;a</button>
+            <button class="seg-btn" data-pr-estado="mora" onclick="setPrEstado('mora')">En mora</button>
+          </div>
           <label style="color:#5a6a6e;font-weight:600;">Per&iacute;odo:</label>
           <select id="prPeriod" onchange="renderProyeccion()" style="padding:0.3rem 0.5rem;border:1.5px solid #d4e8e5;border-radius:6px;font-family:inherit;font-weight:600;cursor:pointer;">
             <option value="3m">Pr&oacute;ximos 3 meses</option>
@@ -3078,48 +3103,66 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         </div>
       </div>
       <div class="module-actions">
+        <select class="sel-periodo" id="rcPeriodo" onchange="renderRecaudo()" title="Per&iacute;odo de los pagos (fecha de movimiento)">
+          <option value="all">Todo el hist&oacute;rico</option>
+          <option value="ytd">A&ntilde;o corrido</option>
+          <option value="12m">&Uacute;ltimos 12 meses</option>
+          <option value="6m">&Uacute;ltimos 6 meses</option>
+          <option value="mes">&Uacute;ltimo mes completo</option>
+        </select>
+        <span class="yoy-slot"></span>
         <span id="rcStatusBadge" class="upload-status-badge" style="display:none;"></span>
         <button class="btn btn-secondary-upload admin-only" id="btnUploadRecaudo" style="display:none;" onclick="document.getElementById('fileRecaudo').click()">Subir Excel</button>
         <input type="file" id="fileRecaudo" accept=".xlsx" style="display:none;" onchange="uploadExtra('recaudo', this.files[0])">
       </div>
     </div>
 
+    <div class="chart-filters-bar" id="rcFilterBar">
+      <span class="cflabel">Filtros activos:</span>
+      <div id="rcFilterChips"></div>
+      <button class="chip-clear" onclick="xfRecaudo('')">Limpiar todo</button>
+    </div>
     <div class="kpi-grid">
-      <div class="kpi-card teal">
+      <div class="kpi-card teal kpi-clickable" id="rcCardTotal" onclick="xfRecaudo('')" title="Quitar filtros: ver todos los pagos">
         <div class="kpi-info">i<span class="kpi-tooltip">N&uacute;mero de pagos recibidos. No cuenta los movimientos que no son recaudo (condonaciones, notas d&eacute;bito, reintegros, cheques devueltos).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/></svg></div>
         <div class="kpi-label">Total Pagos</div>
         <div class="kpi-value" id="rcTotal">-</div>
         <div class="kpi-sub" id="rcTotalSub"></div>
+        <div class="kpi-yoy" id="rcTotalYoy"></div>
       </div>
-      <div class="kpi-card mint">
+      <div class="kpi-card mint kpi-clickable" id="rcCardPago" onclick="xfRecaudo('pago')" title="Ver solo los movimientos que son recaudo (Pago)">
         <div class="kpi-info">i<span class="kpi-tooltip">Plata que efectivamente entr&oacute;: capital + intereses + IVA + gastos de los pagos recibidos. Excluye los movimientos que no son recaudo (condonaciones, notas d&eacute;bito por ajuste, reintegros y cheques devueltos), que se muestran aparte como Ajustes.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
         <div class="kpi-label">Recaudo Efectivo</div>
         <div class="kpi-value" id="rcRecaudo">-</div>
         <div class="kpi-sub" id="rcRecaudoSub"></div>
         <div class="kpi-delta" id="rcDelta"></div>
+        <div class="kpi-yoy" id="rcRecaudoYoy"></div>
       </div>
-      <div class="kpi-card blue">
+      <div class="kpi-card blue kpi-clickable" id="rcCardCapital" onclick="xfRecaudo('capital')" title="Ver los pagos que abonaron a capital">
         <div class="kpi-info">i<span class="kpi-tooltip">Capital recuperado: porci&oacute;n del pago que reduce el saldo del cr&eacute;dito.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
         <div class="kpi-label">Capital Recuperado</div>
         <div class="kpi-value" id="rcCapital">-</div>
         <div class="kpi-sub" id="rcCapitalSub"></div>
+        <div class="kpi-yoy" id="rcCapitalYoy"></div>
       </div>
-      <div class="kpi-card yellow">
+      <div class="kpi-card yellow kpi-clickable" id="rcCardInt" onclick="xfRecaudo('interes')" title="Ver los pagos con inter&eacute;s corriente">
         <div class="kpi-info">i<span class="kpi-tooltip">Intereses corrientes cobrados.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M19 5L5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg></div>
         <div class="kpi-label">Inter&eacute;s Corriente</div>
         <div class="kpi-value" id="rcIntCorr">-</div>
         <div class="kpi-sub" id="rcIntCorrSub"></div>
+        <div class="kpi-yoy" id="rcIntCorrYoy"></div>
       </div>
-      <div class="kpi-card coral">
+      <div class="kpi-card coral kpi-clickable" id="rcCardMora" onclick="xfRecaudo('mora')" title="Ver los pagos que incluyeron inter&eacute;s de mora">
         <div class="kpi-info">i<span class="kpi-tooltip">Intereses de mora cobrados (pagos que llegaron tarde).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
         <div class="kpi-label">Inter&eacute;s de Mora</div>
         <div class="kpi-value" id="rcIntMora">-</div>
         <div class="kpi-sub" id="rcIntMoraSub"></div>
+        <div class="kpi-yoy" id="rcIntMoraYoy"></div>
       </div>
     </div>
     <div class="charts-grid">
@@ -3203,6 +3246,14 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
         </div>
       </div>
       <div class="module-actions">
+        <select class="sel-periodo" id="slPeriodo" onchange="renderSolicitudes()" title="Per&iacute;odo (fecha de radicaci&oacute;n)">
+          <option value="all">Todo el hist&oacute;rico</option>
+          <option value="ytd">A&ntilde;o corrido</option>
+          <option value="12m">&Uacute;ltimos 12 meses</option>
+          <option value="6m">&Uacute;ltimos 6 meses</option>
+          <option value="mes">&Uacute;ltimo mes completo</option>
+        </select>
+        <span class="yoy-slot"></span>
         <span id="slStatusBadge" class="upload-status-badge" style="display:none;"></span>
         <button class="btn btn-secondary-upload admin-only" id="btnUploadSolicitudes" style="display:none;" onclick="document.getElementById('fileSolicitudes').click()">Subir Excel</button>
         <input type="file" id="fileSolicitudes" accept=".xlsx" style="display:none;" onchange="uploadExtra('solicitudes', this.files[0])">
@@ -3220,34 +3271,38 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-card teal">
+      <div class="kpi-card teal kpi-clickable" id="slCardTotal" onclick="xfSolicitudes('')" title="Quitar el filtro de estado (ver todas)">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de solicitudes registradas en el archivo cargado.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></svg></div>
         <div class="kpi-label">Total Solicitudes</div>
         <div class="kpi-value" id="slTotal">-</div>
         <div class="kpi-sub" id="slTotalSub"></div>
+        <div class="kpi-yoy" id="slTotalYoy"></div>
         <div class="kpi-delta" id="slDelta"></div>
       </div>
-      <div class="kpi-card mint">
+      <div class="kpi-card mint kpi-clickable" id="slCardDesem" onclick="xfSolicitudes('estado','DESEMBOLSADA')" title="Ver solo las desembolsadas">
         <div class="kpi-info">i<span class="kpi-tooltip">Solicitudes que terminaron en DESEMBOLSADA.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
         <div class="kpi-label">Desembolsadas</div>
         <div class="kpi-value" id="slDesem">-</div>
         <div class="kpi-sub" id="slDesemSub"></div>
+        <div class="kpi-yoy" id="slDesemYoy"></div>
       </div>
-      <div class="kpi-card blue">
+      <div class="kpi-card blue kpi-clickable" id="slCardTasa" onclick="xfSolicitudes('decidida','Sí')" title="Ver solo las ya decididas (desembolsadas, anuladas y negadas)">
         <div class="kpi-info">i<span class="kpi-tooltip">De las solicitudes ya decididas (desembolsadas + anuladas), qu&eacute; porcentaje termin&oacute; desembolsado. Las que siguen en estudio no cuentan: a&uacute;n no han sido aprobadas ni rechazadas.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 5-6"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
         <div class="kpi-label">Tasa de Aceptaci&oacute;n</div>
         <div class="kpi-value" id="slTasaAcept">-</div>
         <div class="kpi-sub" id="slTasaAceptSub"></div>
+        <div class="kpi-yoy" id="slTasaAceptYoy"></div>
       </div>
-      <div class="kpi-card yellow">
+      <div class="kpi-card yellow kpi-clickable" id="slCardTicket" onclick="xfSolicitudes('estado','DESEMBOLSADA')" title="Ver las desembolsadas que forman el ticket promedio">
         <div class="kpi-info">i<span class="kpi-tooltip">Valor promedio de las solicitudes desembolsadas = Valor Desembolsado / Cantidad de Desembolsadas. Muestra el tama&ntilde;o t&iacute;pico de un cr&eacute;dito aprobado.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="kpi-label">Ticket Promedio</div>
         <div class="kpi-value" id="slTicketProm">-</div>
         <div class="kpi-sub" id="slTicketPromSub"></div>
+        <div class="kpi-yoy" id="slTicketPromYoy"></div>
       </div>
     </div>
     <div class="charts-grid">
@@ -3313,28 +3368,28 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-card mint">
+      <div class="kpi-card mint kpi-clickable" onclick="xfFin('utilidad')" title="Ir a la fila de utilidad en la tabla">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de ingresos del a&ntilde;o seg&uacute;n la fila &laquo;Total 4 INGRESOS&raquo; del estado de resultados, neto de devoluciones en ventas, hasta el &uacute;ltimo mes con datos.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 7-7M14 8h7v7"/></svg></div>
         <div class="kpi-label">Ingresos Totales</div>
         <div class="kpi-value" id="efIngresos">-</div>
         <div class="kpi-sub" id="efIngresosSub"></div>
       </div>
-      <div class="kpi-card coral">
+      <div class="kpi-card coral kpi-clickable" onclick="xfFin('5')" title="Desplegar las cuentas de gastos en la tabla">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de gastos PUC 5xxxx (operacionales + no operacionales).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 7 7M14 16h7V9"/></svg></div>
         <div class="kpi-label">Gastos Totales</div>
         <div class="kpi-value" id="efGastos">-</div>
         <div class="kpi-sub" id="efGastosSub"></div>
       </div>
-      <div class="kpi-card teal">
+      <div class="kpi-card teal kpi-clickable" onclick="xfFin('4')" title="Desplegar las cuentas de ingresos en la tabla">
         <div class="kpi-info">i<span class="kpi-tooltip">Utilidad = Ingresos - Gastos - Costos. Si es positivo, la operaci&oacute;n es rentable.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
         <div class="kpi-label">Utilidad</div>
         <div class="kpi-value" id="efUtilidad">-</div>
         <div class="kpi-sub" id="efUtilidadSub"></div>
       </div>
-      <div class="kpi-card blue">
+      <div class="kpi-card blue kpi-clickable" onclick="xfFin('utilidad')" title="Ir a la fila de utilidad en la tabla">
         <div class="kpi-info">i<span class="kpi-tooltip">Margen = Utilidad / Ingresos &times; 100. Mide qu&eacute; porcentaje de cada peso de ingreso se convierte en utilidad.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M19 5L5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/></svg></div>
         <div class="kpi-label">Margen</div>
@@ -3397,43 +3452,48 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
       </div>
     </div>
 
+    <div class="chart-filters-bar" id="jrFilterBar">
+      <span class="cflabel">Filtros activos:</span>
+      <div id="jrFilterChips"></div>
+      <button class="chip-clear" onclick="xfJuridico('')">Limpiar todo</button>
+    </div>
     <div class="kpi-grid">
-      <div class="kpi-card teal">
+      <div class="kpi-card teal kpi-clickable" id="jrCardTotal" onclick="xfJuridico('')" title="Ver todos los procesos">
         <div class="kpi-info">i<span class="kpi-tooltip">Total de procesos judiciales activos cargados en el sistema.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-4z"/></svg></div>
         <div class="kpi-label">Procesos Activos</div>
         <div class="kpi-value" id="jrTotal">-</div>
         <div class="kpi-sub" id="jrTotalSub"></div>
       </div>
-      <div class="kpi-card mint">
+      <div class="kpi-card mint kpi-clickable" id="jrCardProb" onclick="xfJuridico('probable')" title="Ver solo los procesos con recuperaci&oacute;n probable">
         <div class="kpi-info">i<span class="kpi-tooltip">Procesos con probabilidad PROBABLE (alta posibilidad de recuperaci&oacute;n).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
         <div class="kpi-label">Probables</div>
         <div class="kpi-value" id="jrProb">-</div>
         <div class="kpi-sub" id="jrProbSub"></div>
       </div>
-      <div class="kpi-card coral">
+      <div class="kpi-card coral kpi-clickable" id="jrCardRem" onclick="xfJuridico('remota')" title="Ver solo los procesos con recuperaci&oacute;n remota">
         <div class="kpi-info">i<span class="kpi-tooltip">Procesos con probabilidad REMOTA (baja posibilidad de recuperaci&oacute;n).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
         <div class="kpi-label">Remotas</div>
         <div class="kpi-value" id="jrRem">-</div>
         <div class="kpi-sub" id="jrRemSub"></div>
       </div>
-      <div class="kpi-card blue">
+      <div class="kpi-card blue kpi-clickable" id="jrCardMed" onclick="xfJuridico('medida')" title="Ver solo los procesos con medida cautelar">
         <div class="kpi-info">i<span class="kpi-tooltip">Procesos con alguna medida cautelar constituida (embargo, gravamen, etc.).</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M3 7h18M5 7v13h14V7M9 11v5M15 11v5"/></svg></div>
         <div class="kpi-label">Con Medida Cautelar</div>
         <div class="kpi-value" id="jrMed">-</div>
         <div class="kpi-sub" id="jrMedSub"></div>
       </div>
-      <div class="kpi-card magenta">
+      <div class="kpi-card magenta kpi-clickable" id="jrCardCruce" onclick="xfJuridico('cruce')" title="Ver solo los procesos que cruzan con la cartera">
         <div class="kpi-info">i<span class="kpi-tooltip">Procesos cuya identificaci&oacute;n coincide con un cliente en la cartera consolidada. Permite analizar saldo y exposici&oacute;n.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
         <div class="kpi-label">Cruzados con Cartera</div>
         <div class="kpi-value" id="jrCruce">-</div>
         <div class="kpi-sub" id="jrCruceSub"></div>
       </div>
-      <div class="kpi-card coral">
+      <div class="kpi-card coral kpi-clickable" id="jrCardSaldo" onclick="xfJuridico('cruce')" title="Ver los procesos que componen el saldo expuesto">
         <div class="kpi-info">i<span class="kpi-tooltip">Suma del saldo de capital de los clientes con proceso jur&iacute;dico que est&aacute;n en cartera. Mide la exposici&oacute;n financiera total.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15 9h-4a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4H9"/></svg></div>
         <div class="kpi-label">Saldo Expuesto</div>
@@ -3507,28 +3567,28 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-card mint">
+      <div class="kpi-card mint kpi-clickable" onclick="openAgingDrill('b0','Al día')" title="Ver los cr&eacute;ditos al d&iacute;a">
         <div class="kpi-info">i<span class="kpi-tooltip">% del saldo capital ACTIVO (con saldo &gt; 0) que tiene 0 d&iacute;as de mora. Mismo denominador que el NPL para que sean reconciliables.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div>
         <div class="kpi-label">Cartera al D&iacute;a</div>
         <div class="kpi-value" id="anAlDia">-</div>
         <div class="kpi-sub" id="anAlDiaSub"></div>
       </div>
-      <div class="kpi-card coral">
+      <div class="kpi-card coral kpi-clickable" onclick="openAgingDrillMulti(['b91_180','b181_360','b360p'],'Mora > 90 días (NPL)')" title="Ver los cr&eacute;ditos con mora mayor a 90 d&iacute;as">
         <div class="kpi-info">i<span class="kpi-tooltip">NPL Ratio = saldo capital con mora &gt; 90 d&iacute;as / saldo capital ACTIVO (con saldo &gt; 0). M&eacute;trica est&aacute;ndar de cartera deteriorada. El sub muestra el ICV (&gt; 30 d) con el MISMO denominador para que sean comparables: ICV &ge; NPL siempre.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><path d="M12 3L2 20h20L12 3z"/><path d="M12 10v5M12 17.5v.01"/></svg></div>
         <div class="kpi-label">NPL Ratio (Mora 90+)</div>
         <div class="kpi-value" id="anNPL">-</div>
         <div class="kpi-sub" id="anNPLSub"></div>
       </div>
-      <div class="kpi-card yellow">
+      <div class="kpi-card yellow kpi-clickable" onclick="openAgingDrillMulti(['b1_30','b31_60','b61_90','b91_180','b181_360','b360p'],'Cartera vencida (> 0 días)')" title="Ver todos los cr&eacute;ditos vencidos">
         <div class="kpi-info">i<span class="kpi-tooltip">D&iacute;as de mora promedio ponderado por saldo, calculado SOLO sobre la cartera vencida (mora &gt; 0 d). Responde: cuando un peso est&aacute; en mora, &iquest;cu&aacute;ntos d&iacute;as lleva en promedio? M&eacute;trica interna, no comparable con benchmarks de industria.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg></div>
         <div class="kpi-label">Mora Promedio (vencida)</div>
         <div class="kpi-value" id="anMoraProm">-</div>
         <div class="kpi-sub" id="anMoraPromSub"></div>
       </div>
-      <div class="kpi-card magenta">
+      <div class="kpi-card magenta kpi-clickable" onclick="irACosechaAtencion()" title="Ir a esa cosecha en la tabla">
         <div class="kpi-info">i<span class="kpi-tooltip">Cosecha (mes de desembolso) RECIENTE con peor mora temprana (&gt; 30 d). Solo eval&uacute;a cosechas de 3 a 18 meses de edad para comparar peras con peras &mdash; las cosechas muy viejas se excluyen porque su mora alta es efecto de maduraci&oacute;n, no de mala originaci&oacute;n. Esta m&eacute;trica s&iacute; detecta si la pol&iacute;tica de originaci&oacute;n reciente est&aacute; fallando.</span></div>
         <div class="kpi-icon"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
         <div class="kpi-label">Cosecha de Atenci&oacute;n</div>
@@ -4156,6 +4216,70 @@ function deltaUltimoMes(mapa, esValor) {
   }
   return html;
 }
+// ===== Comparación año a año (global, persiste) =====
+let YOY = false;
+try { YOY = localStorage.getItem('fide_yoy') === '1'; } catch (e) {}
+function setYoy(on) {
+  YOY = !!on;
+  try { localStorage.setItem('fide_yoy', YOY ? '1' : '0'); } catch (e) {}
+  document.querySelectorAll('.yoy-toggle input').forEach(i => { i.checked = YOY; });
+  // Refrescar lo que ya esté cargado
+  try { if (typeof RAW_DATA !== 'undefined' && RAW_DATA.length) applyFilters(); } catch (e) {}
+  try { if (typeof _rcState !== 'undefined' && _rcState) renderRecaudo(); } catch (e) {}
+  try { if (typeof _slRawData !== 'undefined' && _slRawData.length) renderSolicitudes(); } catch (e) {}
+  try { if (typeof _reData !== 'undefined' && _reData) loadResumenEjecutivo(); } catch (e) {}
+}
+function yoyToggleHtml() {
+  return `<label class="yoy-toggle" title="Compara cada cifra y cada gráfica con el mismo período del año inmediatamente anterior"><input type="checkbox" ${YOY ? 'checked' : ''} onchange="setYoy(this.checked)"><span>Comparar con año anterior</span></label>`;
+}
+const _toISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function shiftYearISO(iso, n) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  const y = parseInt(m[1], 10) + n, mo = parseInt(m[2], 10);
+  let d = parseInt(m[3], 10);
+  const dim = new Date(y, mo, 0).getDate();
+  if (d > dim) d = dim;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+// Ventana de un selector de período genérico (Recaudo / Solicitudes).
+function ventanaPeriodo(preset) {
+  const hoy = new Date();
+  if (!preset || preset === 'all') return null;
+  if (preset === 'ytd') return { from: `${hoy.getFullYear()}-01-01`, to: _toISO(hoy), label: 'año corrido' };
+  if (preset === 'mes') {
+    const fin = new Date(hoy.getFullYear(), hoy.getMonth(), 0);           // último día del mes anterior
+    const ini = new Date(fin.getFullYear(), fin.getMonth(), 1);
+    return { from: _toISO(ini), to: _toISO(fin), label: _reEvoLbl(_toISO(ini).slice(0, 7)) };
+  }
+  const n = { '12m': 12, '6m': 6, '3m': 3 }[preset] || 0;
+  if (n) { const d = new Date(hoy); d.setMonth(d.getMonth() - n); return { from: _toISO(d), to: _toISO(hoy), label: `últimos ${n} meses` }; }
+  return null;
+}
+// La misma ventana un año atrás. Sin ventana (= todo el histórico) se compara
+// el año corrido, que es lo que gerencia entiende por "a la fecha".
+function ventanaComparacion(v) {
+  if (!v) { const hoy = new Date(); v = { from: `${hoy.getFullYear()}-01-01`, to: _toISO(hoy), label: 'año corrido' }; }
+  return { from: shiftYearISO(v.from, -1), to: shiftYearISO(v.to, -1), label: (v.label || 'período') + ' del año anterior', base: v };
+}
+function enVentana(fecha, v) {
+  if (!v) return true;
+  const f = String(fecha || '').slice(0, 10);
+  if (!f) return false;
+  if (v.from && f < v.from) return false;
+  if (v.to && f > v.to) return false;
+  return true;
+}
+// Texto de variación año a año para una tarjeta.
+function deltaYoyHtml(cur, prev, fmtV, etiqueta, invertir) {
+  if (!prev) return `<span class="prev">Sin datos del año anterior${etiqueta ? ' (' + etiqueta.replace(' del año anterior', '') + ')' : ''}</span>`;
+  const d = (cur - prev) / Math.abs(prev) * 100;
+  const bueno = invertir ? d <= 0 : d >= 0;
+  const cls = Math.abs(d) < 0.5 ? 'flat' : (bueno ? 'up' : 'down');
+  return `<span class="${cls}">${Math.abs(d) < 0.5 ? '=' : (d >= 0 ? '▲' : '▼')} ${Math.abs(d).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span> vs ${etiqueta} <span class="prev">(${fmtV(prev)})</span>`;
+}
+function _setYoyEl(id, html) { const el = document.getElementById(id); if (el) { el.innerHTML = YOY ? html : ''; el.style.display = YOY && html ? '' : 'none'; } }
+function _marcarCard(id, activo) { const el = document.getElementById(id); if (el) el.classList.toggle('kpi-active', !!activo); }
 function fmt(n) {
   if (n == null || isNaN(n)) return '-';
   return new Intl.NumberFormat('es-CO').format(Math.round(n));
@@ -4414,14 +4538,29 @@ function updateEvolucion() {
 
   _updateEvoMomCards(monthMap, monthValMap, months);
 
+  // Año anterior: misma serie (con los mismos filtros, sin el período) un año
+  // atrás, alineada mes a mes: la barra de Oct 26 se lee junto a Oct 25.
+  const evoDatasets = [
+    { label:'# Créditos', data:months.map(m=>monthMap[m]||0), backgroundColor:FIDE.teal+'bb', borderRadius:5, yAxisID:'y', order: 2 },
+    { label:'Valor ($)', data:months.map(m=>monthValMap[m]||0), type:'line', borderColor:FIDE.blue, backgroundColor:FIDE.blue+'15', borderWidth:2.5, pointRadius:3, pointBackgroundColor:FIDE.blue, fill:true, yAxisID:'y1', tension: 0.3, order: 1 }
+  ];
+  if (YOY) {
+    const pm = {}, pv = {};
+    (_carteraBase || []).forEach(r => {
+      if (!r.fecha_desembolso) return;
+      const m = r.fecha_desembolso.substring(0, 7);
+      pm[m] = (pm[m] || 0) + 1; pv[m] = (pv[m] || 0) + (parseFloat(r.valor_credito) || 0);
+    });
+    const prevKey = m => shiftYearISO(m + '-01', -1).slice(0, 7);
+    evoDatasets.push({ label:'# Créditos año anterior', data: months.map(m => pm[prevKey(m)] || 0), backgroundColor: '#A19F9D' + '88', borderRadius:5, yAxisID:'y', order: 3 });
+    evoDatasets.push({ label:'Valor año anterior', data: months.map(m => pv[prevKey(m)] || 0), type:'line', borderColor: FIDE.blue, borderDash:[6,4], borderWidth:2, pointRadius:2, pointBackgroundColor: FIDE.blue, fill:false, yAxisID:'y1', tension:0.3, order: 0 });
+  }
+
   charts.chartEvolucion = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: months,
-      datasets: [
-        { label:'# Créditos', data:months.map(m=>monthMap[m]||0), backgroundColor:FIDE.teal+'bb', borderRadius:5, yAxisID:'y' },
-        { label:'Valor ($)', data:months.map(m=>monthValMap[m]||0), type:'line', borderColor:FIDE.blue, backgroundColor:FIDE.blue+'15', borderWidth:2.5, pointRadius:3, pointBackgroundColor:FIDE.blue, fill:true, yAxisID:'y1', tension: 0.3 }
-      ]
+      labels: months.map(m => _reEvoLbl(m)),
+      datasets: evoDatasets
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -4473,6 +4612,8 @@ function sumBy(arr, gk, sk) {
 
 // ---- CHART CROSS-FILTERING ----
 const chartFilters = {};
+let _carteraBase = [];      // filtros sin período
+let _carteraPeriodo = null; // ventana activa {from,to} o null
 // Helper: hace que el clic en la leyenda funcione como cross-filter
 // (en lugar del comportamiento default de Chart.js que oculta la categoría)
 function legendFilter(dimension) {
@@ -4483,8 +4624,25 @@ function legendFilter(dimension) {
 // Supported filter dimensions from chart clicks
 const FILTER_LABELS = {
   estado: 'Estado', linea: 'Línea', calificacion: 'Calificación',
-  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado'
+  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado', mora30: 'Mora'
 };
+// Clic en tarjeta → filtro en la lista (y en las gráficas) 1 a 1.
+function xfCarteraEstado(v) {
+  const sel = document.getElementById('fEstado');
+  sel.value = (sel.value === v || v === '') ? '' : v;
+  if (v === '') { delete chartFilters.mora30; renderChartFilterBar(); }
+  applyFilters();
+  _scrollDetalleCartera();
+}
+function xfCarteraMora() {
+  toggleChartFilter('mora30', '> 30 días');
+  if (chartFilters.mora30) { sortCol = 'dias_mora'; sortDir = -1; currentPage = 1; updateTable(); }
+  _scrollDetalleCartera();
+}
+function _scrollDetalleCartera() {
+  const tbl = document.getElementById('tab-detalle');
+  if (tbl && window.innerWidth > 768) setTimeout(() => tbl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
 
 function toggleChartFilter(dimension, value) {
   if (chartFilters[dimension] === value) {
@@ -4539,6 +4697,9 @@ function matchesChartFilters(r) {
     }
     if (dim === 'mes_desembolso') {
       if (!r.fecha_desembolso || r.fecha_desembolso.substring(0,7) !== val) return false;
+    }
+    if (dim === 'mora30') {
+      if (r.estado !== 'ACTIVO' || (parseInt(r.dias_mora) || 0) <= 30) return false;
     }
   }
   return true;
@@ -4652,6 +4813,23 @@ function applyFilters() {
   const custEl = document.getElementById('periodoCustom');
   if (custEl) custEl.style.display = isCustom ? '' : 'none';
   const periodo = _periodoRange();
+  _carteraPeriodo = periodo;
+
+  // Base con todos los filtros MENOS el período: de aquí salen las series del
+  // año anterior (que por definición caen fuera del período elegido).
+  _carteraBase = RAW_DATA.filter(r => {
+    if (f.estado && r.estado !== f.estado) return false;
+    if (f.linea && r.linea !== f.linea) return false;
+    if (f.calif && (r.calificacion||'').trim() !== f.calif) return false;
+    if (f.aliado && r.aliado !== f.aliado) return false;
+    if (f.mora) {
+      const dm = parseInt(r.dias_mora)||0;
+      const ok = (f.mora==='0' && dm===0) || (f.mora==='1-30' && dm>=1&&dm<=30) || (f.mora==='31-60' && dm>=31&&dm<=60) ||
+                 (f.mora==='61-90' && dm>=61&&dm<=90) || (f.mora==='91-180' && dm>=91&&dm<=180) || (f.mora==='181-360' && dm>=181&&dm<=360) || (f.mora==='360+' && dm>360);
+      if (!ok) return false;
+    }
+    return matchesChartFilters(r);
+  });
 
   filteredData = RAW_DATA.filter(r => {
     // Date filter (fecha_desembolso)
@@ -4778,6 +4956,32 @@ function updateKPIs() {
   // carga independientemente en loadSaldoCartera(), no depende de filtros.
 
   document.getElementById('totalRecords').textContent = fmt(d.length);
+
+  // Tarjetas con filtro activo
+  const estSel = document.getElementById('fEstado').value;
+  _marcarCard('kpiCardActivos', estSel === 'ACTIVO');
+  _marcarCard('kpiCardMora', !!chartFilters.mora30);
+  _marcarCard('kpiCardICV', !!chartFilters.mora30);
+
+  // Comparación año a año: solo para FLUJOS (lo desembolsado en la ventana).
+  // Las cifras de stock (activos, saldo, mora, ICV) son una foto de hoy y no
+  // existe la foto de hace un año en la base; se deja sin comparar a propósito.
+  if (YOY) {
+    const comp = ventanaComparacion(_carteraPeriodo);
+    const base = _carteraPeriodo ? d : d.filter(r => enVentana(r.fecha_desembolso, comp.base));
+    const prev = _carteraBase.filter(r => enVentana(r.fecha_desembolso, comp));
+    const pVal = prev.reduce((t, r) => t + (parseFloat(r.valor_credito) || 0), 0);
+    const bVal = base.reduce((t, r) => t + (parseFloat(r.valor_credito) || 0), 0);
+    const pVals = prev.map(r => parseFloat(r.valor_credito)).filter(v => v > 0);
+    const bVals = base.map(r => parseFloat(r.valor_credito)).filter(v => v > 0);
+    const et = comp.label;
+    const nota = _carteraPeriodo ? '' : `<br><span class="prev">Año corrido ${comp.base.from.slice(0,4)}: ${fmt(base.length)} créditos</span>`;
+    _setYoyEl('kpiTotalYoy', deltaYoyHtml(base.length, prev.length, fmt, et) + nota);
+    _setYoyEl('kpiValorYoy', deltaYoyHtml(bVal, pVal, fmtM, et) + (_carteraPeriodo ? '' : `<br><span class="prev">Año corrido: ${fmtM(bVal)}</span>`));
+    _setYoyEl('kpiTicketYoy', deltaYoyHtml(bVals.length ? bVals.reduce((a,b)=>a+b,0)/bVals.length : 0, pVals.length ? pVals.reduce((a,b)=>a+b,0)/pVals.length : null, fmtM, et));
+  } else {
+    ['kpiTotalYoy','kpiValorYoy','kpiTicketYoy'].forEach(id => _setYoyEl(id, ''));
+  }
 }
 
 // ============== Saldo de Cartera (KPI desde snapshot agregado) ==============
@@ -5584,14 +5788,20 @@ function renderRcMensual() {
   if (_rcMeses > 0) mons = mons.slice(-_rcMeses);
   if (_rcCharts.mensual) { _rcCharts.mensual.destroy(); delete _rcCharts.mensual; }
   const el = document.getElementById('chartRcMensual'); if (!el) return;
-  _rcCharts.mensual = new Chart(el, {
-    data:{ labels: mons.map(_reEvoLbl), datasets:[
+  const dsets = [
       { type:'bar', label:'Recaudado', data: mons.map(m=>monMap[m]||0),
         backgroundColor: FIDE.teal+'cc', borderRadius:4, order:2 },
       { type:'line', label:'Desembolsado', data: mons.map(m=>desMap[m]||0),
         borderColor: FIDE.blue, backgroundColor: FIDE.blue,
         borderWidth:2, tension:0.3, pointRadius: mons.length > 40 ? 0 : 3, pointHoverRadius:5, order:1 },
-    ]},
+  ];
+  if (YOY) {
+    const pk = m => shiftYearISO(m + '-01', -1).slice(0, 7);
+    dsets.push({ type:'line', label:'Recaudado año anterior', data: mons.map(m => monMap[pk(m)] || 0),
+      borderColor: FIDE.tealDark, borderDash:[6,4], borderWidth:2, pointRadius: mons.length > 40 ? 0 : 3, tension:0.3, order:0 });
+  }
+  _rcCharts.mensual = new Chart(el, {
+    data:{ labels: mons.map(_reEvoLbl), datasets: dsets },
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
       plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
         tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } } },
@@ -5610,129 +5820,188 @@ async function loadRecaudo() {
       fetchJson('/api/recaudo/legacy-summary'),
       fetchJson('/api/recaudo/legacy'),
     ]);
-    // KPIs sumando legacy + nuevo
-    const totalPagos = (s.total || 0) + (sLeg.pagos_total || 0);
-    const recaudoTotal = (s.recaudo_total || 0) + (sLeg.valor_total || 0);
-    const moraTotal = (s.interes_mora || 0) + (sLeg.mora_total || 0);
-    document.getElementById('rcTotal').textContent = fmt(totalPagos);
-    document.getElementById('rcTotalSub').textContent = `${fmt(s.total || 0)} nuevos · ${fmt(sLeg.pagos_total || 0)} histórico (${fmt(sLeg.prestamos || 0)} préstamos)`;
-    document.getElementById('rcRecaudo').textContent = fmtM(recaudoTotal);
-    // Los ajustes (condonaciones, notas débito, reintegros, cheques devueltos) NO
-    // son recaudo, pero se muestran para que la cifra siga siendo reconstruible:
-    // recaudo efectivo + ajustes = total bruto del archivo.
-    const rcAjustes = s.ajustes_total || 0;
-    document.getElementById('rcRecaudoSub').textContent =
-      `Nuevo: ${fmtM(s.recaudo_total || 0)} · Histórico: ${fmtM(sLeg.valor_total || 0)}`
-      + (rcAjustes ? ` · Ajustes: ${fmtM(rcAjustes)}` : '');
-    document.getElementById('rcCapital').textContent = fmtM(s.capital_total || 0);
-    document.getElementById('rcCapitalSub').textContent = pct(s.capital_total, s.recaudo_total) + ' del recaudo nuevo';
-    document.getElementById('rcIntCorr').textContent = fmtM(s.interes_corr || 0);
-    document.getElementById('rcIntCorrSub').textContent = pct(s.interes_corr, s.recaudo_total) + ' del recaudo nuevo';
-    document.getElementById('rcIntMora').textContent = fmtM(moraTotal);
-    document.getElementById('rcIntMoraSub').textContent = `Nuevo: ${fmtM(s.interes_mora || 0)} · Histórico: ${fmtM(sLeg.mora_total || 0)}`;
-
-    // Etiqueta de histórico precargado (solo si hay datos)
-    const rcHist = document.getElementById('rcHistInfo');
-    if (rcHist) {
-      if ((sLeg.prestamos || 0) > 0) {
-        rcHist.textContent = `✓ Histórico precargado: ${fmt(sLeg.prestamos)} préstamos`;
-        rcHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. ${fmt(sLeg.pagos_total||0)} pagos agrupados por Id préstamo. Total: ${fmtM(sLeg.valor_total||0)}.`;
-        rcHist.style.display = '';
-      } else {
-        rcHist.style.display = 'none';
-      }
-    }
-
-    // Destroy previous charts before re-rendering
-    Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); });
-
-    // Top aliados
-    const aliMap = {};
-    l.forEach(p => { const k = p.aliado || 'N/A'; aliMap[k] = (aliMap[k]||0) + (p.total||0); });
-    const topAli = Object.entries(aliMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
-    _rcCharts.aliado = new Chart(document.getElementById('chartRcAliado'), {
-      type: 'bar',
-      data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
-      options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 70 } },
-        plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmtM(v) } },
-        scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } },
-      plugins: [ChartDataLabels]
-    });
-
-    // Evolución mensual: recaudo (barras) vs desembolso (línea) por mes.
-    const monMap = {};   // recaudo por mes (de pagos)
-    l.forEach(p => {
-      if (!p.fecha_movimiento) return;
-      const m = p.fecha_movimiento.substring(0,7);
-      monMap[m] = (monMap[m]||0) + (p.total||0);
-    });
-    // Desembolsos por mes (de la cartera — RAW_DATA), para comparar colocación
-    // vs cobro. Responde "¿cómo va el recaudo frente a lo que estoy prestando?".
-    const desMap = {};
-    (RAW_DATA || []).forEach(c => {
-      if (!c.fecha_desembolso) return;
-      const m = c.fecha_desembolso.substring(0,7);
-      desMap[m] = (desMap[m]||0) + (parseFloat(c.valor_credito)||0);
-    });
-    // Unión de meses de ambas series, ordenada
-    // Variación del último mes completo de recaudo (tarjeta KPI)
-    const rcDeltaEl = document.getElementById('rcDelta');
-    if (rcDeltaEl) rcDeltaEl.innerHTML = deltaUltimoMes(monMap, true);
-    _rcSeries = { monMap, desMap };
-    renderRcMensual();
-
-    // Tabla — render amplio (1500) para que la búsqueda por cédula cubra
-    // la mayoría del dataset sin paginación server-side.
-    const tb = document.querySelector('#tblRecaudo tbody');
-    window._rcRows = l; window._rcLegRows = lLeg;
-    notaRecorte('tblRecaudo', Math.min(1500, l.length), l.length);
-    tb.innerHTML = l.slice(0, 1500).map(p => `
-      <tr>
-        <td data-label="Fecha">${fmtDate(p.fecha_movimiento) || '-'}</td>
-        <td data-label="Cliente">${esc(p.cliente) || '-'}</td>
-        <td data-label="Cuenta">${esc(p.cuenta) || '-'}</td>
-        <td data-label="Aliado">${esc(p.aliado) || '-'}</td>
-        <td data-label="Tipo">${esc(p.tipo_mvto) || '-'}</td>
-        <td class="num" data-label="Capital">${fmtCurrency(p.capital)}</td>
-        <td class="num" data-label="Interés">${fmtCurrency(p.interes_corriente)}</td>
-        <td class="num" data-label="Mora">${fmtCurrency(p.interes_mora)}</td>
-        <td class="num" data-label="Total"><strong>${fmtCurrency(p.total)}</strong></td>
-      </tr>
-    `).join('');
-    if (!l.length) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin datos. Sube el archivo de recaudo para comenzar.</td></tr>';
-
-    // Tabla histórica (legacy agrupada por id_prestamo)
-    const tbLeg = document.querySelector('#tblRecaudoLegacy tbody');
-    if (tbLeg) {
-      notaRecorte('tblRecaudoLegacy', Math.min(500, lLeg.length), lLeg.length);
-      tbLeg.innerHTML = lLeg.slice(0, 500).map(p => `
-        <tr>
-          <td><strong>${esc(p.id_prestamo) || '-'}</strong></td>
-          <td>${esc(p.nombre) || '-'}</td>
-          <td class="num">${fmt(p.num_pagos || 0)}</td>
-          <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
-          <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
-          <td>${fmtDate(p.fecha_primer_pago) || '-'}</td>
-        </tr>
-      `).join('');
-      if (!lLeg.length) {
-        tbLeg.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado en la base de datos.</td></tr>';
-      }
-    }
-  } catch(e) {
+    _rcState = { s, l: Array.isArray(l) ? l : [], sLeg, lLeg: Array.isArray(lLeg) ? lLeg : [] };
+    renderRecaudo();
+  } catch (e) {
     console.error('loadRecaudo', e);
-    // Limpiar skeletons para no dejar la tabla "cargando" eternamente
-    clearTableSkeleton('tblRecaudo', 9, 'No se pudieron cargar los pagos. Desliza para reintentar.');
-    clearTableSkeleton('tblRecaudoLegacy', 6, 'No se pudo cargar el histórico.');
+    clearTableSkeleton('tblRecaudo', 9, 'No se pudo cargar el recaudo. Desliza para reintentar.');
+    clearTableSkeleton('tblRecaudoLegacy', 6, '');
     showToast('Error al cargar Recaudo. Verifica tu conexión.', 'err');
   }
 }
+let _rcState = null, _rcFiltro = '';
+const RC_FILTRO_LABEL = { pago: 'Solo recaudo (Pago)', capital: 'Con abono a capital', interes: 'Con interés corriente', mora: 'Con interés de mora' };
+const _esPago = p => /^PAGO/i.test(String(p.tipo_mvto || ''));
+function _rcPasaFiltro(p) {
+  if (!_rcFiltro) return true;
+  if (_rcFiltro === 'pago') return _esPago(p);
+  if (_rcFiltro === 'capital') return (parseFloat(p.capital) || 0) > 0;
+  if (_rcFiltro === 'interes') return (parseFloat(p.interes_corriente) || 0) > 0;
+  if (_rcFiltro === 'mora') return (parseFloat(p.interes_mora) || 0) > 0;
+  return true;
+}
+function xfRecaudo(k) {
+  _rcFiltro = (_rcFiltro === k) ? '' : k;
+  renderRecaudo();
+  try { localStorage.setItem('fide_chart_hint_dismissed', '1'); document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none'); } catch (e) {}
+}
+function _rcSumas(rows) {
+  const pagos = rows.filter(_esPago);
+  const sum = (arr, k) => arr.reduce((t, p) => t + (parseFloat(p[k]) || 0), 0);
+  return { n: rows.length, recaudo: sum(pagos, 'total'), capital: sum(pagos, 'capital'), interes: sum(pagos, 'interes_corriente'),
+           mora: sum(pagos, 'interes_mora'), ajustes: sum(rows.filter(p => !_esPago(p)), 'total') };
+}
+function renderRecaudo() {
+  if (!_rcState) return;
+  const { s, l, sLeg, lLeg } = _rcState;
+  const preset = document.getElementById('rcPeriodo')?.value || 'all';
+  const v = ventanaPeriodo(preset);
+  const conPeriodo = !!v;
+  // Chips
+  const bar = document.getElementById('rcFilterBar'), chips = document.getElementById('rcFilterChips');
+  if (bar && chips) {
+    const partes = [];
+    if (_rcFiltro) partes.push(`<span class="chip" onclick="xfRecaudo('')" title="Quitar filtro">Tarjeta: <strong>${RC_FILTRO_LABEL[_rcFiltro]}</strong> <span class="x">&times;</span></span>`);
+    if (v) partes.push(`<span class="chip" onclick="document.getElementById('rcPeriodo').value='all';renderRecaudo()" title="Quitar período">Período: <strong>${v.label}</strong> <span class="x">&times;</span></span>`);
+    chips.innerHTML = partes.join('');
+    bar.classList.toggle('active', partes.length > 0);
+  }
+  ['rcCardPago','rcCardCapital','rcCardInt','rcCardMora'].forEach((id, i) => _marcarCard(id, _rcFiltro === ['pago','capital','interes','mora'][i]));
 
-// ---------- SOLICITUDES (con cross-filter de gráficas) ----------
+  const lf = l.filter(p => enVentana(p.fecha_movimiento, v) && _rcPasaFiltro(p));
+  const cur = _rcSumas(lf);
+  // El histórico (plataforma anterior) viene agregado por préstamo sin fecha de
+  // cada pago: solo se suma cuando NO hay período ni filtro de tarjeta.
+  const incluirLegacy = !conPeriodo && !_rcFiltro;
+  const legPagos = incluirLegacy ? (sLeg.pagos_total || 0) : 0;
+  const legValor = incluirLegacy ? (sLeg.valor_total || 0) : 0;
+  const legMora = incluirLegacy ? (sLeg.mora_total || 0) : 0;
+
+  document.getElementById('rcTotal').textContent = fmt(cur.n + legPagos);
+  document.getElementById('rcTotalSub').textContent = incluirLegacy
+    ? `${fmt(cur.n)} nuevos · ${fmt(legPagos)} histórico (${fmt(sLeg.prestamos || 0)} préstamos)`
+    : `${fmt(cur.n)} movimientos ${v ? 'en ' + v.label : ''}${_rcFiltro ? ' · ' + RC_FILTRO_LABEL[_rcFiltro].toLowerCase() : ''} · histórico no incluido`;
+  document.getElementById('rcRecaudo').textContent = fmtM(cur.recaudo + legValor);
+  document.getElementById('rcRecaudoSub').textContent = incluirLegacy
+    ? `Nuevo: ${fmtM(cur.recaudo)} · Histórico: ${fmtM(legValor)}` + (cur.ajustes ? ` · Ajustes: ${fmtM(cur.ajustes)}` : '')
+    : `Solo movimientos Pago` + (cur.ajustes ? ` · Ajustes: ${fmtM(cur.ajustes)}` : '');
+  document.getElementById('rcCapital').textContent = fmtM(cur.capital);
+  document.getElementById('rcCapitalSub').textContent = pct(cur.capital, cur.recaudo) + ' del recaudo nuevo';
+  document.getElementById('rcIntCorr').textContent = fmtM(cur.interes);
+  document.getElementById('rcIntCorrSub').textContent = pct(cur.interes, cur.recaudo) + ' del recaudo nuevo';
+  document.getElementById('rcIntMora').textContent = fmtM(cur.mora + legMora);
+  document.getElementById('rcIntMoraSub').textContent = incluirLegacy ? `Nuevo: ${fmtM(cur.mora)} · Histórico: ${fmtM(legMora)}` : `Interés de mora cobrado`;
+
+  // Comparación año a año (mismo período un año atrás, mismos filtros)
+  if (YOY) {
+    const comp = ventanaComparacion(v);
+    const base = v ? lf : l.filter(p => enVentana(p.fecha_movimiento, comp.base) && _rcPasaFiltro(p));
+    const prev = _rcSumas(l.filter(p => enVentana(p.fecha_movimiento, comp) && _rcPasaFiltro(p)));
+    const b = _rcSumas(base);
+    const et = comp.label;
+    const nota = v ? '' : `<br><span class="prev">Año corrido: ${fmtM(b.recaudo)}</span>`;
+    _setYoyEl('rcTotalYoy', deltaYoyHtml(b.n, prev.n, fmt, et) + (v ? '' : `<br><span class="prev">Año corrido: ${fmt(b.n)}</span>`));
+    _setYoyEl('rcRecaudoYoy', deltaYoyHtml(b.recaudo, prev.recaudo, fmtM, et) + nota);
+    _setYoyEl('rcCapitalYoy', deltaYoyHtml(b.capital, prev.capital, fmtM, et));
+    _setYoyEl('rcIntCorrYoy', deltaYoyHtml(b.interes, prev.interes, fmtM, et));
+    _setYoyEl('rcIntMoraYoy', deltaYoyHtml(b.mora, prev.mora, fmtM, et, true));
+  } else {
+    ['rcTotalYoy','rcRecaudoYoy','rcCapitalYoy','rcIntCorrYoy','rcIntMoraYoy'].forEach(id => _setYoyEl(id, ''));
+  }
+
+  // Etiqueta de histórico precargado (solo si hay datos)
+  const rcHist = document.getElementById('rcHistInfo');
+  if (rcHist) {
+    if ((sLeg.prestamos || 0) > 0) {
+      rcHist.textContent = `✓ Histórico precargado: ${fmt(sLeg.prestamos)} préstamos`;
+      rcHist.title = `Datos de la plataforma anterior cargados una sola vez en la BD. ${fmt(sLeg.pagos_total||0)} pagos agrupados por Id préstamo. Total: ${fmtM(sLeg.valor_total||0)}.`;
+      rcHist.style.display = '';
+    } else {
+      rcHist.style.display = 'none';
+    }
+  }
+
+  Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); delete _rcCharts[k]; });
+
+  // Top aliados (sobre lo filtrado)
+  const aliMap = {};
+  lf.forEach(p => { const k = p.aliado || 'N/A'; aliMap[k] = (aliMap[k]||0) + (p.total||0); });
+  const topAli = Object.entries(aliMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  _rcCharts.aliado = new Chart(document.getElementById('chartRcAliado'), {
+    type: 'bar',
+    data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 70 } },
+      plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmtM(v) } },
+      scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } },
+    plugins: [ChartDataLabels]
+  });
+
+  // Serie mensual: recaudo (todas las fechas, con el filtro de tarjeta) vs desembolsos de la cartera
+  const monMap = {};
+  l.filter(_rcPasaFiltro).forEach(p => {
+    if (!p.fecha_movimiento) return;
+    const m = p.fecha_movimiento.substring(0,7);
+    monMap[m] = (monMap[m]||0) + (p.total||0);
+  });
+  const desMap = {};
+  (RAW_DATA || []).forEach(c => {
+    if (!c.fecha_desembolso) return;
+    const m = c.fecha_desembolso.substring(0,7);
+    desMap[m] = (desMap[m]||0) + (parseFloat(c.valor_credito)||0);
+  });
+  const rcDeltaEl = document.getElementById('rcDelta');
+  if (rcDeltaEl) rcDeltaEl.innerHTML = deltaUltimoMes(monMap, true);
+  _rcSeries = { monMap, desMap, ventana: v };
+  renderRcMensual();
+
+  // Tabla de pagos (filtrada)
+  const tb = document.querySelector('#tblRecaudo tbody');
+  window._rcRows = lf; window._rcLegRows = lLeg;
+  notaRecorte('tblRecaudo', Math.min(1500, lf.length), lf.length);
+  tb.innerHTML = lf.slice(0, 1500).map(p => `
+    <tr>
+      <td data-label="Fecha">${fmtDate(p.fecha_movimiento) || '-'}</td>
+      <td data-label="Cliente">${esc(p.cliente) || '-'}</td>
+      <td data-label="Cuenta">${esc(p.cuenta) || '-'}</td>
+      <td data-label="Aliado">${esc(p.aliado) || '-'}</td>
+      <td data-label="Tipo">${esc(p.tipo_mvto) || '-'}</td>
+      <td class="num" data-label="Capital">${fmtCurrency(p.capital)}</td>
+      <td class="num" data-label="Interés">${fmtCurrency(p.interes_corriente)}</td>
+      <td class="num" data-label="Mora">${fmtCurrency(p.interes_mora)}</td>
+      <td class="num" data-label="Total"><strong>${fmtCurrency(p.total)}</strong></td>
+    </tr>
+  `).join('');
+  if (!lf.length) tb.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:#5a6a6e;">${l.length ? 'Ningún pago cumple el período o el filtro elegido.' : 'Sin datos. Sube el archivo de recaudo para comenzar.'}</td></tr>`;
+
+  // Tabla histórica (legacy agrupada por id_prestamo): sin fecha por pago, no se filtra
+  const tbLeg = document.querySelector('#tblRecaudoLegacy tbody');
+  if (tbLeg) {
+    notaRecorte('tblRecaudoLegacy', Math.min(500, lLeg.length), lLeg.length, conPeriodo || _rcFiltro ? 'El histórico no tiene fecha por pago: no se filtra por período ni por tarjeta.' : '');
+    tbLeg.innerHTML = lLeg.slice(0, 500).map(p => `
+      <tr>
+        <td><strong>${esc(p.id_prestamo) || '-'}</strong></td>
+        <td>${esc(p.nombre) || '-'}</td>
+        <td class="num">${fmt(p.num_pagos || 0)}</td>
+        <td class="num"><strong>${fmtCurrency(p.valor_pago_total)}</strong></td>
+        <td class="num">${fmtCurrency(p.interes_mora_total)}</td>
+        <td>${fmtDate(p.fecha_primer_pago) || '-'}</td>
+      </tr>
+    `).join('');
+    if (!lLeg.length) tbLeg.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:1.5rem;color:#5a6a6e;">Sin histórico cargado en la base de datos.</td></tr>';
+  }
+}
 let _slCharts = {};
 let _slRawData = [];           // crudo del /combined endpoint
 let _slFilters = {};           // {estado: 'DESEMBOLSADA', linea: 'POLIZA PERSONAS', ...}
-const SL_FILTER_LABELS = { estado: 'Estado', linea: 'Línea' };
+const SL_FILTER_LABELS = { estado: 'Estado', linea: 'Línea', decidida: 'Decididas', periodo: 'Período' };
+const _SL_DECIDIDOS = new Set(['DESEMBOLSADA', 'ANULADA', 'NEGADA']);
+function xfSolicitudes(dim, val) {
+  if (!dim) { delete _slFilters.estado; delete _slFilters.decidida; renderSolicitudes(); return; }
+  if (dim === 'estado') delete _slFilters.decidida;
+  if (dim === 'decidida') delete _slFilters.estado;
+  toggleSlChartFilter(dim, val);
+}
+function _slVentana() { return ventanaPeriodo(document.getElementById('slPeriodo')?.value || 'all'); }
 
 // Consolida la línea de cualquier solicitud en una de las 4 categorías que
 // quiere la líder: CREDITO EMPRESAS, CREDITO PERSONAS, POLIZA EMPRESAS,
@@ -5767,8 +6036,11 @@ async function loadSolicitudes() {
   }
 }
 
-function _slMatchesFilters(r) {
+function _slMatchesFilters(r, ventana) {
+  if (ventana === undefined) ventana = _slVentana();
+  if (ventana && !enVentana(r.fecha_solicitud, ventana)) return false;
   for (const k in _slFilters) {
+    if (k === 'decidida') { if (!_SL_DECIDIDOS.has(r.estado)) return false; continue; }
     // Para 'linea' comparamos contra la línea NORMALIZADA porque el chart
     // agrupa por las 4 categorías consolidadas.
     if (k === 'linea') {
@@ -5793,7 +6065,8 @@ function toggleSlChartFilter(dim, val) {
 }
 
 function removeSlFilter(dim) {
-  delete _slFilters[dim];
+  if (dim === 'periodo') { const p = document.getElementById('slPeriodo'); if (p) p.value = 'all'; }
+  else delete _slFilters[dim];
   renderSolicitudes();
 }
 
@@ -5807,6 +6080,8 @@ function renderSlFilterBar() {
   const chipsEl = document.getElementById('slFilterChips');
   if (!bar || !chipsEl) return;
   const entries = Object.entries(_slFilters);
+  const vSel = _slVentana();
+  if (vSel) entries.push(['periodo', vSel.label]);
   if (!entries.length) {
     bar.classList.remove('active');
     chipsEl.innerHTML = '';
@@ -5817,10 +6092,29 @@ function renderSlFilterBar() {
     `<span class="chip" onclick="removeSlFilter('${dim}')" title="Quitar filtro">${SL_FILTER_LABELS[dim] || dim}: <strong>${val}</strong> <span class="x">&times;</span></span>`
   ).join('');
 }
+function _slYoy(filtered) {
+  const ids = ['slTotalYoy','slDesemYoy','slTasaAceptYoy','slTicketPromYoy'];
+  if (!YOY) { ids.forEach(id => _setYoyEl(id, '')); return; }
+  const v = _slVentana();
+  const comp = ventanaComparacion(v);
+  const base = v ? filtered : filtered.filter(r => enVentana(r.fecha_solicitud, comp.base));
+  const prev = _slRawData.filter(r => _slMatchesFilters(r, comp));
+  const stats = arr => {
+    const des = arr.filter(r => r.estado === 'DESEMBOLSADA');
+    const dec = arr.filter(r => _SL_DECIDIDOS.has(r.estado)).length;
+    const vDes = des.reduce((t, r) => t + (parseFloat(r.valor) || 0), 0);
+    return { n: arr.length, des: des.length, tasa: dec ? des.length / dec * 100 : null, ticket: des.length ? vDes / des.length : null };
+  };
+  const b = stats(base), p = stats(prev), et = comp.label;
+  _setYoyEl('slTotalYoy', deltaYoyHtml(b.n, p.n, fmt, et) + (v ? '' : `<br><span class="prev">Año corrido: ${fmt(b.n)}</span>`));
+  _setYoyEl('slDesemYoy', deltaYoyHtml(b.des, p.des, fmt, et) + (v ? '' : `<br><span class="prev">Año corrido: ${fmt(b.des)}</span>`));
+  _setYoyEl('slTasaAceptYoy', p.tasa == null ? '<span class="prev">Sin decididas el año anterior</span>' : `${(b.tasa || 0).toFixed(1)}% vs <span class="prev">${p.tasa.toFixed(1)}%</span> ${et} <span class="${(b.tasa || 0) >= p.tasa ? 'up' : 'down'}">${(b.tasa || 0) >= p.tasa ? '▲' : '▼'} ${Math.abs((b.tasa || 0) - p.tasa).toFixed(1)} pp</span>`);
+  _setYoyEl('slTicketPromYoy', deltaYoyHtml(b.ticket || 0, p.ticket, fmtM, et));
+}
 
 function renderSolicitudes() {
   // Filtered subset (cross-filters aplicados)
-  const filtered = _slRawData.filter(_slMatchesFilters);
+  const filtered = _slRawData.filter(r => _slMatchesFilters(r));
   // Totales globales (sin filtro) y filtrados (respetando cross-filter)
   // Tras auditoría: cuando hay filtros activos, el sub-label de Total
   // debería reflejar el subset filtrado, no los totales raw.
@@ -5882,6 +6176,11 @@ function renderSolicitudes() {
   document.getElementById('slTicketProm').textContent = fmtM(ticket);
   document.getElementById('slTicketPromSub').textContent = 'Por solicitud aprobada';
 
+  _marcarCard('slCardDesem', _slFilters.estado === 'DESEMBOLSADA');
+  _marcarCard('slCardTicket', _slFilters.estado === 'DESEMBOLSADA');
+  _marcarCard('slCardTasa', !!_slFilters.decidida);
+  _slYoy(filtered);
+
   // ============ Charts (con onClick = cross-filter) ============
   Object.keys(_slCharts).forEach(k => { _slCharts[k]?.destroy?.(); });
 
@@ -5930,16 +6229,24 @@ function renderSolicitudes() {
   // Orden fijo: las 4 categorías principales primero, OTROS al final si aplica.
   const LN_ORDER = ['CREDITO EMPRESAS', 'CREDITO PERSONAS', 'POLIZA EMPRESAS', 'POLIZA PERSONAS', 'OTROS'];
   const lnLabels = LN_ORDER.filter(k => lnMap[k] > 0);
+  const lnDatasets = [{ label: 'Solicitudes', data: lnLabels.map(k => lnMap[k]), backgroundColor: FIDE.teal + 'cc', borderRadius: 4 }];
+  if (YOY) {
+    const vv = _slVentana(); const comp = ventanaComparacion(vv);
+    const prevMap = {};
+    _slRawData.filter(r => _slMatchesFilters(r, comp)).forEach(x => { const k = _normalizeLineaSolic(x.linea); prevMap[k] = (prevMap[k] || 0) + 1; });
+    lnDatasets[0].label = 'Solicitudes ' + (vv ? vv.label : 'año corrido');
+    lnDatasets.push({ label: comp.label, data: lnLabels.map(k => prevMap[k] || 0), backgroundColor: '#A19F9D' + '99', borderRadius: 4 });
+    if (!vv) { // sin período: la barra actual pasa a ser el año corrido, para comparar lo comparable
+      const curMap = {};
+      filtered.filter(r => enVentana(r.fecha_solicitud, comp.base)).forEach(x => { const k = _normalizeLineaSolic(x.linea); curMap[k] = (curMap[k] || 0) + 1; });
+      lnDatasets[0].data = lnLabels.map(k => curMap[k] || 0);
+    }
+  }
   _slCharts.linea = new Chart(document.getElementById('chartSlLinea'), {
     type: 'bar',
     data: {
       labels: lnLabels,
-      datasets: [{
-        label: 'Solicitudes',
-        data: lnLabels.map(k => lnMap[k]),
-        backgroundColor: FIDE.teal + 'cc',
-        borderRadius: 4
-      }]
+      datasets: lnDatasets
     },
     options: {
       indexAxis: 'y',
@@ -5950,7 +6257,7 @@ function renderSolicitudes() {
         toggleSlChartFilter('linea', label);
       },
       layout: { padding: { right: 50 } },
-      plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', offset: 4, clip: false, color: '#323130', font: { size: 12, weight: 700 }, formatter: v => fmt(v) } },
+      plugins: { legend: { display: YOY, position: 'bottom' }, datalabels: { anchor: 'end', align: 'end', offset: 4, clip: false, color: '#323130', font: { size: 12, weight: 700 }, formatter: v => fmt(v) } },
       scales: { x: { grid: { color: '#F3F2F1' }, ticks: { precision: 0 } }, y: { grid: { display: false } } }
     },
     plugins: [ChartDataLabels]
@@ -6003,7 +6310,43 @@ async function loadJuridico() {
       fetchJson('/api/juridico/summary'),
       fetchJson('/api/juridico')
     ]);
-    window._jrData = l || [];   // para exportar a CSV
+    _jrState = { s, l: l || [] };
+    renderJuridico();
+  } catch (e) {
+    console.error('loadJuridico', e);
+    clearTableSkeleton('tblJuridico', 8, 'No se pudieron cargar los procesos. Desliza para reintentar.');
+    showToast('Error al cargar Cobro Jurídico. Verifica tu conexión.', 'err');
+  }
+}
+let _jrState = null, _jrFiltro = '';
+const JR_FILTRO_LABEL = { probable: 'Recuperación probable', remota: 'Recuperación remota', medida: 'Con medida cautelar', cruce: 'Cruzados con cartera' };
+const _jrConMedida = x => { const m = String(x.medida_cautelar || '').trim(); return !!m && !/^(no\b|sin\b|n\/a|ningun)/i.test(m); };
+function _jrPasa(x) {
+  if (!_jrFiltro) return true;
+  if (_jrFiltro === 'probable') return /probab/i.test(x.probabilidad || '');
+  if (_jrFiltro === 'remota') return /remot/i.test(x.probabilidad || '');
+  if (_jrFiltro === 'medida') return _jrConMedida(x);
+  if (_jrFiltro === 'cruce') return !!x.cartera_match;
+  return true;
+}
+function xfJuridico(k) {
+  _jrFiltro = (_jrFiltro === k) ? '' : k;
+  renderJuridico();
+  const tbl = document.getElementById('tblJuridico');
+  if (tbl && _jrFiltro && window.innerWidth > 768) setTimeout(() => tbl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+}
+function renderJuridico() {
+  if (!_jrState) return;
+  const s = _jrState.s;
+  const l = _jrState.l.filter(_jrPasa);
+  const bar = document.getElementById('jrFilterBar'), chips = document.getElementById('jrFilterChips');
+  if (bar && chips) {
+    chips.innerHTML = _jrFiltro ? `<span class="chip" onclick="xfJuridico('')" title="Quitar filtro">Tarjeta: <strong>${JR_FILTRO_LABEL[_jrFiltro]}</strong> <span class="x">&times;</span></span>` : '';
+    bar.classList.toggle('active', !!_jrFiltro);
+  }
+  [['jrCardProb','probable'],['jrCardRem','remota'],['jrCardMed','medida'],['jrCardCruce','cruce'],['jrCardSaldo','cruce']].forEach(([id, k]) => _marcarCard(id, _jrFiltro === k));
+  try {
+    window._jrData = l;   // para exportar (respeta el filtro)
     const _matched = (l || []).filter(r => r.cartera_match);
     const cs = {
       total: (l || []).length,
@@ -6011,19 +6354,26 @@ async function loadJuridico() {
       saldo_total_cartera: _matched.reduce((a, r) => a + (r.cartera_saldo_activo || 0), 0),
       saldo_en_mora: _matched.reduce((a, r) => a + (r.cartera_saldo_activo_mora30 || 0), 0),
     };
-    document.getElementById('jrTotal').textContent = fmt(s.total || 0);
-    document.getElementById('jrTotalSub').textContent = `${s.juzgados || 0} juzgados involucrados`;
-    document.getElementById('jrProb').textContent = fmt(s.probables || 0);
-    document.getElementById('jrProbSub').textContent = pct(s.probables, s.total) + ' del total';
-    document.getElementById('jrRem').textContent = fmt(s.remotas || 0);
-    document.getElementById('jrRemSub').textContent = pct(s.remotas, s.total) + ' del total';
-    document.getElementById('jrMed').textContent = fmt(s.con_medida || 0);
-    document.getElementById('jrMedSub').textContent = pct(s.con_medida, s.total) + ' del total';
+    // Con un filtro de tarjeta activo las cifras salen de la lista filtrada;
+    // sin filtro, del resumen del servidor (misma definición).
+    const tot = _jrFiltro ? l.length : (s.total || 0);
+    const nProb = _jrFiltro ? l.filter(x => /probab/i.test(x.probabilidad || '')).length : (s.probables || 0);
+    const nRem = _jrFiltro ? l.filter(x => /remot/i.test(x.probabilidad || '')).length : (s.remotas || 0);
+    const nMed = _jrFiltro ? l.filter(_jrConMedida).length : (s.con_medida || 0);
+    const nJuz = _jrFiltro ? new Set(l.map(x => x.juzgado).filter(Boolean)).size : (s.juzgados || 0);
+    document.getElementById('jrTotal').textContent = fmt(tot);
+    document.getElementById('jrTotalSub').textContent = `${nJuz} juzgados involucrados${_jrFiltro ? ' · ' + JR_FILTRO_LABEL[_jrFiltro].toLowerCase() : ''}`;
+    document.getElementById('jrProb').textContent = fmt(nProb);
+    document.getElementById('jrProbSub').textContent = pct(nProb, tot) + ' del total';
+    document.getElementById('jrRem').textContent = fmt(nRem);
+    document.getElementById('jrRemSub').textContent = pct(nRem, tot) + ' del total';
+    document.getElementById('jrMed').textContent = fmt(nMed);
+    document.getElementById('jrMedSub').textContent = pct(nMed, tot) + ' del total';
 
     // KPIs cruce con cartera
     const matched = cs.matched || 0;
     document.getElementById('jrCruce').textContent = fmt(matched);
-    document.getElementById('jrCruceSub').textContent = pct(matched, s.total || cs.total) + ' del total';
+    document.getElementById('jrCruceSub').textContent = pct(matched, tot) + ' del total';
     document.getElementById('jrSaldo').textContent = fmtM(cs.saldo_total_cartera || 0);
     document.getElementById('jrSaldoSub').textContent = `En mora: ${fmtM(cs.saldo_en_mora || 0)}`;
 
@@ -6032,7 +6382,7 @@ async function loadJuridico() {
     _jrCharts.prob = new Chart(document.getElementById('chartJrProb'), {
       type:'doughnut',
       data:{ labels:['Probable','Remota','Otro'], datasets:[{
-        data:[s.probables||0, s.remotas||0, (s.total||0)-(s.probables||0)-(s.remotas||0)],
+        data:[nProb, nRem, Math.max(0, tot - nProb - nRem)],
         backgroundColor:[FIDE.teal, FIDE.gray, FIDE.grayLight], borderWidth:3, borderColor:'#fff' }] },
       options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
         plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
@@ -6337,6 +6687,20 @@ function renderFinTable(rows) {
   }).join('');
 }
 
+// Clic en tarjeta de EEFF → la tabla se abre en ese grupo.
+function xfFin(code) {
+  if (!_finLastRows) return;
+  if (code === 'utilidad') {
+    const row = document.querySelector('#tab-financieros tr.fin-utilidad-neta') || document.querySelector('#tab-financieros tr.fin-utilidad');
+    if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.style.outline = '2px solid var(--fide-teal)'; setTimeout(() => row.style.outline = '', 2500); }
+    return;
+  }
+  if (!_finExpanded) _finExpanded = new Set();
+  _finExpanded.add(code);
+  renderFinTable(_finLastRows);
+  const row = Array.from(document.querySelectorAll('#tab-financieros tr.fin-group, #tab-financieros tr.fin-total')).find(tr => (tr.textContent || '').replace(/[▸▾►▼]/g, '').trim().startsWith(code));
+  if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'start' }); row.style.outline = '2px solid var(--fide-teal)'; setTimeout(() => row.style.outline = '', 2500); }
+}
 function toggleFinGroup(code) {
   if (!_finExpanded) _finExpanded = new Set();
   if (_finExpanded.has(code)) _finExpanded.delete(code);
@@ -6571,6 +6935,23 @@ function openAgingDrill(bucketKey, bucketLabel) {
   }
 }
 
+// Drill de varios buckets a la vez (p.ej. NPL = 91-180 + 181-360 + +360)
+function openAgingDrillMulti(keys, label) {
+  const all = window._agingCreditsByBucket || {};
+  const lista = [];
+  keys.forEach(k => (all[k] || []).forEach(r => lista.push(r)));
+  all['multi'] = lista;
+  openAgingDrill('multi', label);
+}
+function irACosechaAtencion() {
+  const ym = window._anPeorYM;
+  if (!ym) { showToast('No hay una cosecha de atención con los filtros actuales', 'warn'); return; }
+  const fila = Array.from(document.querySelectorAll('#tblCosechas tbody tr')).find(tr => (tr.querySelector('td')?.textContent || '').trim() === ym);
+  if (!fila) return;
+  fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  fila.style.outline = '2px solid var(--fide-coral)';
+  setTimeout(() => fila.style.outline = '', 3000);
+}
 function closeAgingDrill() {
   const panel = document.getElementById('agingDrillPanel');
   if (panel) {
@@ -6726,6 +7107,7 @@ function renderAnalitica() {
   document.getElementById('anMoraProm').textContent = Math.round(moraProm) + ' d';
   document.getElementById('anMoraPromSub').textContent =
     'Solo cartera vencida (>0 d) · ' + fmtCurrency(saldoConMora) + ' en mora';
+  window._anPeorYM = peorYM || null;
   document.getElementById('anCosechaPeor').textContent = peorYM ? peorPct.toFixed(1) + '%' : '–';
   // Sub-label: mes de la cosecha + su saldo + criterio (mora temprana >30,
   // cosechas de 3-18 meses, mín 5 créditos y $1M).
@@ -6894,9 +7276,17 @@ function renderAnalitica() {
   }
 }
 
+let _prEstado = 'all';
+function setPrEstado(v) {
+  _prEstado = v;
+  document.querySelectorAll('[data-pr-estado]').forEach(b => b.classList.toggle('active', b.dataset.prEstado === v));
+  renderProyeccion();
+}
 function renderProyeccion() {
   const period = document.getElementById('prPeriod')?.value || '12m';
-  const proyData = _buildProyeccionData();
+  let proyData = _buildProyeccionData();
+  if (_prEstado === 'aldia') proyData = proyData.filter(r => (parseInt(r.dias_mora) || 0) === 0);
+  if (_prEstado === 'mora') proyData = proyData.filter(r => (parseInt(r.dias_mora) || 0) > 0);
   const titleEl = document.getElementById('prTitle');
   const backBtn = document.getElementById('prBackBtn');
   const ctx = document.getElementById('chartProyeccion');
@@ -7620,6 +8010,9 @@ _enableKpiTooltipTaps();
 const _origLoadData = loadData;
 loadData = async function() { await _origLoadData(); _enableKpiTooltipTaps(); try { _reRenderComposicion(); } catch (e) { console.error('composición home', e); } };
 
+// Interruptor "Comparar con año anterior" en cada módulo (misma preferencia global)
+document.querySelectorAll('.yoy-slot').forEach(el => { el.outerHTML = yoyToggleHtml(); });
+
 // Load data from API (replaces static embedded data)
 loadData();
 // El home es el Resumen Ejecutivo — cargarlo al inicio (independiente de loadData).
@@ -7778,7 +8171,7 @@ async function loadResumenEjecutivo() {
     showToast('Error al cargar el Resumen Ejecutivo.', 'err');
   }
 }
-let _reData = null, _reDims_ = {}, _reSaldoHist = [], _reEvo = [], _reCompCharts = {};
+let _reData = null, _reDims_ = {}, _reSaldoHist = [], _reEvo = [], _reEvoTodo = [], _reCompCharts = {};
 const _RE_MUTE_KEY = 'fideReAlertMute';
 let _reShowMuted = false;
 
@@ -7825,7 +8218,7 @@ function _reHeroHtml(d, dims) {
 
   if (c) {
     const st = _reIcvEstado(c.icv_pct);
-    html += `<div class="re-card re-hero-icv ${st.cls === 'ok' ? 'ok' : 'riesgo'}" onclick="verClientesEnMora()" title="Ver los créditos en mora">
+    html += `<div class="re-card re-hero-icv ${st.cls === 'ok' ? 'ok' : 'riesgo'}" onclick="_reGoMora()" title="Ver en Cartera los créditos que originan el ICV">
       <div class="re-lbl">Índice de cartera vencida (ICV, mora &gt; 30 días) ${_reBadge(c, dims)}</div>
       <div class="re-gauge-row">
         <div class="re-gauge"><canvas id="reGaugeIcv"></canvas></div>
@@ -7920,7 +8313,7 @@ function _reKpisHtml(d, dims) {
     <div class="re-kpi-spark"><canvas id="reSparkDesem"></canvas></div>
   </div>`;
   const tasa = s && s.total ? (s.desembolsadas / s.total * 100) : null;
-  cards += `<div class="re-card" onclick="_reGo('solicitudes')">
+  cards += `<div class="re-card" onclick="_reGoSolicitudesEnEstudio()">
     <div class="re-lbl">Solicitudes en estudio ${_reBadge(s, dims)}</div>
     <div class="re-val">${s ? fmt(s.en_estudio) : '—'}</div>
     <div class="re-sub">${s ? fmt(s.desembolsadas) + ' desembolsadas de ' + fmt(s.total) + (tasa != null ? ' · aceptación ' + tasa.toFixed(0) + '%' : '') : 'sin archivo'}</div>
@@ -7969,6 +8362,16 @@ function _reDeltaHtml(arr, campo, esValor) {
     const dlt = (cur[campo] - prev[campo]) / prev[campo] * 100;
     const cls = Math.abs(dlt) < 0.5 ? 'flat' : (dlt >= 0 ? 'up' : 'down');
     html += ` <span class="${cls}">${cls === 'flat' ? '=' : (dlt >= 0 ? '▲' : '▼')} ${Math.abs(dlt).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span> vs ${_reEvoLbl(prev.mes)}`;
+  }
+  if (YOY) {
+    const ya = (_reEvoTodo || []).find(x => x.mes === shiftYearISO(cur.mes + '-01', -1).slice(0, 7));
+    if (ya && ya[campo]) {
+      const d2 = (cur[campo] - ya[campo]) / ya[campo] * 100;
+      const c2 = Math.abs(d2) < 0.5 ? 'flat' : (d2 >= 0 ? 'up' : 'down');
+      html += `<br><span class="${c2}">${c2 === 'flat' ? '=' : (d2 >= 0 ? '▲' : '▼')} ${Math.abs(d2).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span> vs ${_reEvoLbl(ya.mes)} <span class="prev">(${fmtV(ya[campo])})</span>`;
+    } else {
+      html += `<br><span class="prev">Sin dato del mismo mes del año anterior</span>`;
+    }
   }
   return html;
 }
@@ -8145,9 +8548,12 @@ async function loadEvolucionMensual(filtros) {
   if (!canvas) return;
   try {
     const qs = new URLSearchParams(filtros).toString();
-    const d = await fetchJson('/api/resumen/evolucion-mensual' + (qs ? '?' + qs : ''));
-    const arr = d.meses || [];
-    _reEvo = arr;
+    const d = await fetchJson('/api/resumen/evolucion-mensual' + (qs ? '?' + qs : '') + (YOY ? (qs ? '&' : '?') + 'meses=24' : ''));
+    const arrTodo = d.meses || [];
+    // Con comparación anual pedimos 24 meses para tener el año anterior, pero
+    // la gráfica sigue mostrando los últimos 12 (el año anterior va superpuesto).
+    const arr = YOY && arrTodo.length > 12 ? arrTodo.slice(-12) : arrTodo;
+    _reEvo = arr; _reEvoTodo = arrTodo;
     if (_reEvoChart) { _reEvoChart.destroy(); _reEvoChart = null; }
     _reRenderDeltas(arr);
     _reRenderAlertas();
@@ -8172,6 +8578,14 @@ async function loadEvolucionMensual(filtros) {
         borderColor: '#5a6a6e', backgroundColor: '#5a6a6e', borderWidth: 2,
         pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 },
     ];
+    if (YOY) {
+      const byMes = {}; arrTodo.forEach(x => { byMes[x.mes] = x; });
+      const pk = m => shiftYearISO(m + '-01', -1).slice(0, 7);
+      datasets.push({ type: 'line', label: 'Recaudo año anterior', data: arr.map(x => (byMes[pk(x.mes)] || {}).recaudo ?? null),
+        borderColor: FIDE.tealDark, borderDash: [6, 4], borderWidth: 2, pointRadius: 2, yAxisID: 'y', order: 0, spanGaps: true });
+      datasets.push({ type: 'line', label: 'Desembolsos año anterior', data: arr.map(x => (byMes[pk(x.mes)] || {}).desembolsos_valor ?? null),
+        borderColor: FIDE.blue, borderDash: [6, 4], borderWidth: 2, pointRadius: 2, yAxisID: 'y', order: 0, spanGaps: true });
+    }
     if (metas.recaudo > 0) datasets.push({ type: 'line', label: 'Meta recaudo', data: arr.map(() => metas.recaudo),
       borderColor: FIDE.tealDark, borderDash: [6, 4], borderWidth: 2, pointRadius: 0, yAxisID: 'y', order: 2 });
     if (metas.desembolso > 0) datasets.push({ type: 'line', label: 'Meta desembolsos', data: arr.map(() => metas.desembolso),
@@ -8202,6 +8616,17 @@ async function loadEvolucionMensual(filtros) {
   }
 }
 
+function _reGoMora() {
+  chartFilters.mora30 = '> 30 días';
+  const sel = document.getElementById('fEstado'); if (sel) sel.value = '';
+  renderChartFilterBar();
+  verClientesEnMora();
+  applyFilters();
+}
+function _reGoSolicitudesEnEstudio() {
+  _slFilters = { estado: 'EN ESTUDIO' };
+  _reGo('solicitudes');
+}
 // Navegar a un tab desde una tarjeta del resumen
 function _reGo(tabName) {
   const t = document.querySelector('.nav-tab[data-tab="' + tabName + '"]');
