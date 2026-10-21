@@ -2370,6 +2370,172 @@ td.skeleton-cell .skeleton-box { height: 12px; width: 80%; }
   pointer-events: none;
 }
 
+
+/* =====================================================================
+   TEMA "STRIPE" (oct-2026): se aplica al final para sobreescribir lo
+   anterior sin tocarlo. Principios: fondo gris muy claro, tarjetas
+   blancas sin bordes de color, UN acento (teal FIDE), números grandes
+   con la variación en píldora, gráficas finas con rejilla apenas visible,
+   tablas sin cebra con divisores suaves, tipografía Inter-like (Nunito).
+   ===================================================================== */
+:root {
+  --bg: #f6f8fa;
+  --card: #ffffff;
+  --border: #e3e8ee;
+  --border-soft: #ebeef3;
+  --neutral-900: #30313d;
+  --neutral-700: #414552;
+  --neutral-600: #596171;
+  --neutral-500: #687385;
+  --neutral-300: #a3acb9;
+  --neutral-200: #d5dbe1;
+  --neutral-100: #ebeef3;
+  --neutral-50:  #f6f8fa;
+  --text: #30313d;
+  --text-secondary: #687385;
+  --shadow: 0 1px 2px rgba(48,49,61,0.04), 0 0 0 1px rgba(48,49,61,0.02);
+  --shadow-hover: 0 2px 6px rgba(48,49,61,0.08);
+  --shadow-lg: 0 8px 24px rgba(48,49,61,0.10);
+  --radius: 10px;
+  --radius-sm: 8px;
+  --pos: #0f7b6c; --pos-bg: #e3f3ef;
+  --neg: #b8680f; --neg-bg: #fcf0dd;
+}
+body { background: var(--bg); color: var(--text); }
+
+/* ---- Cabecera: blanca, logo en teal, acciones neutras ---- */
+.header { background: #fff; color: var(--neutral-900); border-bottom: 1px solid var(--border); padding: 0.9rem 2rem; }
+.fide-logo { filter: none; height: 44px; }
+.header-title { border-left: 1px solid var(--border); padding-left: 1.25rem; }
+.header-title h1 { text-transform: none; letter-spacing: -0.2px; font-size: 1.1rem; font-weight: 700; color: var(--neutral-900); opacity: 1; }
+.header-title .subtitle { color: var(--neutral-500); opacity: 1; font-size: 0.86rem; }
+.header-right { opacity: 1; color: var(--neutral-700); }
+.header-right strong { color: var(--neutral-900); }
+.header-btn { background: #fff; border: 1px solid var(--border); color: var(--neutral-700); box-shadow: 0 1px 1px rgba(0,0,0,0.03); border-radius: 8px; }
+.header-btn:hover { background: var(--neutral-50); border-color: var(--neutral-200); color: var(--neutral-900); }
+#userName { color: var(--neutral-600); font-weight: 600 !important; }
+
+/* ---- Navegación lateral ---- */
+.sidebar { background: #fff; border-right: 1px solid var(--border); }
+.sidebar-header { color: var(--neutral-300); font-size: 0.72rem; letter-spacing: 0.8px; }
+.nav-group-label { color: var(--neutral-500); font-size: 0.72rem; letter-spacing: 0.8px; font-weight: 700; }
+.nav-group-label .cat-icon { opacity: 0.7; }
+.nav-tab { color: var(--neutral-700); font-weight: 500; border-left: none; border-radius: 8px; }
+.nav-tab:hover { background: var(--neutral-50); color: var(--neutral-900); }
+.nav-tab.active { background: var(--fide-teal-tint); color: var(--fide-teal-deeper); font-weight: 700; border-left: none; }
+
+/* ---- Contenedores: módulo, filtros, tarjetas ---- */
+.module-header, .filters, .table-section, .chart-card, .kpi-card, .re-card {
+  border: 1px solid var(--border); box-shadow: var(--shadow); border-radius: var(--radius);
+}
+.module-header { padding: 14px 18px; }
+.module-title svg { background: var(--neutral-50); color: var(--neutral-600); border-radius: 8px; }
+.module-title h2 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.2px; color: var(--neutral-900); }
+.module-meta { color: var(--neutral-500); }
+.chart-card { padding: 18px 18px 14px; }
+.chart-card:hover { border-color: var(--border); box-shadow: var(--shadow); }
+.chart-card h3, .table-section h3 { font-size: 0.95rem; font-weight: 600; color: var(--neutral-900); border-bottom: none; padding-bottom: 0; margin-bottom: 12px; }
+.chart-card h3 .dot { display: none; }
+.re-h3-sub { color: var(--neutral-500); font-weight: 400; }
+.subnav { background: var(--bg); }
+.subnav button { border-radius: 8px; }
+
+/* ---- Tarjetas KPI: sin borde de color, ícono discreto, número grande ---- */
+.kpi-card { border-left: 1px solid var(--border) !important; padding: 16px 18px 14px; }
+.kpi-card.mint, .kpi-card.blue, .kpi-card.yellow, .kpi-card.coral, .kpi-card.teal, .kpi-card.magenta { border-left-color: var(--border) !important; }
+.kpi-card:hover, .kpi-card:focus-within { border-color: var(--neutral-200); box-shadow: var(--shadow-hover); }
+.kpi-card.kpi-active { outline: none; border-color: var(--fide-teal) !important; box-shadow: 0 0 0 3px var(--fide-teal-tint); background: #fff; }
+.kpi-card.kpi-active::before { color: var(--fide-teal-dark); }
+.kpi-icon { display: none; }
+.kpi-card.blue .kpi-icon, .kpi-card.yellow .kpi-icon, .kpi-card.coral .kpi-icon, .kpi-card.magenta .kpi-icon, .kpi-card.mint .kpi-icon, .kpi-card.teal .kpi-icon { display: none; }
+.kpi-label { text-transform: none; letter-spacing: 0; font-size: 0.86rem; font-weight: 500; color: var(--neutral-500); margin-bottom: 6px; }
+.kpi-value { font-size: 1.75rem; font-weight: 600; color: var(--neutral-900); letter-spacing: -0.02em; line-height: 1.05; }
+.kpi-sub { color: var(--neutral-500); font-weight: 500; margin-top: 6px; }
+.kpi-info { border-color: var(--border); color: var(--neutral-300); top: 12px; right: 12px; }
+.kpi-info:hover { background: var(--neutral-900); border-color: var(--neutral-900); }
+.kpi-group-label { color: var(--neutral-500); letter-spacing: 0.6px; font-weight: 700; }
+.kpi-group-label::after { background: var(--border); }
+
+/* Píldoras de variación (vs mes anterior / vs año anterior) */
+.kpi-delta, .kpi-yoy, .re-card .re-delta, .kpi-sub .up, .kpi-sub .down { font-weight: 500; color: var(--neutral-600); }
+.kpi-delta .up, .kpi-yoy .up, .re-delta .up, .kpi-sub .up,
+.kpi-delta .down, .kpi-yoy .down, .re-delta .down, .kpi-sub .down,
+.kpi-delta .flat, .kpi-yoy .flat, .re-delta .flat {
+  display: inline-block; padding: 1px 7px; border-radius: 999px; font-weight: 700; font-size: 0.8rem; line-height: 1.4; margin-right: 2px; font-variant-numeric: tabular-nums;
+}
+.kpi-delta .up, .kpi-yoy .up, .re-delta .up, .kpi-sub .up { background: var(--pos-bg); color: var(--pos); }
+.kpi-delta .down, .kpi-yoy .down, .re-delta .down, .kpi-sub .down { background: var(--neg-bg); color: var(--neg); }
+.kpi-delta .flat, .kpi-yoy .flat, .re-delta .flat { background: var(--neutral-50); color: var(--neutral-500); }
+.kpi-yoy .prev { color: var(--neutral-300); }
+
+/* ---- Home ---- */
+.re-card { border-left: 1px solid var(--border) !important; padding: 18px 20px; }
+.re-card.riesgo, .re-card.ok { border-left-color: var(--border) !important; }
+.re-card .re-lbl { text-transform: none; letter-spacing: 0; font-size: 0.88rem; font-weight: 500; color: var(--neutral-500); }
+.re-card .re-val { font-weight: 600; letter-spacing: -0.02em; }
+.re-hero .re-val { font-size: 2.6rem; }
+.re-card .re-sub { color: var(--neutral-500); font-weight: 500; }
+.re-hero-mini b { font-weight: 600; }
+.re-icv-val { font-weight: 600; }
+.re-icv-status { border-radius: 999px; font-size: 0.74rem; }
+.re-alerts-card .re-alert { border-left-width: 3px; border-radius: 8px; }
+.re-updates { color: var(--neutral-500); }
+.re-badge { font-size: 0.68rem; }
+.re-comp-legend, .re-minirow { color: var(--neutral-600); }
+.re-minirow .re-minibar { background: var(--neutral-100); }
+.yoy-toggle { border-radius: 999px; }
+
+/* ---- Tablas: sin cebra, divisores suaves, cabecera discreta ---- */
+.data-table th { background: #fff; color: var(--neutral-500); font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; border-bottom: 1px solid var(--border); padding: 10px 12px; }
+.data-table th:hover { background: var(--neutral-50); color: var(--neutral-900); }
+.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-soft); color: var(--neutral-700); }
+.data-table tr:nth-child(even) td { background: transparent; }
+.data-table tr:hover td { background: var(--neutral-50); }
+.data-table .num { font-weight: 500; color: var(--neutral-900); }
+.data-table tr.fin-total td { background: var(--neutral-50); }
+.table-search-input { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font: inherit; }
+.table-search-input:focus { outline: none; border-color: var(--fide-teal); box-shadow: 0 0 0 3px var(--fide-teal-tint); }
+.tabla-nota { color: var(--neutral-500); }
+.role-pill { border-radius: 999px; font-weight: 600; letter-spacing: 0.3px; }
+.pagination button, .page-btn { border-radius: 8px; }
+
+/* ---- Botones y campos ---- */
+.btn { border-radius: 8px; font-weight: 600; box-shadow: 0 1px 1px rgba(0,0,0,0.03); }
+.btn-reset { background: #fff; border: 1px solid var(--border); color: var(--neutral-700); }
+.btn-reset:hover { background: var(--neutral-50); border-color: var(--neutral-200); }
+.btn-export, .btn-primary-action { background: var(--fide-teal); border: 1px solid var(--fide-teal-dark); color: #fff; }
+.btn-export:hover, .btn-primary-action:hover { background: var(--fide-teal-dark); }
+.btn-secondary-upload { border-radius: 8px; }
+.filters select, .filters input, .sel-periodo, .filter-group select, .filter-group input { border: 1px solid var(--border); border-radius: 8px; background: #fff; color: var(--neutral-900); }
+.filters select:focus, .filters input:focus, .sel-periodo:focus { outline: none; border-color: var(--fide-teal); box-shadow: 0 0 0 3px var(--fide-teal-tint); }
+.filter-group label { color: var(--neutral-500); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.seg { border-radius: 8px; }
+.seg-btn.active { background: var(--neutral-900); color: #fff; }
+
+/* ---- Chips de filtro ---- */
+.chart-filters-bar { border-radius: 10px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.chip { background: #fff; color: var(--neutral-900); border: 1px solid var(--neutral-200); border-radius: 999px; font-weight: 500; }
+.chip strong { font-weight: 700; }
+.chip:hover { background: var(--neutral-900); color: #fff; border-color: var(--neutral-900); }
+.chip-clear { border-radius: 999px; }
+
+/* ---- Avisos, tooltips, varios ---- */
+.cross-filter-hint { background: var(--neutral-50); border: 1px dashed var(--border); border-radius: 8px; color: var(--neutral-600); }
+.upload-status-badge, .hist-info { border-radius: 999px; }
+.kpi-tooltip { border-radius: 8px; }
+.footer { color: var(--neutral-400, #9aa3b2); }
+.initial-loader .loader-card { border-radius: 12px; box-shadow: var(--shadow-lg); }
+.user-modal-card, .ficha-panel { border-radius: 12px; }
+.toast { border-radius: 10px; }
+
+/* ---- Móvil: la barra superior también blanca ---- */
+.mobile-topbar { background: #fff; color: var(--neutral-900); border-bottom: 1px solid var(--border); }
+.mobile-topbar .menu-label { color: var(--neutral-900); }
+.mobile-topbar .btn-salir { background: #fff; border: 1px solid var(--border); color: var(--neutral-700); }
+.mobile-topbar .fide-logo, .mobile-topbar img { filter: none; }
+.sidebar-toggle { background: var(--neutral-50); color: var(--neutral-900); border: 1px solid var(--border); }
+.sidebar-toggle:hover { background: var(--neutral-100); }
+.bottom-nav { border-top: 1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -4085,6 +4251,32 @@ Chart.defaults.plugins.legend.labels.padding = _isMobileChart ? 12 : 14;
 Chart.defaults.plugins.legend.labels.boxWidth = _isMobileChart ? 12 : 10;
 Chart.defaults.plugins.legend.labels.boxHeight = _isMobileChart ? 12 : 10;
 Chart.defaults.plugins.legend.labels.font = { weight: 600, size: 13 };
+// Tema "Stripe": rejilla apenas visible, sin bordes de eje, etiquetas grises,
+// líneas finas con puntos solo al pasar el ratón, barras con esquinas suaves.
+Chart.defaults.color = '#687385';
+Chart.defaults.borderColor = '#ebeef3';
+Chart.defaults.scale.grid.color = '#ebeef3';
+Chart.defaults.scale.grid.drawTicks = false;
+Chart.defaults.scale.border.display = false;
+Chart.defaults.scale.ticks.padding = 8;
+Chart.defaults.elements.line.borderWidth = 2;
+Chart.defaults.elements.line.tension = 0.35;
+Chart.defaults.elements.point.radius = 0;
+Chart.defaults.elements.point.hoverRadius = 5;
+Chart.defaults.elements.point.hitRadius = 12;
+Chart.defaults.elements.bar.borderRadius = 4;
+Chart.defaults.elements.arc.borderWidth = 2;
+Chart.defaults.plugins.tooltip.backgroundColor = '#30313d';
+Chart.defaults.plugins.tooltip.titleColor = '#ffffff';
+Chart.defaults.plugins.tooltip.bodyColor = '#e3e8ee';
+Chart.defaults.plugins.tooltip.borderWidth = 0;
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.cornerRadius = 8;
+Chart.defaults.plugins.legend.labels.boxWidth = 8;
+Chart.defaults.plugins.legend.labels.boxHeight = 8;
+Chart.defaults.plugins.legend.labels.pointStyle = 'circle';
+Chart.defaults.plugins.legend.labels.font = { weight: 500, size: 12 };
+Chart.defaults.plugins.legend.labels.color = '#596171';
 
 // Toast component — reemplaza alert() nativo con feedback de marca FIDE.
 // Uso: showToast('Saldo actualizado: 765 cuentas');
@@ -4265,7 +4457,11 @@ function ventanaPeriodo(preset) {
 // el año corrido, que es lo que gerencia entiende por "a la fecha".
 function ventanaComparacion(v) {
   if (!v) { const hoy = new Date(); v = { from: `${hoy.getFullYear()}-01-01`, to: _toISO(hoy), label: 'año corrido' }; }
-  return { from: shiftYearISO(v.from, -1), to: shiftYearISO(v.to, -1), label: (v.label || 'período') + ' del año anterior', base: v };
+  const from = shiftYearISO(v.from, -1), to = shiftYearISO(v.to, -1);
+  const mes = iso => _MESES_ES[parseInt(iso.slice(5, 7), 10) - 1].toLowerCase();
+  const y = to.slice(0, 4);
+  const label = from.slice(0, 7) === to.slice(0, 7) ? `${mes(to)} ${y}` : `${mes(from)}–${mes(to)} ${y}`;
+  return { from, to, label, base: v };
 }
 function enVentana(fecha, v) {
   if (!v) return true;
@@ -4277,7 +4473,7 @@ function enVentana(fecha, v) {
 }
 // Texto de variación año a año para una tarjeta.
 function deltaYoyHtml(cur, prev, fmtV, etiqueta, invertir) {
-  if (!prev) return `<span class="prev">Sin datos del año anterior${etiqueta ? ' (' + etiqueta.replace(' del año anterior', '') + ')' : ''}</span>`;
+  if (!prev) return `<span class="prev">Sin datos en ${etiqueta || 'el año anterior'}</span>`;
   const d = (cur - prev) / Math.abs(prev) * 100;
   const bueno = invertir ? d <= 0 : d >= 0;
   const cls = Math.abs(d) < 0.5 ? 'flat' : (bueno ? 'up' : 'down');
