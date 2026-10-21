@@ -4576,7 +4576,9 @@ function updateEvolucion() {
         const monthKey = months[idx];
         if (monthKey) {
           evoDrillMonth = monthKey;
-          updateEvolucion();
+          // Diferido: la gráfica se destruye dentro de su propio clic y
+          // Chart.js aún está procesando el evento ("handleEvent" undefined).
+          setTimeout(updateEvolucion, 0);
         }
       },
       plugins: {
@@ -6236,7 +6238,7 @@ function renderSolicitudes() {
       onClick: (evt, els) => {
         if (!els.length) return;
         const label = estLabels[els[0].index];
-        toggleSlChartFilter('estado', label);
+        setTimeout(() => toggleSlChartFilter('estado', label), 0);
       },
       plugins: {
         legend: { position: 'bottom' },
@@ -6287,7 +6289,7 @@ function renderSolicitudes() {
       onClick: (evt, els) => {
         if (!els.length) return;
         const label = lnLabels[els[0].index];
-        toggleSlChartFilter('linea', label);
+        setTimeout(() => toggleSlChartFilter('linea', label), 0);
       },
       layout: { padding: { right: 50 } },
       plugins: { legend: { display: YOY, position: 'bottom' }, datalabels: { anchor: 'end', align: 'end', offset: 4, clip: false, color: '#323130', font: { size: 12, weight: 700 }, formatter: v => fmt(v) } },
@@ -7473,7 +7475,7 @@ function renderProyeccion() {
           if (!items || !items.length) return;
           const idx = items[0].index;
           const monthKey = keys[idx];
-          if (monthKey) { _prDrillMonth = monthKey; renderProyeccion(); }
+          if (monthKey) { _prDrillMonth = monthKey; setTimeout(renderProyeccion, 0); }
         },
         plugins: {
           legend: { position: 'top' },
