@@ -1992,6 +1992,11 @@ select:focus-visible {
 .kpi-card.kpi-active { outline: 2px solid var(--fide-teal); background: var(--fide-teal-tint); }
 .kpi-card.kpi-active::before { content: 'FILTRO ACTIVO'; position: absolute; left: 12px; bottom: 8px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.6px; color: var(--fide-teal-deeper); }
 .sel-periodo { padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-size: 0.88rem; font-weight: 600; background: var(--card); min-height: 36px; cursor: pointer; }
+.data-table .fin-col-hl { background: var(--fide-teal-tint) !important; box-shadow: inset 2px 0 0 var(--fide-teal), inset -2px 0 0 var(--fide-teal); }
+.vintage-heatmap td.vh-click { cursor: pointer; }
+.vintage-heatmap td.vh-click:hover { outline: 2px solid var(--fide-teal); outline-offset: -2px; }
+.re-comp-legend span[data-go] { cursor: pointer; } .re-comp-legend span[data-go]:hover { text-decoration: underline; }
+.re-minirow[data-go] { cursor: pointer; } .re-minirow[data-go]:hover b { color: var(--fide-teal-dark); }
 .tabla-nota { font-size: 0.84rem; color: var(--neutral-600); padding: 8px 4px 0; }
 .tabla-nota b { color: var(--neutral-900); }
 .kpi-delta { font-size: 0.84rem; font-weight: 700; margin-top: 6px; color: var(--neutral-600); font-variant-numeric: tabular-nums; }
@@ -4624,8 +4629,21 @@ function legendFilter(dimension) {
 // Supported filter dimensions from chart clicks
 const FILTER_LABELS = {
   estado: 'Estado', linea: 'Línea', calificacion: 'Calificación',
-  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado', mora30: 'Mora'
+  mora: 'Mora', mes_desembolso: 'Mes', aliado: 'Aliado', mora30: 'Mora',
+  tasa: 'Tasa', plazo: 'Plazo'
 };
+// Mismos cortes que usan las gráficas de tasas y plazos (para que el clic en
+// una barra filtre exactamente lo que esa barra cuenta).
+function getTasaBucket(t) {
+  t = parseFloat(t); if (isNaN(t) || t <= 0) return null;
+  if (t < 22) return '20-22%'; if (t < 24) return '22-24%'; if (t < 26) return '24-26%'; if (t < 28) return '26-28%';
+  if (t < 30) return '28-30%'; if (t < 35) return '30-35%'; if (t < 40) return '35-40%'; return '40%+';
+}
+function getPlazoBucket(p) {
+  p = parseInt(p); if (isNaN(p) || p <= 0) return null;
+  for (const lim of [30,60,90,120,150,180,210,240,270,300,360]) if (p <= lim) return String(lim);
+  return '360+';
+}
 // Clic en tarjeta → filtro en la lista (y en las gráficas) 1 a 1.
 function xfCarteraEstado(v) {
   const sel = document.getElementById('fEstado');
@@ -4701,6 +4719,8 @@ function matchesChartFilters(r) {
     if (dim === 'mora30') {
       if (r.estado !== 'ACTIVO' || (parseInt(r.dias_mora) || 0) <= 30) return false;
     }
+    if (dim === 'tasa' && getTasaBucket(r.tasa_efectiva) !== val) return false;
+    if (dim === 'plazo' && getPlazoBucket(r.plazo) !== val) return false;
   }
   return true;
 }
@@ -5790,7 +5810,7 @@ function renderRcMensual() {
   const el = document.getElementById('chartRcMensual'); if (!el) return;
   const dsets = [
       { type:'bar', label:'Recaudado', data: mons.map(m=>monMap[m]||0),
-        backgroundColor: FIDE.teal+'cc', borderRadius:4, order:2 },
+        backgroundColor: mons.map(m => (!_rcFiltroMes || m === _rcFiltroMes) ? FIDE.teal+'cc' : FIDE.grayLight), borderRadius:4, order:2 },
       { type:'line', label:'Desembolsado', data: mons.map(m=>desMap[m]||0),
         borderColor: FIDE.blue, backgroundColor: FIDE.blue,
         borderWidth:2, tension:0.3, pointRadius: mons.length > 40 ? 0 : 3, pointHoverRadius:5, order:1 },
@@ -5803,8 +5823,9 @@ function renderRcMensual() {
   _rcCharts.mensual = new Chart(el, {
     data:{ labels: mons.map(_reEvoLbl), datasets: dsets },
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+      onClick: (evt, els) => { if (!els.length) return; const m = mons[els[0].index]; _rcFiltroMes = (_rcFiltroMes === m) ? '' : m; setTimeout(renderRecaudo, 0); },
       plugins:{ legend:{ display:true, position:'bottom' }, datalabels:{ display:false },
-        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y) } } },
+        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + fmtCurrency(ctx.parsed.y), footer: () => _rcFiltroMes ? 'Clic para quitar el filtro de mes' : 'Clic para ver solo este mes' } } },
       scales:{ y:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' }, title:{ display:true, text:'Pesos' } },
                x:{ grid:{ display:false }, ticks:{ maxRotation: mons.length > 24 ? 60 : 0, autoSkip:true } } } }
   });
@@ -5829,10 +5850,12 @@ async function loadRecaudo() {
     showToast('Error al cargar Recaudo. Verifica tu conexión.', 'err');
   }
 }
-let _rcState = null, _rcFiltro = '';
+let _rcState = null, _rcFiltro = '', _rcFiltroAliado = '', _rcFiltroMes = '';
 const RC_FILTRO_LABEL = { pago: 'Solo recaudo (Pago)', capital: 'Con abono a capital', interes: 'Con interés corriente', mora: 'Con interés de mora' };
 const _esPago = p => /^PAGO/i.test(String(p.tipo_mvto || ''));
 function _rcPasaFiltro(p) {
+  if (_rcFiltroAliado && (p.aliado || 'N/A') !== _rcFiltroAliado) return false;
+  if (_rcFiltroMes && String(p.fecha_movimiento || '').slice(0, 7) !== _rcFiltroMes) return false;
   if (!_rcFiltro) return true;
   if (_rcFiltro === 'pago') return _esPago(p);
   if (_rcFiltro === 'capital') return (parseFloat(p.capital) || 0) > 0;
@@ -5842,6 +5865,7 @@ function _rcPasaFiltro(p) {
 }
 function xfRecaudo(k) {
   _rcFiltro = (_rcFiltro === k) ? '' : k;
+  if (!k) { _rcFiltroAliado = ''; _rcFiltroMes = ''; }
   renderRecaudo();
   try { localStorage.setItem('fide_chart_hint_dismissed', '1'); document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none'); } catch (e) {}
 }
@@ -5861,7 +5885,9 @@ function renderRecaudo() {
   const bar = document.getElementById('rcFilterBar'), chips = document.getElementById('rcFilterChips');
   if (bar && chips) {
     const partes = [];
-    if (_rcFiltro) partes.push(`<span class="chip" onclick="xfRecaudo('')" title="Quitar filtro">Tarjeta: <strong>${RC_FILTRO_LABEL[_rcFiltro]}</strong> <span class="x">&times;</span></span>`);
+    if (_rcFiltro) partes.push(`<span class="chip" onclick="xfRecaudo('${_rcFiltro}')" title="Quitar filtro">Tarjeta: <strong>${RC_FILTRO_LABEL[_rcFiltro]}</strong> <span class="x">&times;</span></span>`);
+    if (_rcFiltroAliado) partes.push(`<span class="chip" onclick="_rcFiltroAliado='';renderRecaudo()" title="Quitar filtro">Aliado: <strong>${esc(_rcFiltroAliado)}</strong> <span class="x">&times;</span></span>`);
+    if (_rcFiltroMes) partes.push(`<span class="chip" onclick="_rcFiltroMes='';renderRecaudo()" title="Quitar filtro">Mes: <strong>${_reEvoLbl(_rcFiltroMes)}</strong> <span class="x">&times;</span></span>`);
     if (v) partes.push(`<span class="chip" onclick="document.getElementById('rcPeriodo').value='all';renderRecaudo()" title="Quitar período">Período: <strong>${v.label}</strong> <span class="x">&times;</span></span>`);
     chips.innerHTML = partes.join('');
     bar.classList.toggle('active', partes.length > 0);
@@ -5923,26 +5949,33 @@ function renderRecaudo() {
 
   Object.keys(_rcCharts).forEach(k => { _rcCharts[k]?.destroy?.(); delete _rcCharts[k]; });
 
-  // Top aliados (sobre lo filtrado)
+  // Top aliados: se arma sin el filtro de aliado (para que las demás barras
+  // sigan visibles) y el aliado elegido se resalta. Clic = filtrar por él.
   const aliMap = {};
-  lf.forEach(p => { const k = p.aliado || 'N/A'; aliMap[k] = (aliMap[k]||0) + (p.total||0); });
+  l.filter(p => enVentana(p.fecha_movimiento, v) && (_rcFiltro ? _rcPasaFiltro({ ...p, aliado: _rcFiltroAliado || p.aliado }) : true) && (!_rcFiltroMes || String(p.fecha_movimiento || '').slice(0, 7) === _rcFiltroMes))
+   .forEach(p => { const k = p.aliado || 'N/A'; aliMap[k] = (aliMap[k]||0) + (p.total||0); });
   const topAli = Object.entries(aliMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
   _rcCharts.aliado = new Chart(document.getElementById('chartRcAliado'), {
     type: 'bar',
-    data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+    data: { labels: topAli.map(a=>a[0]), datasets: [{ label:'Recaudo', data: topAli.map(a=>a[1]),
+      backgroundColor: topAli.map(a => (!_rcFiltroAliado || a[0] === _rcFiltroAliado) ? FIDE.teal+'cc' : FIDE.grayLight), borderRadius:4 }] },
     options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 70 } },
-      plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmtM(v) } },
+      onClick: (evt, els) => { if (!els.length) return; const k = topAli[els[0].index][0]; _rcFiltroAliado = (_rcFiltroAliado === k) ? '' : k; setTimeout(renderRecaudo, 0); },
+      plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmtM(v) },
+        tooltip:{ callbacks:{ footer: () => _rcFiltroAliado ? 'Clic para quitar el filtro' : 'Clic para filtrar por este aliado' } } },
       scales:{ x:{ ticks:{ callback:v=>fmtM(v) }, grid:{ color:'#F3F2F1' } }, y:{ grid:{ display:false } } } },
     plugins: [ChartDataLabels]
   });
 
   // Serie mensual: recaudo (todas las fechas, con el filtro de tarjeta) vs desembolsos de la cartera
   const monMap = {};
+  const mesGuardado = _rcFiltroMes; _rcFiltroMes = '';
   l.filter(_rcPasaFiltro).forEach(p => {
     if (!p.fecha_movimiento) return;
     const m = p.fecha_movimiento.substring(0,7);
     monMap[m] = (monMap[m]||0) + (p.total||0);
   });
+  _rcFiltroMes = mesGuardado;
   const desMap = {};
   (RAW_DATA || []).forEach(c => {
     if (!c.fecha_desembolso) return;
@@ -6318,11 +6351,13 @@ async function loadJuridico() {
     showToast('Error al cargar Cobro Jurídico. Verifica tu conexión.', 'err');
   }
 }
-let _jrState = null, _jrFiltro = '';
-const JR_FILTRO_LABEL = { probable: 'Recuperación probable', remota: 'Recuperación remota', medida: 'Con medida cautelar', cruce: 'Cruzados con cartera' };
+let _jrState = null, _jrFiltro = '', _jrJuzgado = '';
+const JR_FILTRO_LABEL = { probable: 'Recuperación probable', remota: 'Recuperación remota', otro: 'Probabilidad sin clasificar', medida: 'Con medida cautelar', cruce: 'Cruzados con cartera' };
 const _jrConMedida = x => { const m = String(x.medida_cautelar || '').trim(); return !!m && !/^(no\b|sin\b|n\/a|ningun)/i.test(m); };
 function _jrPasa(x) {
+  if (_jrJuzgado && (x.juzgado || 'N/A') !== _jrJuzgado) return false;
   if (!_jrFiltro) return true;
+  if (_jrFiltro === 'otro') return !/probab|remot/i.test(x.probabilidad || '');
   if (_jrFiltro === 'probable') return /probab/i.test(x.probabilidad || '');
   if (_jrFiltro === 'remota') return /remot/i.test(x.probabilidad || '');
   if (_jrFiltro === 'medida') return _jrConMedida(x);
@@ -6331,6 +6366,7 @@ function _jrPasa(x) {
 }
 function xfJuridico(k) {
   _jrFiltro = (_jrFiltro === k) ? '' : k;
+  if (!k) _jrJuzgado = '';
   renderJuridico();
   const tbl = document.getElementById('tblJuridico');
   if (tbl && _jrFiltro && window.innerWidth > 768) setTimeout(() => tbl.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
@@ -6341,10 +6377,14 @@ function renderJuridico() {
   const l = _jrState.l.filter(_jrPasa);
   const bar = document.getElementById('jrFilterBar'), chips = document.getElementById('jrFilterChips');
   if (bar && chips) {
-    chips.innerHTML = _jrFiltro ? `<span class="chip" onclick="xfJuridico('')" title="Quitar filtro">Tarjeta: <strong>${JR_FILTRO_LABEL[_jrFiltro]}</strong> <span class="x">&times;</span></span>` : '';
-    bar.classList.toggle('active', !!_jrFiltro);
+    const partes = [];
+    if (_jrFiltro) partes.push(`<span class="chip" onclick="xfJuridico('${_jrFiltro}')" title="Quitar filtro">Probabilidad: <strong>${JR_FILTRO_LABEL[_jrFiltro]}</strong> <span class="x">&times;</span></span>`);
+    if (_jrJuzgado) partes.push(`<span class="chip" onclick="_jrJuzgado='';renderJuridico()" title="Quitar filtro">Juzgado: <strong>${esc(_jrJuzgado)}</strong> <span class="x">&times;</span></span>`);
+    chips.innerHTML = partes.join('');
+    bar.classList.toggle('active', partes.length > 0);
   }
   [['jrCardProb','probable'],['jrCardRem','remota'],['jrCardMed','medida'],['jrCardCruce','cruce'],['jrCardSaldo','cruce']].forEach(([id, k]) => _marcarCard(id, _jrFiltro === k));
+  _marcarCard('jrCardTotal', !!_jrJuzgado && !_jrFiltro);
   try {
     window._jrData = l;   // para exportar (respeta el filtro)
     const _matched = (l || []).filter(r => r.cartera_match);
@@ -6385,18 +6425,23 @@ function renderJuridico() {
         data:[nProb, nRem, Math.max(0, tot - nProb - nRem)],
         backgroundColor:[FIDE.teal, FIDE.gray, FIDE.grayLight], borderWidth:3, borderColor:'#fff' }] },
       options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
-        plugins:{ legend:{ position:'bottom' }, datalabels:{ color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
+        onClick: (evt, els) => { if (!els.length) return; const k = ['probable','remota','otro'][els[0].index]; setTimeout(() => xfJuridico(k), 0); },
+        plugins:{ legend:{ position:'bottom', onClick: (e, item) => { const k = ['probable','remota','otro'][item.index]; setTimeout(() => xfJuridico(k), 0); } }, datalabels:{ color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
           formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t&&v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } } },
       plugins: [ChartDataLabels]
     });
 
     const juzMap = {};
-    l.forEach(x => { const k = x.juzgado || 'N/A'; juzMap[k] = (juzMap[k]||0) + 1; });
+    const jg = _jrJuzgado; _jrJuzgado = '';
+    _jrState.l.filter(_jrPasa).forEach(x => { const k = x.juzgado || 'N/A'; juzMap[k] = (juzMap[k]||0) + 1; });
+    _jrJuzgado = jg;
     const topJuz = Object.entries(juzMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
     _jrCharts.juzgado = new Chart(document.getElementById('chartJrJuzgado'), {
       type:'bar',
-      data:{ labels: topJuz.map(j=>j[0].length>40?j[0].substring(0,40)+'…':j[0]), datasets:[{ label:'Procesos', data: topJuz.map(j=>j[1]), backgroundColor: FIDE.teal+'cc', borderRadius:4 }] },
+      data:{ labels: topJuz.map(j=>j[0].length>40?j[0].substring(0,40)+'…':j[0]), datasets:[{ label:'Procesos', data: topJuz.map(j=>j[1]),
+        backgroundColor: topJuz.map(j => (!_jrJuzgado || j[0] === _jrJuzgado) ? FIDE.teal+'cc' : FIDE.grayLight), borderRadius:4 }] },
       options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, layout:{ padding:{ right: 30 } },
+        onClick: (evt, els) => { if (!els.length) return; const k = topJuz[els[0].index][0]; _jrJuzgado = (_jrJuzgado === k) ? '' : k; setTimeout(renderJuridico, 0); },
         plugins:{ legend:{ display:false }, datalabels:{ anchor:'end', align:'end', offset:4, clip:false, color:'#323130', font:{ size:12, weight:700 }, formatter: v => fmt(v) } },
         scales:{ x:{ grid:{ color:'#F3F2F1' }, ticks:{ precision:0, stepSize:1 } }, y:{ grid:{ display:false }, ticks:{ font:{ size:12 } } } } },
       plugins: [ChartDataLabels]
@@ -6518,6 +6563,7 @@ async function loadFinancieros() {
     // Chart evolución
     if (_efChart) { _efChart.destroy(); _efChart = null; }
     const months = (s.by_month || []).map(b => _MESES_ES[(parseInt(b.month, 10) || 1) - 1] || `Mes ${b.month}`);
+    const mesesNum = (s.by_month || []).map(b => parseInt(b.month, 10));
     _efChart = new Chart(document.getElementById('chartFinEvol'), {
       type: 'bar',
       data: {
@@ -6534,8 +6580,9 @@ async function loadFinancieros() {
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode:'index', intersect: false },
+        onClick: (evt, els) => { if (!els.length) return; const m = mesesNum[els[0].index]; setTimeout(() => resaltarMesFin(m), 0); },
         plugins: { legend:{ position: 'top' }, datalabels: { display: false },
-          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}` } } },
+          tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${fmtCurrency(ctx.raw)}`, footer: () => 'Clic para resaltar este mes en la tabla' } } },
         scales: {
           x: { grid: { display: false } },
           y: { beginAtZero: true, ticks: { callback: v => fmtM(v) }, grid: { color: '#F3F2F1' } }
@@ -6687,7 +6734,20 @@ function renderFinTable(rows) {
   }).join('');
 }
 
-// Clic en tarjeta de EEFF → la tabla se abre en ese grupo.
+// Clic en un mes de la gráfica → se resalta esa columna en la tabla (y se
+// despliegan los grupos para verla completa). Clic de nuevo = quitar.
+let _finMesHl = null;
+function resaltarMesFin(mes) {
+  _finMesHl = (_finMesHl === mes) ? null : mes;
+  const tbl = document.getElementById('tblFinancieros'); if (!tbl) return;
+  tbl.querySelectorAll('.fin-col-hl').forEach(c => c.classList.remove('fin-col-hl'));
+  if (_finMesHl) {
+    if (_finLastRows) { expandAllFin(); }
+    tbl.querySelectorAll(`tr > *:nth-child(${2 + _finMesHl})`).forEach(c => c.classList.add('fin-col-hl'));
+    const cab = tbl.querySelector(`thead tr > *:nth-child(${2 + _finMesHl})`);
+    if (cab) cab.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'center' });
+  }
+}
 function xfFin(code) {
   if (!_finLastRows) return;
   if (code === 'utilidad') {
@@ -6706,6 +6766,7 @@ function toggleFinGroup(code) {
   if (_finExpanded.has(code)) _finExpanded.delete(code);
   else _finExpanded.add(code);
   if (_finLastRows) renderFinTable(_finLastRows);
+  if (_finMesHl) { const m = _finMesHl; _finMesHl = null; resaltarMesFin(m); }
 }
 
 function expandAllFin() {
@@ -6942,6 +7003,12 @@ function openAgingDrillMulti(keys, label) {
   keys.forEach(k => (all[k] || []).forEach(r => lista.push(r)));
   all['multi'] = lista;
   openAgingDrill('multi', label);
+}
+// Clic en una celda del mapa de calor: los créditos de ESA cosecha en ESE rango de mora.
+function drillCosecha(ym, bucketKey, bucketLabel) {
+  const all = window._agingCreditsByBucket || {};
+  all['multi'] = (all[bucketKey] || []).filter(r => String(r.fecha_desembolso || '').slice(0, 7) === ym);
+  openAgingDrill('multi', `Cosecha ${ym} · ${bucketLabel}`);
 }
 function irACosechaAtencion() {
   const ym = window._anPeorYM;
@@ -7237,7 +7304,8 @@ function renderAnalitica() {
           // No mostrar para Al día — solo resaltar mora
           const sev = b.key === 'b0' ? (pct >= 80 ? 'sev-1' : 'sev-0') : _sevClassFromPct(pct);
           const txt = pct < 0.5 ? '·' : pct.toFixed(0) + '%';
-          html += `<td class="${sev}" title="${pct.toFixed(1)}% — ${fmtCurrency(sb)}">${txt}</td>`;
+          const clic = sb > 0 ? ` vh-click" onclick="drillCosecha('${c.ym}','${b.key}','${b.label}')"` : '"';
+          html += `<td class="${sev}${clic} title="${pct.toFixed(1)}% — ${fmtCurrency(sb)}${sb > 0 ? ' · clic para ver los créditos' : ''}">${txt}</td>`;
         });
         html += '</tr>';
       });
@@ -7971,8 +8039,11 @@ function registerChartClicks() {
   // mostrando solo las barras de esa categoría sin removerla del gráfico.
   addChartClick('chartCalifLinea', 'calificacion',
     (chart, idx, dsIdx) => chart.data.datasets[dsIdx]?.label);
-  // chartTasas and chartPlazos don't have a meaningful cross-filter dimension;
-  // clicking them used to set a bogus calificacion filter. Disabled on purpose.
+  // Tasas y plazos filtran por el MISMO corte que dibuja la barra.
+  addChartClick('chartTasas', 'tasa');
+  addChartClick('chartPlazos', 'plazo');
+  // Cosechas (barras apiladas por mes de desembolso): clic = ese mes.
+  addChartClick('chartCosecha', 'mes_desembolso');
   addChartClick('chartMoraSaldo', 'mora');
   addChartClick('chartAliados', 'aliado');
   addChartClick('chartAliadosCount', 'aliado');
@@ -8475,7 +8546,22 @@ function _reFiltraCartera(f) {
     return true;
   });
 }
-function _reStack(canvasId, legId, pairs, colors, fmtV) {
+// Abrir Cartera 360 con un filtro puesto (desde las gráficas del home).
+function _irACarteraCon(setup) {
+  const t = document.querySelector('.nav-tab[data-tab="cartera-360"]');
+  if (t) activateTab(t);
+  resetFilters();
+  // Trasladar los filtros del home que Cartera también tiene
+  const f = _reGetFilters();
+  if (f.linea) document.getElementById('fLinea').value = f.linea;
+  if (f.aliado) document.getElementById('fAliado').value = f.aliado;
+  if (f.calificacion) document.getElementById('fCalif').value = f.calificacion;
+  document.getElementById('fEstado').value = 'ACTIVO';
+  setup();
+  applyFilters(); renderChartFilterBar();
+  _scrollDetalleCartera();
+}
+function _reStack(canvasId, legId, pairs, colors, fmtV, onPick) {
   const el = document.getElementById(canvasId); const leg = document.getElementById(legId);
   if (!el) return;
   if (_reCompCharts[canvasId]) { _reCompCharts[canvasId].destroy(); delete _reCompCharts[canvasId]; }
@@ -8487,10 +8573,14 @@ function _reStack(canvasId, legId, pairs, colors, fmtV) {
     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: { padding: 0 },
       plugins: { legend: { display: false }, datalabels: { display: false },
         tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmtV(c.parsed.x)} (${(c.parsed.x / total * 100).toFixed(1)}%)` } } },
+      onClick: (evt, els) => { if (els.length && onPick) { const k = pairs[els[0].datasetIndex][0]; setTimeout(() => onPick(k), 0); } },
       scales: { x: { stacked: true, display: false, max: total }, y: { stacked: true, display: false } },
       animation: false }
   });
-  if (leg) leg.innerHTML = pairs.map((p, i) => `<span style="--c:${colors[i % colors.length]}">${esc(p[0])} <b>${(p[1] / total * 100).toFixed(0)}%</b></span>`).join('');
+  if (leg) {
+    leg.innerHTML = pairs.map((p, i) => `<span style="--c:${colors[i % colors.length]}" ${onPick ? 'data-go="1" title="Ver en Cartera"' : ''}>${esc(p[0])} <b>${(p[1] / total * 100).toFixed(0)}%</b></span>`).join('');
+    if (onPick) Array.from(leg.children).forEach((sp, i) => sp.onclick = () => onPick(pairs[i][0]));
+  }
 }
 function _reRenderComposicion(f) {
   f = f || _reGetFilters();
@@ -8503,19 +8593,23 @@ function _reRenderComposicion(f) {
   const porLinea = {};
   rows.forEach(r => { const k = r.linea || 'Sin línea'; porLinea[k] = (porLinea[k] || 0) + (parseFloat(r.saldo_capital) || 0); });
   const pl = Object.entries(porLinea).sort((a, b) => b[1] - a[1]);
-  _reStack('reCompLinea', 'reCompLineaLeg', pl, CHART_COLORS, fmtM);
+  _reStack('reCompLinea', 'reCompLineaLeg', pl, CHART_COLORS, fmtM, k => _irACarteraCon(() => { document.getElementById('fLinea').value = k; }));
   // Mora por rango (solo en mora)
   const rangos = [['1–30', 1, 30], ['31–60', 31, 60], ['61–90', 61, 90], ['91–180', 91, 180], ['181–360', 181, 360], ['+360', 361, 1e9]];
   const pm = rangos.map(([lbl, a, b]) => [lbl, rows.reduce((t, r) => { const dm = parseInt(r.dias_mora) || 0; return (dm >= a && dm <= b) ? t + (parseFloat(r.saldo_capital) || 0) : t; }, 0)]).filter(p => p[1] > 0);
-  _reStack('reCompMora', 'reCompMoraLeg', pm, ['#85ffaa', '#FFD86F', '#f0a350', '#e89a4c', '#c97a3a', '#8a4d2a'], fmtM);
+  _reStack('reCompMora', 'reCompMoraLeg', pm, ['#85ffaa', '#FFD86F', '#f0a350', '#e89a4c', '#c97a3a', '#8a4d2a'], fmtM,
+    k => _irACarteraCon(() => { chartFilters.mora = k.replace('–', '-'); }));
   // Top 5 aliados
   const porAliado = {};
   rows.forEach(r => { const k = r.aliado || 'Sin intermediario'; porAliado[k] = (porAliado[k] || 0) + (parseFloat(r.saldo_capital) || 0); });
   const top = Object.entries(porAliado).sort((a, b) => b[1] - a[1]).slice(0, 5);
   const max = top.length ? top[0][1] : 1;
   const box = document.getElementById('reCompAliados');
-  if (box) box.innerHTML = top.length ? top.map(([k, v]) => `<div class="re-minirow"><span>${esc(k)}</span><b>${fmtM(v)}</b><div class="re-minibar"><i style="width:${(v / max * 100).toFixed(0)}%"></i></div></div>`).join('')
+  if (box) box.innerHTML = top.length ? top.map(([k, v]) => `<div class="re-minirow" data-go="1" data-aliado="${esc(k)}" title="Ver en Cartera"><span>${esc(k)}</span><b>${fmtM(v)}</b><div class="re-minibar"><i style="width:${(v / max * 100).toFixed(0)}%"></i></div></div>`).join('')
                                     : '<div class="re-loading" style="padding:0.5rem;">Sin datos</div>';
+  if (box) box.querySelectorAll('.re-minirow[data-aliado]').forEach(row => {
+    row.onclick = () => _irACarteraCon(() => { document.getElementById('fAliado').value = row.dataset.aliado; });
+  });
 }
 // ---- Evolución Mensual (inteligencia de tiempo del home) ----
 let _reEvoChart = null;
@@ -8595,13 +8689,21 @@ async function loadEvolucionMensual(filtros) {
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
+        onClick: (evt, els) => {
+          if (!els.length) return;
+          const m = arr[els[0].index].mes;
+          const d1 = document.getElementById('reFDesde'), d2 = document.getElementById('reFHasta');
+          const ini = m + '-01', fin = `${m}-${String(new Date(parseInt(m.slice(0,4),10), parseInt(m.slice(5,7),10), 0).getDate()).padStart(2,'0')}`;
+          if (d1.value === ini && d2.value === fin) { d1.value = ''; d2.value = ''; } else { d1.value = ini; d2.value = fin; }
+          setTimeout(loadResumenEjecutivo, 0);
+        },
         plugins: {
           legend: { position: 'bottom' },
           datalabels: { display: false },
           tooltip: { callbacks: { label: (ctx) =>
             ctx.dataset.yAxisID === 'y'
               ? `${ctx.dataset.label}: ${fmtM(ctx.parsed.y)}`
-              : `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}` } },
+              : `${ctx.dataset.label}: ${fmt(ctx.parsed.y)}`, footer: () => 'Clic para ver solo este mes en todo el resumen' } },
         },
         scales: {
           y: { ticks: { callback: v => fmtM(v) }, title: { display: true, text: 'Pesos' } },
