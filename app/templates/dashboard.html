@@ -1601,7 +1601,23 @@ body {
   .filters, .pagination, .table-controls { display:none; }
   .chart-card, .kpi-card { break-inside:avoid; }
   .header { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  /* Resumen Ejecutivo → PDF: solo el contenido, en una columna limpia */
+  body.print-resumen .sidebar, body.print-resumen .mobile-topbar, body.print-resumen .bottom-nav,
+  body.print-resumen .header-actions, body.print-resumen .ficha-fab, body.print-resumen .yoy-toggle,
+  body.print-resumen .module-header .btn, body.print-resumen #reFilters, body.print-resumen .re-filters-toggle,
+  body.print-resumen .re-alert-mute, body.print-resumen #reAlertsToggleMuted, body.print-resumen .footer { display: none !important; }
+  body.print-resumen .app-main { padding: 0 !important; }
+  body.print-resumen .tab-content { display: none !important; }
+  body.print-resumen #tab-resumen-ejecutivo { display: block !important; }
+  body.print-resumen .re-hero, body.print-resumen .re-row2 { grid-template-columns: 1fr 1fr; }
+  body.print-resumen .re-grid { grid-template-columns: repeat(4, 1fr); }
+  body.print-resumen .re-comp { grid-template-columns: repeat(3, 1fr); }
+  body.print-resumen .re-card, body.print-resumen .chart-card { box-shadow: none; break-inside: avoid; }
+  body.print-resumen .print-pie { display: block !important; margin-top: 12px; font-size: 11px; color: #687385; }
+  body.print-resumen .header { border-bottom: 1px solid #e3e8ee; padding: 8px 0; }
+  @page { size: A4 landscape; margin: 12mm; }
 }
+.print-pie { display: none; }
 
 /* ============================================================
  *   UX HARDENING — Auditoría visual (sesión 2026-06)
@@ -2699,6 +2715,7 @@ body { background: var(--bg); color: var(--text); }
       </div>
       <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
         <span class="yoy-slot"></span>
+        <button class="btn btn-reset" style="font-size:0.88rem;" onclick="imprimirResumen()" title="Imprimir o guardar como PDF el Resumen Ejecutivo (para junta o env&iacute;o)">Imprimir / PDF</button>
         <button class="btn btn-reset" style="font-size:0.88rem;" onclick="openGlosario()" title="¿Qu&eacute; significan los t&eacute;rminos?">Glosario</button>
         <button class="btn btn-export" style="font-size:0.88rem;" onclick="loadResumenEjecutivo()">Actualizar</button>
       </div>
@@ -2738,6 +2755,7 @@ body { background: var(--bg); color: var(--text); }
       </div>
     </div>
 
+    <div class="print-pie" id="rePrintPie"></div>
     <!-- Bloque 1: hero (saldo por cobrar + ICV con meta) -->
     <div class="re-hero" id="reHero"></div>
 
@@ -3011,10 +3029,6 @@ body { background: var(--bg); color: var(--text); }
       <div class="chart-card">
         <h3><span class="dot"></span> Calificaci&oacute;n de Cartera</h3>
         <div class="chart-container"><canvas id="chartCalif"></canvas></div>
-      </div>
-      <div class="chart-card">
-        <h3><span class="dot"></span> Rangos de Mora (d&iacute;as)</h3>
-        <div class="chart-container"><canvas id="chartMora"></canvas></div>
       </div>
       <div class="chart-card full">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
@@ -5901,6 +5915,28 @@ function activateTab(tab) {
 
 document.querySelectorAll('.nav-tab').forEach(tab => {
   tab.addEventListener('click', () => activateTab(tab));
+  // Accesible por teclado: Tab para llegar, Enter o espacio para abrir, flechas para moverse.
+  tab.setAttribute('role', 'tab');
+  tab.setAttribute('tabindex', '0');
+  tab.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activateTab(tab); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const tabs = Array.from(document.querySelectorAll('.nav-tab')).filter(t => t.offsetParent !== null);
+      const i = tabs.indexOf(tab); const n = tabs[(i + (e.key === 'ArrowDown' ? 1 : tabs.length - 1)) % tabs.length];
+      if (n) n.focus();
+    }
+  });
+});
+// Escape cierra lo que esté abierto (modales, ficha, drill de aging, menú móvil)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  try { if (document.getElementById('fichaModal')?.classList.contains('open')) { closeFicha(); return; } } catch (x) {}
+  try { if (document.getElementById('glosarioModal')?.classList.contains('open')) { closeGlosario(); return; } } catch (x) {}
+  try { if (document.getElementById('userModal')?.style.display === 'flex') { closeUserModal(); return; } } catch (x) {}
+  try { if (document.getElementById('segModal')?.style.display === 'flex') { closeSeguridad(); return; } } catch (x) {}
+  try { if (document.getElementById('agingDrillPanel')?.style.display === 'block') { closeAgingDrill(); return; } } catch (x) {}
+  try { if (typeof closeSidebar === 'function' && window.innerWidth <= 768) closeSidebar(); } catch (x) {}
 });
 
 // Activar el tab inicial (Análisis de Cartera muestra 4 divs combinados)
@@ -8230,7 +8266,6 @@ function registerChartClicks() {
   addChartClick('chartEstado', 'estado');
   addChartClick('chartLinea', 'linea');
   addChartClick('chartCalif', 'calificacion');
-  addChartClick('chartMora', 'mora');
   // chartEvolucion uses its own onClick handler for drill-down (see updateEvolucion)
   addChartClick('chartSaldoLinea', 'linea');
   // Calificación por Línea: al hacer clic, filtra por la CALIFICACIÓN (color del segmento),
@@ -8934,6 +8969,23 @@ function _reGo(tabName) {
 }
 
 // ===================== GLOSARIO =====================
+// Imprimir / guardar PDF del Resumen Ejecutivo (el navegador abre el diálogo de impresión)
+function imprimirResumen() {
+  const t = document.querySelector('.nav-tab[data-tab="resumen-ejecutivo"]');
+  if (t && !t.classList.contains('active')) activateTab(t);
+  const pie = document.getElementById('rePrintPie');
+  if (pie) {
+    const f = (typeof _reGetFilters === 'function') ? _reGetFilters() : {};
+    const filtros = Object.keys(f).length ? ' · Filtros: ' + Object.entries(f).map(([k, v]) => `${RE_FILTER_LABELS[k] || k}: ${v}`).join(', ') : '';
+    pie.textContent = `FIDE Seguros · Resumen Ejecutivo · generado el ${new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' })}${YOY ? ' · con comparación anual' : ''}${filtros}`;
+  }
+  document.body.classList.add('print-resumen');
+  // Redibujar las gráficas al ancho de impresión y volver al terminar
+  const redibujar = () => { try { [_reEvoChart, ...Object.values(_reCompCharts || {})].forEach(c => c && c.resize()); } catch (e) {} };
+  const fin = () => { document.body.classList.remove('print-resumen'); setTimeout(redibujar, 100); window.removeEventListener('afterprint', fin); };
+  window.addEventListener('afterprint', fin);
+  setTimeout(() => { redibujar(); window.print(); }, 150);
+}
 function openGlosario() {
   document.getElementById('glosarioModal').classList.add('open');
   document.body.classList.add('sheet-open');

@@ -219,8 +219,9 @@ def health(request: Request):
     # IPs internas). Permite verificar que el límite de intentos por IP esté
     # contando la IP correcta detrás del proxy de Railway.
     from app.audit import get_client_ip
+    from app.build_version import BUILD_VERSION
     xff = request.headers.get("x-forwarded-for", "")
-    return {"status": "ok", "service": "fide-dashboard",
+    return {"status": "ok", "service": "fide-dashboard", "build": str(BUILD_VERSION)[:12],
             "client_ip": get_client_ip(request),
             "xff_hops": len([h for h in xff.split(",") if h.strip()]),
             "has_real_ip": bool(request.headers.get("x-real-ip"))}
