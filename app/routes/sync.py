@@ -33,6 +33,52 @@ def sync_status(_user=Depends(require_auth)):
         conn.close()
 
 
+# Cuerpo de las dos cargas de cartera (importar + auditar + traducir errores a
+# HTTP). Viven fuera de los endpoints para que la carga única
+# (/api/cargas/aplicar) ejecute EXACTAMENTE lo mismo que estos botones.
+def ejecutar_carga_base(user: dict, filename: str | None, content: bytes, ip: str) -> dict:
+    from app.sync.job import sync_from_excel
+    try:
+        result = sync_from_excel(content, uploaded_by=user["user_id"])
+        log_audit(user["user_id"], user["username"], "excel_upload",
+                  f"file={filename} mode=base records={result.get('records', 0)}", ip)
+        return result
+    except ValueError as e:
+        # Validación de firma/contenido: mensaje accionable para la gerente
+        # (ej. "parece ser el archivo de Recaudo, no el de Cartera").
+        log_audit(user["user_id"], user["username"], "excel_upload_failed",
+                  f"file={filename} mode=base error=ValueError: {str(e)[:200]}", ip)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _log.exception("Excel upload (base) failed")
+        log_audit(user["user_id"], user["username"], "excel_upload_failed",
+                  f"file={filename} mode=base error={type(e).__name__}: {str(e)[:200]}", ip)
+        raise HTTPException(status_code=500,
+                            detail="No se pudo importar el archivo. Revise el formato e intente nuevamente.")
+
+
+def ejecutar_actualizacion_incremental(user: dict, filename: str | None, content: bytes, ip: str) -> dict:
+    from app.sync.job import incremental_update_from_excel
+    try:
+        result = incremental_update_from_excel(content, uploaded_by=user["user_id"])
+        log_audit(
+            user["user_id"], user["username"], "excel_upload",
+            f"file={filename} mode=update actualizados={result.get('actualizados', 0)} "
+            f"nuevos={result.get('nuevos', 0)}", ip
+        )
+        return result
+    except ValueError as e:
+        log_audit(user["user_id"], user["username"], "excel_upload_failed",
+                  f"file={filename} mode=update error=ValueError: {str(e)[:200]}", ip)
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        _log.exception("Excel update (incremental) failed")
+        log_audit(user["user_id"], user["username"], "excel_upload_failed",
+                  f"file={filename} mode=update error={type(e).__name__}: {str(e)[:200]}", ip)
+        raise HTTPException(status_code=500,
+                            detail="No se pudo importar la actualización. Revise el formato e intente nuevamente.")
+
+
 @router.post("/upload-excel")
 async def upload_excel(request: Request,
                        user=Depends(require_superadmin),
@@ -44,27 +90,7 @@ async def upload_excel(request: Request,
     # usan los demás módulos vía upload_session. Antes esta ruta solo miraba
     # extensión y tamaño.
     _check_upload_file(file, content, MAX_UPLOAD_MB)
-
-    ip = get_client_ip(request) or "unknown"
-    from app.sync.job import sync_from_excel
-    try:
-        result = sync_from_excel(content, uploaded_by=user["user_id"])
-        log_audit(user["user_id"], user["username"], "excel_upload",
-                  f"file={file.filename} mode=base records={result.get('records', 0)}", ip)
-        del content
-        return result
-    except ValueError as e:
-        # Validación de firma/contenido: mensaje accionable para la gerente
-        # (ej. "parece ser el archivo de Recaudo, no el de Cartera").
-        log_audit(user["user_id"], user["username"], "excel_upload_failed",
-                  f"file={file.filename} mode=base error=ValueError: {str(e)[:200]}", ip)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        _log.exception("Excel upload (base) failed")
-        log_audit(user["user_id"], user["username"], "excel_upload_failed",
-                  f"file={file.filename} mode=base error={type(e).__name__}: {str(e)[:200]}", ip)
-        raise HTTPException(status_code=500,
-                            detail="No se pudo importar el archivo. Revise el formato e intente nuevamente.")
+    return ejecutar_carga_base(user, file.filename, content, get_client_ip(request) or "unknown")
 
 
 @router.post("/update-incremental")
@@ -77,25 +103,5 @@ async def update_incremental(request: Request,
     aparecen en el archivo se mantienen intactas. Uso periódico/diario."""
     content = await file.read()
     _check_upload_file(file, content, MAX_UPLOAD_MB)
-
-    ip = get_client_ip(request) or "unknown"
-    from app.sync.job import incremental_update_from_excel
-    try:
-        result = incremental_update_from_excel(content, uploaded_by=user["user_id"])
-        log_audit(
-            user["user_id"], user["username"], "excel_upload",
-            f"file={file.filename} mode=update actualizados={result.get('actualizados', 0)} "
-            f"nuevos={result.get('nuevos', 0)}", ip
-        )
-        del content
-        return result
-    except ValueError as e:
-        log_audit(user["user_id"], user["username"], "excel_upload_failed",
-                  f"file={file.filename} mode=update error=ValueError: {str(e)[:200]}", ip)
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        _log.exception("Excel update (incremental) failed")
-        log_audit(user["user_id"], user["username"], "excel_upload_failed",
-                  f"file={file.filename} mode=update error={type(e).__name__}: {str(e)[:200]}", ip)
-        raise HTTPException(status_code=500,
-                            detail="No se pudo importar la actualización. Revise el formato e intente nuevamente.")
+    return ejecutar_actualizacion_incremental(user, file.filename, content,
+                                              get_client_ip(request) or "unknown")

@@ -17,7 +17,12 @@ CREATE TABLE IF NOT EXISTS sync_logs (
     error_message TEXT,
     source TEXT DEFAULT 'manual_upload',
     uploaded_by INTEGER,
-    duration_seconds REAL
+    duration_seconds REAL,
+    -- Solo para source='manual_upload' (cartera): 'cartera_vieja' (carga base)
+    -- o 'cartera_nueva' (incremental). Los dos comparten source porque todo el
+    -- dashboard consulta el lote vigente por source='manual_upload'; esta
+    -- columna deja distinguirlos en el historial de cargas.
+    tipo_carga TEXT
 );
 
 CREATE TABLE IF NOT EXISTS credits (
@@ -320,6 +325,30 @@ CREATE TABLE IF NOT EXISTS cartera_nueva_cuentas (
     cuenta TEXT PRIMARY KEY,
     last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============== Foto mensual de la cartera (cierres) ==============
+-- Cada carga de cartera reemplaza la anterior, asi que las cifras de stock
+-- (saldo, ICV) no dejaban historia. Aqui queda UNA fila por mes: la ultima
+-- carga de cada mes hace UPSERT y queda como cierre (ver app/snapshots.py).
+-- Solo agregados, sin PII.
+CREATE TABLE IF NOT EXISTS cartera_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mes TEXT NOT NULL UNIQUE,            -- 'YYYY-MM' (hora Colombia)
+    fecha_corte TEXT,                    -- 'YYYY-MM-DD' de la carga que dejo la foto
+    total INTEGER DEFAULT 0,
+    activos INTEGER DEFAULT 0,
+    saldo_activo REAL DEFAULT 0,
+    mora30_count INTEGER DEFAULT 0,
+    mora30_saldo REAL DEFAULT 0,
+    mora90_saldo REAL DEFAULT 0,
+    icv_pct REAL DEFAULT 0,              -- mora30_saldo / saldo_activo * 100
+    npl_pct REAL DEFAULT 0,              -- mora90_saldo / saldo_activo * 100
+    valor_desembolsado_mes REAL DEFAULT 0,
+    por_linea TEXT,                      -- JSON {linea: {activos, saldo, mora30_saldo}}
+    por_calificacion TEXT,               -- JSON {calificacion: {activos, saldo, mora30_saldo}}
+    sync_batch_id INTEGER,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 CREDIT_FIELDS = [
@@ -396,6 +425,8 @@ def _migrate_existing_schema(conn):
     log_cols = [r[1] for r in conn.execute("PRAGMA table_info(sync_logs)").fetchall()]
     if "uploaded_by" not in log_cols:
         conn.execute("ALTER TABLE sync_logs ADD COLUMN uploaded_by INTEGER")
+    if "tipo_carga" not in log_cols:
+        conn.execute("ALTER TABLE sync_logs ADD COLUMN tipo_carga TEXT")
     # PII enmascarada cacheada (acelera /api/credits ~3s)
     cred_cols = [r[1] for r in conn.execute("PRAGMA table_info(credits)").fetchall()]
     if "identificacion_masked" not in cred_cols:

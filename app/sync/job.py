@@ -1,10 +1,23 @@
 """Sync job: imports data from an uploaded Excel file (processed in-memory)."""
+import logging
 import time
 from datetime import datetime
 from app.database import get_db, CREDIT_FIELDS
 from app.sync.upload_helpers import check_file_signature, _parse_with_zip_xml
 
 MAX_ROWS = 50_000
+_log = logging.getLogger("fide.sync.job")
+
+
+def _foto_mensual(sync_id: int):
+    """Guarda/actualiza la foto mensual de la cartera tras una carga exitosa.
+    Nunca tumba la carga: la foto es un derivado, la cartera ya quedó guardada."""
+    try:
+        from app.snapshots import guardar_snapshot_cartera
+        with get_db() as conn:
+            guardar_snapshot_cartera(conn, sync_id)
+    except Exception:
+        _log.exception("No se pudo guardar la foto mensual de cartera (no fatal)")
 
 # Firma del Informe de Cartera (los 3 exports — vieja, nueva, consolidado —
 # comparten estos headers; verificado contra los .xlsx reales). Sin esta
@@ -114,8 +127,8 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
     # Create the sync_log first so failures are recorded.
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO sync_logs (started_at, status, source, uploaded_by) "
-            "VALUES (?, 'running', 'manual_upload', ?)",
+            "INSERT INTO sync_logs (started_at, status, source, uploaded_by, tipo_carga) "
+            "VALUES (?, 'running', 'manual_upload', ?, 'cartera_vieja')",
             (datetime.utcnow().isoformat(), uploaded_by)
         )
         sync_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -152,6 +165,7 @@ def sync_from_excel(file_bytes: bytes, uploaded_by: int | None = None) -> dict:
                 WHERE id=?
             """, (datetime.utcnow().isoformat(), len(rows), len(records), duration, sync_id))
 
+        _foto_mensual(sync_id)
         return {
             "status": "success",
             "records": len(records),
@@ -190,8 +204,8 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
 
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO sync_logs (started_at, status, source, uploaded_by) "
-            "VALUES (?, 'running', 'manual_upload', ?)",
+            "INSERT INTO sync_logs (started_at, status, source, uploaded_by, tipo_carga) "
+            "VALUES (?, 'running', 'manual_upload', ?, 'cartera_nueva')",
             (datetime.utcnow().isoformat(), uploaded_by)
         )
         sync_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -278,6 +292,7 @@ def incremental_update_from_excel(file_bytes: bytes, uploaded_by: int | None = N
                  updated_count + inserted_count, duration, sync_id)
             )
 
+        _foto_mensual(sync_id)
         return {
             "status": "success",
             "actualizados": updated_count,

@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>fide. Seguros &mdash; Panel de Gesti&oacute;n Integral</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -2552,6 +2553,139 @@ body { background: var(--bg); color: var(--text); }
 .sidebar-toggle { background: var(--neutral-50); color: var(--neutral-900); border: 1px solid var(--border); }
 .sidebar-toggle:hover { background: var(--neutral-100); }
 .bottom-nav { border-top: 1px solid var(--border); }
+
+/* =====================================================================
+   TEMA V3 (nov-2026) — referentes Stripe y Nubank. Capa final: aire,
+   tipografía Inter, esquinas amplias, un héroe con el degradado de marca,
+   títulos de página sin caja y gráficas variadas. Se revierte borrando
+   este bloque.
+   ===================================================================== */
+:root { --radius: 16px; --radius-sm: 10px; --bg: #f7f8fa;
+  --shadow: 0 1px 2px rgba(16,24,40,0.04), 0 1px 3px rgba(16,24,40,0.03);
+  --shadow-hover: 0 6px 16px rgba(16,24,40,0.08);
+  --grad-marca: linear-gradient(135deg, #00443f 0%, #007a73 52%, #00a79d 100%); }
+html { font-size: 16px; }
+body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; letter-spacing: -0.006em; }
+button, input, select, textarea { font-family: inherit; }
+.app-main { padding: 24px 28px 40px; }
+
+/* Título de página sin caja (como Stripe): grande, a la izquierda, acciones a la derecha */
+.module-header { background: transparent; border: none; box-shadow: none; padding: 4px 2px 0; margin-bottom: 14px; }
+.module-title svg { display: none; }
+.module-title h2 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.03em; color: var(--neutral-900); }
+.module-meta { font-size: 0.9rem; margin-top: 2px; }
+
+/* Filtros: sin caja, controles tipo píldora */
+.filters { background: transparent; border: none; box-shadow: none; padding: 0; gap: 8px 14px; }
+.filters select, .filters input, .sel-periodo, .filter-group select, .filter-group input { border-radius: 10px; padding: 7px 10px; min-height: 38px; box-shadow: 0 1px 1px rgba(16,24,40,0.03); }
+
+/* Tarjetas */
+.kpi-card, .re-card, .chart-card, .table-section { border-color: #eceef2; border-radius: var(--radius); }
+.kpi-card { padding: 18px 20px 16px; min-height: 118px; transition: box-shadow .18s, transform .18s, border-color .18s; }
+.kpi-card.kpi-clickable:hover, .re-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.kpi-label { font-size: 0.86rem; }
+.kpi-value { font-size: 1.85rem; font-weight: 600; letter-spacing: -0.035em; font-feature-settings: 'tnum'; }
+.chart-card { padding: 20px 22px 16px; }
+.chart-card h3, .table-section h3 { font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
+.kpi-group-label { font-size: 0.74rem; }
+
+/* Anillo de progreso dentro de la tarjeta (porcentajes) */
+.kpi-ring { position: absolute; right: 18px; top: 42px; pointer-events: none; line-height: 0; }
+.kpi-card:has(.kpi-ring) .kpi-sub, .kpi-card:has(.kpi-ring) .kpi-yoy { padding-right: 66px; }
+.kpi-ring circle { transition: stroke-dasharray .5s ease; }
+@media (max-width: 600px) { .kpi-ring { display: none; } }
+
+/* Héroe con el degradado de la marca (la tarjeta "de producto", estilo Nubank) */
+.re-hero .re-card.re-hero-main { background: var(--grad-marca); border: none !important; color: #fff; box-shadow: 0 12px 30px rgba(0,90,85,0.22); min-height: 210px; }
+.re-hero-main .re-lbl { color: rgba(255,255,255,0.78) !important; }
+.re-hero-main .re-val { color: #fff !important; font-size: 2.9rem; }
+.re-hero-main .re-sub { color: rgba(255,255,255,0.78) !important; }
+.re-hero-main .re-hero-mini div { color: rgba(255,255,255,0.72); }
+.re-hero-main .re-hero-mini b { color: #fff; }
+.re-hero-main .re-delta .up, .re-hero-main .re-delta .down, .re-hero-main .re-delta .flat { background: rgba(255,255,255,0.18); color: #fff; }
+.re-hero-main .re-badge { background: rgba(255,255,255,0.18) !important; color: #fff !important; }
+.re-hero-main .re-spark-wrap { opacity: 0.55; }
+.re-card .re-val { letter-spacing: -0.035em; }
+.re-hero .re-card { border-radius: 20px; }
+
+/* Navegación */
+.sidebar { padding: 16px 12px; }
+.nav-tab { padding: 8px 12px; font-size: 0.92rem; }
+.nav-tab.active { background: #eef7f6; }
+
+/* Tablas */
+.table-wrapper { border-radius: 12px; }
+.data-table td { padding: 11px 12px; }
+.data-table th { padding: 11px 12px; }
+
+/* Botones */
+.btn { border-radius: 10px; padding: 8px 14px; }
+.btn-export, .btn-primary-action { box-shadow: 0 1px 2px rgba(0,122,115,0.25); }
+.header-btn { border-radius: 10px; }
+
+/* Centro de cargas */
+.cu-drop { border: 2px dashed var(--neutral-200); border-radius: 16px; padding: 26px 18px; text-align: center; color: var(--neutral-600); cursor: pointer; display: grid; gap: 6px; justify-items: center; transition: background .15s, border-color .15s; }
+.cu-drop:hover, .cu-drop:focus-visible, .cu-drop.sobre { border-color: var(--fide-teal); background: #eef7f6; color: var(--fide-teal-deeper); outline: none; }
+.cu-drop b { color: var(--neutral-900); } .cu-drop small { color: var(--neutral-500); }
+.cu-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center; border: 1px solid #eceef2; border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+.cu-item .nom { font-weight: 600; color: var(--neutral-900); word-break: break-word; }
+.cu-item .det { font-size: 0.86rem; color: var(--neutral-600); grid-column: 1 / -1; }
+.cu-item .alerta { grid-column: 1 / -1; background: var(--neg-bg); color: #7a4a0a; border-radius: 8px; padding: 8px 10px; font-size: 0.86rem; }
+.cu-item .alerta label { display: flex; gap: 8px; align-items: center; margin-top: 6px; font-weight: 600; cursor: pointer; }
+.cu-item.error { border-color: #f1d2a8; background: #fffaf2; }
+.cu-item.ok { border-color: #bfe5df; background: #f3fbfa; }
+.cu-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; background: var(--neutral-50); color: var(--neutral-600); white-space: nowrap; }
+.cu-pill.tipo { background: #eef7f6; color: var(--fide-teal-deeper); }
+.cu-pill.mal { background: var(--neg-bg); color: var(--neg); } .cu-pill.bien { background: var(--pos-bg); color: var(--pos); }
+.cu-estado { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cu-estado div { border: 1px solid #eceef2; border-radius: 12px; padding: 10px 14px; }
+.cu-estado span { display: block; font-size: 0.82rem; color: var(--neutral-500); }
+.cu-estado b { font-weight: 600; color: var(--neutral-900); }
+.cu-estado i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--neutral-200); }
+.cu-estado i.f { background: #0f7b6c; } .cu-estado i.v { background: #c29200; } .cu-estado i.m { background: #b8680f; }
+
+/* Embudo (Solicitudes) */
+.embudo { display: grid; grid-template-columns: 1fr 260px; gap: 22px; align-items: center; }
+.embudo-pasos { display: flex; flex-direction: column; gap: 10px; }
+.embudo-paso { display: grid; grid-template-columns: 150px 1fr 110px; align-items: center; gap: 12px; cursor: pointer; }
+.embudo-paso .nom { font-size: 0.9rem; color: var(--neutral-600); font-weight: 500; }
+.embudo-paso .barra { height: 34px; border-radius: 10px; background: var(--neutral-100); position: relative; overflow: hidden; }
+.embudo-paso .barra i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 10px; background: var(--c, var(--fide-teal)); transition: width .5s ease; }
+.embudo-paso .val { font-size: 1.05rem; font-weight: 600; color: var(--neutral-900); text-align: right; font-feature-settings: 'tnum'; }
+.embudo-paso .val small { display: block; font-size: 0.78rem; font-weight: 500; color: var(--neutral-500); }
+.embudo-paso:hover .nom { color: var(--neutral-900); }
+.embudo-lado { display: grid; gap: 10px; }
+.embudo-lado div { border: 1px solid #eceef2; border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+.embudo-lado div:hover { border-color: var(--neutral-200); }
+.embudo-lado span { font-size: 0.82rem; color: var(--neutral-500); display: block; }
+.embudo-lado b { font-size: 1.15rem; font-weight: 600; color: var(--neutral-900); }
+@media (max-width: 900px) {
+  .embudo { grid-template-columns: 1fr; }
+  .embudo-paso { grid-template-columns: 1fr auto; grid-template-areas: "nom val" "barra barra"; gap: 4px 10px; }
+  .embudo-paso .nom { grid-area: nom; align-self: end; } .embudo-paso .val { grid-area: val; } .embudo-paso .barra { grid-area: barra; height: 22px; }
+  .embudo-lado { grid-template-columns: repeat(3, 1fr); }
+}
+/* Tablas en modo tarjeta (celular): que los valores largos bajen de línea en vez de salirse */
+@media (max-width: 768px) {
+  table.cards-mobile { display: block; }
+  table.cards-mobile td { white-space: normal !important; gap: 12px; word-break: break-word; }
+  table.cards-mobile tr { border-left: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+}
+
+/* Calendario de recaudo (mapa de calor por día) */
+.cal-wrap { display: flex; gap: 8px; align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
+.cal-dias { display: grid; grid-template-rows: repeat(7, 16px); gap: 4px; font-size: 0.7rem; color: var(--neutral-500); padding-top: 20px; }
+.cal-dias span { line-height: 16px; }
+.cal-cuerpo { display: flex; flex-direction: column; gap: 4px; }
+.cal-meses { display: grid; grid-auto-flow: column; grid-auto-columns: 16px; gap: 4px; height: 16px; font-size: 0.7rem; color: var(--neutral-500); white-space: nowrap; }
+.cal-heat { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 16px); grid-auto-columns: 16px; gap: 4px; }
+.cal-heat i { width: 16px; height: 16px; border-radius: 4px; background: #eef0f4; display: block; cursor: pointer; }
+.cal-heat i.v { visibility: hidden; }
+.cal-heat i.l1 { background: #c9ece8; } .cal-heat i.l2 { background: #8fd8d1; } .cal-heat i.l3 { background: #33b9af; } .cal-heat i.l4 { background: #007a73; }
+.cal-heat i:hover { outline: 2px solid var(--neutral-900); outline-offset: 1px; }
+.cal-heat i.sel { outline: 2px solid var(--neutral-900); outline-offset: 1px; }
+.cal-ley { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--neutral-500); margin-top: 10px; }
+.cal-ley i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
 </style>
 </head>
 <body>
@@ -3352,6 +3486,10 @@ body { background: var(--bg); color: var(--text); }
     </div>
     <div class="charts-grid">
       <div class="chart-card full">
+        <h3>Recaudo por d&iacute;a <span class="re-h3-sub">&uacute;ltimas 26 semanas &middot; clic en un d&iacute;a para ver sus pagos</span></h3>
+        <div id="rcCalendario"></div>
+      </div>
+      <div class="chart-card full">
         <h3><span class="dot"></span> Top 10 Aliados por Recaudo</h3>
         <div class="chart-container"><canvas id="chartRcAliado"></canvas></div>
       </div>
@@ -3491,6 +3629,10 @@ body { background: var(--bg); color: var(--text); }
       </div>
     </div>
     <div class="charts-grid">
+      <div class="chart-card full">
+        <h3>Embudo de solicitudes <span class="re-h3-sub">de la radicaci&oacute;n al desembolso &middot; clic en un paso para filtrar</span></h3>
+        <div class="embudo" id="slEmbudo"></div>
+      </div>
       <div class="chart-card">
         <h3><span class="dot"></span> Estados de Solicitudes</h3>
         <div class="chart-container"><canvas id="chartSlEstado"></canvas></div>
@@ -3586,6 +3728,10 @@ body { background: var(--bg); color: var(--text); }
     <div class="chart-card full" style="margin-bottom:1.5rem;">
       <h3><span class="dot"></span> Evoluci&oacute;n Mensual</h3>
       <div class="chart-container tall"><canvas id="chartFinEvol"></canvas></div>
+    </div>
+    <div class="chart-card full" style="margin-bottom:1.5rem;">
+      <h3>Del ingreso a la utilidad <span class="re-h3-sub">acumulado del a&ntilde;o &middot; qu&eacute; se lleva cada rubro</span></h3>
+      <div class="chart-container"><canvas id="chartFinCascada"></canvas></div>
     </div>
 
     <div class="chart-card full">
@@ -3783,7 +3929,12 @@ body { background: var(--bg); color: var(--text); }
     </div>
 
     <div class="charts-grid">
-      <div class="chart-card full">
+      <div class="chart-card full" style="margin-bottom:16px;">
+      <h3>Cierres mensuales de la cartera <span class="re-h3-sub">ICV y saldo activo al cierre de cada mes &middot; se guarda solo con cada carga</span></h3>
+      <div class="chart-container" id="cierresWrap"><canvas id="chartCierres"></canvas></div>
+      <div class="tabla-nota" id="cierresNota"></div>
+    </div>
+    <div class="chart-card full">
         <h3>
           <span class="dot"></span> Aging de Mora &mdash; Distribuci&oacute;n del Saldo por Bucket
           <span style="font-size:0.78rem;font-weight:500;color:var(--neutral-500);margin-left:0.4rem;">Click en una barra para ver los cr&eacute;ditos del bucket</span>
@@ -3859,6 +4010,31 @@ body { background: var(--bg); color: var(--text); }
 
   <!-- Tab: Panel de Configuración (solo superadmin) -->
   <div class="tab-content" id="tab-usuarios">
+    <div class="table-section admin-only" style="margin-bottom:14px;display:none;">
+      <h3 style="margin:0 0 4px;">Centro de cargas</h3>
+      <p style="color:var(--neutral-600);font-size:0.9rem;margin:0 0 12px;">Arrastra aqu&iacute; todos los archivos de Excel del d&iacute;a, juntos. El sistema reconoce cu&aacute;l es cada uno, te muestra qu&eacute; va a cambiar y solo carga cuando confirmas.</p>
+      <div class="cu-drop" id="cuDrop" tabindex="0" role="button" aria-label="Elegir archivos de Excel">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <div><b>Arrastra los archivos aqu&iacute;</b> o haz clic para elegirlos</div>
+        <small>Cartera, recaudo, solicitudes, procesos judiciales, estado de resultados y saldo de cartera (.xlsx)</small>
+        <input type="file" id="cuInput" accept=".xlsx,.xls" multiple style="display:none;">
+      </div>
+      <div id="cuLista"></div>
+      <div id="cuAcciones" style="display:none;margin-top:12px;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-export" id="cuBtnCargar" onclick="cuCargarTodo()">Cargar</button>
+        <button class="btn btn-reset" onclick="cuLimpiar()">Descartar</button>
+        <span id="cuResumen" style="font-size:0.88rem;color:var(--neutral-600);"></span>
+      </div>
+      <h3 style="margin:20px 0 8px;">Qu&eacute; tan al d&iacute;a est&aacute; cada archivo</h3>
+      <div class="cu-estado" id="cuEstado"></div>
+      <h3 style="margin:20px 0 8px;">Historial de cargas</h3>
+      <div class="table-wrapper" style="max-height:300px;">
+        <table class="data-table compact" id="cuHistTable">
+          <thead><tr><th>Fecha</th><th>Archivo</th><th>Usuario</th><th class="num">Registros</th><th class="num">Variaci&oacute;n</th><th>Resultado</th></tr></thead>
+          <tbody id="cuHistBody"><tr><td colspan="6">Cargando&hellip;</td></tr></tbody>
+        </table>
+      </div>
+    </div>
     <div class="table-section admin-only" style="margin-bottom:14px;display:none;">
       <h3 style="margin:0 0 6px;">Metas del tablero</h3>
       <p style="color:var(--neutral-600);font-size:0.88rem;margin:0 0 12px;">Se usan en el Resumen Ejecutivo: medidor de ICV, l&iacute;neas de meta en la evoluci&oacute;n mensual y alertas. Montos en pesos completos (sin puntos). Deja en blanco para no mostrar una meta.</p>
@@ -4233,7 +4409,7 @@ const MORA_ORDER = ['Al día','1-30','31-60','61-90','91-180','181-360','+360'];
 const MORA_COLORS = ['#0f7b6c', '#7a9f6e', '#c29200', '#b8680f', '#8a4810', '#4a2b0c', '#1c1917'];
 
 // ---- Chart.js global defaults (Power BI-like professional style) ----
-Chart.defaults.font.family = "'Nunito', 'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.family = "'Inter', 'Segoe UI', system-ui, sans-serif";
 // En móvil subimos la fuente base de los charts (ejes, leyendas) para que
 // no se vean tan apretados. Los charts se recrean en cada render, así que
 // este default aplica.
@@ -4427,6 +4603,47 @@ function deltaUltimoMes(mapa, esValor) {
   }
   return html;
 }
+// ===== Utilidades visuales (tema v3) =====
+function hexA(hex, a) {
+  const h = String(hex).replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+// Relleno en degradado vertical para áreas (se calcula con el área real de la gráfica).
+function gradFill(color, a1, a2) {
+  return (c) => {
+    const { ctx, chartArea } = c.chart;
+    if (!chartArea) return hexA(color, 0.12);
+    const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+    g.addColorStop(0, hexA(color, a1 == null ? 0.26 : a1)); g.addColorStop(1, hexA(color, a2 == null ? 0.01 : a2));
+    return g;
+  };
+}
+// Anillo de progreso en una tarjeta KPI (para cifras que son un porcentaje).
+function setRing(valueId, pct, color) {
+  const v = document.getElementById(valueId); if (!v) return;
+  const card = v.closest('.kpi-card'); if (!card) return;
+  let r = card.querySelector('.kpi-ring');
+  if (!r) { r = document.createElement('div'); r.className = 'kpi-ring'; card.appendChild(r); }
+  const p = Math.max(0, Math.min(100, Number(pct) || 0)); const R = 22, C = 2 * Math.PI * R;
+  r.innerHTML = `<svg viewBox="0 0 56 56" width="56" height="56" aria-hidden="true"><circle cx="28" cy="28" r="${R}" fill="none" stroke="#ebeef3" stroke-width="6"/><circle cx="28" cy="28" r="${R}" fill="none" stroke="${color || '#00a79d'}" stroke-width="6" stroke-linecap="round" stroke-dasharray="${(C * p / 100).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 28 28)"/></svg>`;
+}
+// Texto al centro de los donuts: options.plugins.centerText = { value, label }
+if (typeof Chart !== 'undefined') {
+  Chart.register({ id: 'centerText', afterDraw(c) {
+    const o = c.options.plugins && c.options.plugins.centerText;
+    if (!o || o.value == null || c.config.type !== 'doughnut') return;
+    const a = c.chartArea; if (!a) return;
+    const x = (a.left + a.right) / 2, y = (a.top + a.bottom) / 2, ctx = c.ctx;
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#30313d'; ctx.font = "600 26px Inter, sans-serif"; ctx.fillText(String(o.value), x, y - 6);
+    ctx.fillStyle = '#687385'; ctx.font = "500 12px Inter, sans-serif"; ctx.fillText(String(o.label || ''), x, y + 16);
+    ctx.restore();
+  } });
+  Chart.defaults.datasets.bar.maxBarThickness = 36;
+  Chart.defaults.datasets.bar.borderRadius = 6;
+}
+
 // ===== Comparación año a año (global, persiste) =====
 let YOY = false;
 try { YOY = localStorage.getItem('fide_yoy') === '1'; } catch (e) {}
@@ -5140,6 +5357,7 @@ function updateKPIs() {
   const cerrados = d.length - act.length;
   document.getElementById('kpiTotalSub').textContent = `${fmt(act.length)} activos / ${fmt(cerrados)} cerrados`;
   document.getElementById('kpiActivos').textContent = fmt(act.length);
+  setRing('kpiActivos', d.length ? act.length / d.length * 100 : 0);
   document.getElementById('kpiActivosSub').textContent = pct(act.length, d.length) + ' del total';
   // El sub de 'Valor Total Cartera' muestra el SALDO CAPITAL ACTIVO (= lo que
   // queda pendiente por cobrar de los créditos activos), no el valor original.
@@ -5356,13 +5574,14 @@ function updateCharts() {
     type: 'doughnut',
     // Cancelado NO es un estado negativo en una cartera: va en gris, no en naranja.
     data: { labels: Object.keys(estadoMap), datasets: [{ data: Object.values(estadoMap),
-      backgroundColor: Object.keys(estadoMap).map(k => k === 'ACTIVO' ? FIDE.teal : (k === 'CANCELADO' ? FIDE.gray : FIDE.blue)),
-      borderWidth: 3, borderColor: '#fff' }] },
+      backgroundColor: Object.keys(estadoMap).map(k => k === 'ACTIVO' ? FIDE.teal : (k === 'CANCELADO' ? FIDE.grayLight : FIDE.blue)),
+      borderWidth: 0, spacing: 3, borderRadius: 8 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      cutout: '65%',
+      cutout: '72%',
       layout: { padding: 6 },
       plugins: {
+        centerText: { value: fmt(d.length), label: 'créditos' },
         legend: { position:'bottom', onClick: legendFilter('estado'), labels: { padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 12, weight: 700 } } },
         tooltip: { callbacks: { label: (ctx) => {
           const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
@@ -5391,12 +5610,13 @@ function updateCharts() {
   const lLabels = Object.keys(lineaMap).sort();
   charts.chartLinea = new Chart(document.getElementById('chartLinea'), {
     type: 'doughnut',
-    data: { labels: lLabels, datasets: [{ data: lLabels.map(l=>lineaMap[l]), backgroundColor: CHART_COLORS.slice(0,lLabels.length), borderWidth: 3, borderColor: '#fff' }] },
+    data: { labels: lLabels, datasets: [{ data: lLabels.map(l=>lineaMap[l]), backgroundColor: CHART_COLORS.slice(0,lLabels.length), borderWidth: 0, spacing: 3, borderRadius: 8 }] },
     options: {
       responsive: true, maintainAspectRatio: false,
-      cutout: '55%',
+      cutout: '72%',
       layout: { padding: 6 },
       plugins: {
+        centerText: { value: lLabels.length, label: 'líneas' },
         legend: { position:'bottom', onClick: legendFilter('linea'), labels: { padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 11, weight: 700 }, boxWidth: 10 } },
         tooltip: { callbacks: { label: (ctx) => {
           const t = ctx.dataset.data.reduce((a,b)=>a+b,0);
@@ -5902,13 +6122,13 @@ function activateTab(tab) {
   const tabName = tab.dataset.tab;
   _syncBottomNav(tabName);
   if (tabName === 'resumen-ejecutivo') loadResumenEjecutivo();
-  if (tabName === 'usuarios') { loadUsers(); cargarMetas(); cargarRespaldos(); }
+  if (tabName === 'usuarios') { loadUsers(); cargarMetas(); cargarRespaldos(); cargarCentroCargas(); }
   if (tabName === 'recaudo') loadRecaudo();
   if (tabName === 'solicitudes') loadSolicitudes();
   if (tabName === 'juridico') loadJuridico();
   if (tabName === 'proyeccion') renderProyeccion();
   if (tabName === 'financieros') loadFinancierosInit();
-  if (tabName === 'analitica') renderAnalitica();
+  if (tabName === 'analitica') { renderAnalitica(); renderCierres(); }
   // En móvil, cerrar el sidebar tras seleccionar
   if (window.innerWidth <= 768) closeSidebar();
 }
@@ -6035,6 +6255,33 @@ function setRcMeses(n) {
   document.querySelectorAll('[data-rc-meses]').forEach(b => b.classList.toggle('active', parseInt(b.dataset.rcMeses, 10) === n));
   renderRcMensual();
 }
+// Calendario de recaudo: un cuadro por día (columnas = semanas), más oscuro = más recaudo.
+function renderRcCalendario(l) {
+  const box = document.getElementById('rcCalendario'); if (!box) return;
+  const dG = _rcFiltroDia, mG = _rcFiltroMes; _rcFiltroDia = ''; _rcFiltroMes = '';
+  const porDia = {}, nDia = {};
+  l.filter(_rcPasaFiltro).forEach(p => { const d = String(p.fecha_movimiento || '').slice(0, 10); if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return; porDia[d] = (porDia[d] || 0) + (parseFloat(p.total) || 0); nDia[d] = (nDia[d] || 0) + 1; });
+  _rcFiltroDia = dG; _rcFiltroMes = mG;
+  const dias = Object.keys(porDia).sort();
+  if (!dias.length) { box.innerHTML = '<div class="tabla-nota">Sin pagos con fecha para dibujar el calendario.</div>'; return; }
+  const fin = new Date(dias[dias.length - 1] + 'T12:00:00');
+  const ini = new Date(fin); ini.setDate(ini.getDate() - 7 * 26 + 1);
+  ini.setDate(ini.getDate() - ((ini.getDay() + 6) % 7));               // retroceder al lunes
+  const vals = Object.entries(porDia).filter(([d]) => d >= _toISO(ini)).map(([, v]) => v).filter(v => v > 0).sort((a, b) => a - b);
+  const q = f => vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * f))] : 0;
+  const cortes = [q(0.25), q(0.5), q(0.8)];
+  let celdas = '', meses = '', mesPrev = -1, col = 0;
+  for (let d = new Date(ini); d <= fin || d.getDay() !== 1; d.setDate(d.getDate() + 1)) {
+    const iso = _toISO(d), v = porDia[iso] || 0;
+    if (d.getDay() === 1) { meses += `<span>${d.getMonth() !== mesPrev ? _MESES_ES[d.getMonth()] : ''}</span>`; mesPrev = d.getMonth(); col++; }
+    if (d > fin) { celdas += '<i class="v"></i>'; continue; }
+    const lvl = !v ? '' : v <= cortes[0] ? 'l1' : v <= cortes[1] ? 'l2' : v <= cortes[2] ? 'l3' : 'l4';
+    celdas += `<i class="${lvl}${iso === _rcFiltroDia ? ' sel' : ''}" title="${fmtDate(iso)} · ${v ? fmtCurrency(v) + ' en ' + nDia[iso] + ' pagos' : 'sin pagos'}" onclick="_rcFiltroDia=(_rcFiltroDia==='${iso}'?'':'${iso}');renderRecaudo()"></i>`;
+  }
+  box.innerHTML = `<div class="cal-wrap"><div class="cal-dias"><span>L</span><span></span><span>M</span><span></span><span>V</span><span></span><span>D</span></div>
+    <div class="cal-cuerpo"><div class="cal-meses">${meses}</div><div class="cal-heat">${celdas}</div></div></div>
+    <div class="cal-ley">Menos <i style="background:#eef0f4"></i><i style="background:#c9ece8"></i><i style="background:#8fd8d1"></i><i style="background:#33b9af"></i><i style="background:#007a73"></i> Más recaudo</div>`;
+}
 function renderRcMensual() {
   if (!_rcSeries) return;
   const { monMap, desMap } = _rcSeries;
@@ -6084,12 +6331,13 @@ async function loadRecaudo() {
     showToast('Error al cargar Recaudo. Verifica tu conexión.', 'err');
   }
 }
-let _rcState = null, _rcFiltro = '', _rcFiltroAliado = '', _rcFiltroMes = '';
+let _rcState = null, _rcFiltro = '', _rcFiltroAliado = '', _rcFiltroMes = '', _rcFiltroDia = '';
 const RC_FILTRO_LABEL = { pago: 'Solo recaudo (Pago)', capital: 'Con abono a capital', interes: 'Con interés corriente', mora: 'Con interés de mora' };
 const _esPago = p => /^PAGO/i.test(String(p.tipo_mvto || ''));
 function _rcPasaFiltro(p) {
   if (_rcFiltroAliado && (p.aliado || 'N/A') !== _rcFiltroAliado) return false;
   if (_rcFiltroMes && String(p.fecha_movimiento || '').slice(0, 7) !== _rcFiltroMes) return false;
+  if (_rcFiltroDia && String(p.fecha_movimiento || '').slice(0, 10) !== _rcFiltroDia) return false;
   if (!_rcFiltro) return true;
   if (_rcFiltro === 'pago') return _esPago(p);
   if (_rcFiltro === 'capital') return (parseFloat(p.capital) || 0) > 0;
@@ -6099,7 +6347,7 @@ function _rcPasaFiltro(p) {
 }
 function xfRecaudo(k) {
   _rcFiltro = (_rcFiltro === k) ? '' : k;
-  if (!k) { _rcFiltroAliado = ''; _rcFiltroMes = ''; }
+  if (!k) { _rcFiltroAliado = ''; _rcFiltroMes = ''; _rcFiltroDia = ''; }
   renderRecaudo();
   try { localStorage.setItem('fide_chart_hint_dismissed', '1'); document.querySelectorAll('.cross-filter-hint').forEach(el => el.style.display = 'none'); } catch (e) {}
 }
@@ -6122,6 +6370,7 @@ function renderRecaudo() {
     if (_rcFiltro) partes.push(`<span class="chip" onclick="xfRecaudo('${_rcFiltro}')" title="Quitar filtro">Tarjeta: <strong>${RC_FILTRO_LABEL[_rcFiltro]}</strong> <span class="x">&times;</span></span>`);
     if (_rcFiltroAliado) partes.push(`<span class="chip" onclick="_rcFiltroAliado='';renderRecaudo()" title="Quitar filtro">Aliado: <strong>${esc(_rcFiltroAliado)}</strong> <span class="x">&times;</span></span>`);
     if (_rcFiltroMes) partes.push(`<span class="chip" onclick="_rcFiltroMes='';renderRecaudo()" title="Quitar filtro">Mes: <strong>${_reEvoLbl(_rcFiltroMes)}</strong> <span class="x">&times;</span></span>`);
+    if (_rcFiltroDia) partes.push(`<span class="chip" onclick="_rcFiltroDia='';renderRecaudo()" title="Quitar filtro">Día: <strong>${fmtDate(_rcFiltroDia)}</strong> <span class="x">&times;</span></span>`);
     if (v) partes.push(`<span class="chip" onclick="document.getElementById('rcPeriodo').value='all';renderRecaudo()" title="Quitar período">Período: <strong>${v.label}</strong> <span class="x">&times;</span></span>`);
     chips.innerHTML = partes.join('');
     bar.classList.toggle('active', partes.length > 0);
@@ -6220,6 +6469,7 @@ function renderRecaudo() {
   if (rcDeltaEl) rcDeltaEl.innerHTML = deltaUltimoMes(monMap, true);
   _rcSeries = { monMap, desMap, ventana: v };
   renderRcMensual();
+  renderRcCalendario(l);
 
   // Tabla de pagos (filtrada)
   const tb = document.querySelector('#tblRecaudo tbody');
@@ -6434,6 +6684,7 @@ function renderSolicitudes() {
   const decididas = desembolsadas + anuladas + negadas;
   const tasaAcept = decididas > 0 ? (desembolsadas / decididas * 100) : 0;
   document.getElementById('slTasaAcept').textContent = tasaAcept.toFixed(1) + '%';
+  setRing('slTasaAcept', tasaAcept);
   const enEstudio = total - decididas;
   document.getElementById('slTasaAceptSub').textContent =
     `${fmt(desembolsadas)} de ${fmt(decididas)} decididas`
@@ -6442,6 +6693,24 @@ function renderSolicitudes() {
   const ticket = desembolsadas > 0 ? (valorDesembolsado / desembolsadas) : 0;
   document.getElementById('slTicketProm').textContent = fmtM(ticket);
   document.getElementById('slTicketPromSub').textContent = 'Por solicitud aprobada';
+
+  // Embudo: radicadas → decididas → desembolsadas, con la conversión de cada paso
+  const emb = document.getElementById('slEmbudo');
+  if (emb) {
+    const w = n => total ? Math.max(2, n / total * 100).toFixed(1) : 0;
+    const pc = (a, b) => b ? (a / b * 100).toFixed(0) + '%' : '–';
+    emb.innerHTML = `
+      <div class="embudo-pasos">
+        <div class="embudo-paso" onclick="xfSolicitudes('')" title="Ver todas"><span class="nom">Radicadas</span><div class="barra"><i style="width:${w(total)}%;--c:#8fd8d1"></i></div><span class="val">${fmt(total)}<small>${fmtM(valorTotal)}</small></span></div>
+        <div class="embudo-paso" onclick="xfSolicitudes('decidida','Sí')" title="Ver solo las decididas"><span class="nom">Decididas</span><div class="barra"><i style="width:${w(decididas)}%;--c:#33b9af"></i></div><span class="val">${fmt(decididas)}<small>${pc(decididas, total)} de las radicadas</small></span></div>
+        <div class="embudo-paso" onclick="xfSolicitudes('estado','DESEMBOLSADA')" title="Ver solo las desembolsadas"><span class="nom">Desembolsadas</span><div class="barra"><i style="width:${w(desembolsadas)}%;--c:#007a73"></i></div><span class="val">${fmt(desembolsadas)}<small>${pc(desembolsadas, decididas)} de las decididas</small></span></div>
+      </div>
+      <div class="embudo-lado">
+        <div onclick="xfSolicitudes('estado','EN ESTUDIO')"><span>En estudio</span><b>${fmt(enEstudio)}</b></div>
+        <div onclick="xfSolicitudes('estado','ANULADA')"><span>Anuladas</span><b>${fmt(anuladas)}</b></div>
+        <div onclick="xfSolicitudes('estado','NEGADA')"><span>Negadas</span><b>${fmt(negadas)}</b></div>
+      </div>`;
+  }
 
   _marcarCard('slCardDesem', _slFilters.estado === 'DESEMBOLSADA');
   _marcarCard('slCardTicket', _slFilters.estado === 'DESEMBOLSADA');
@@ -6462,19 +6731,21 @@ function renderSolicitudes() {
       datasets: [{
         data: estLabels.map(k => estMap[k]),
         backgroundColor: estLabels.map((k, i) => ESTADO_COLORS[k] || CHART_COLORS[i % CHART_COLORS.length]),
-        borderWidth: 3, borderColor: '#fff'
+        borderWidth: 0, spacing: 3, borderRadius: 8
       }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false, cutout: '58%',
+      responsive: true, maintainAspectRatio: false, cutout: '72%',
       onClick: (evt, els) => {
         if (!els.length) return;
         const label = estLabels[els[0].index];
         setTimeout(() => toggleSlChartFilter('estado', label), 0);
       },
       plugins: {
+        centerText: { value: fmt(filtered.length), label: 'solicitudes' },
         legend: { position: 'bottom' },
         datalabels: {
+          display: false,
           color: '#fff', font: { weight: 800, size: 11 },
           textStrokeColor: 'rgba(0,0,0,0.5)', textStrokeWidth: 3,
           formatter: (v, ctx) => {
@@ -6638,6 +6909,7 @@ function renderJuridico() {
     document.getElementById('jrTotal').textContent = fmt(tot);
     document.getElementById('jrTotalSub').textContent = `${nJuz} juzgados involucrados${_jrFiltro ? ' · ' + JR_FILTRO_LABEL[_jrFiltro].toLowerCase() : ''}`;
     document.getElementById('jrProb').textContent = fmt(nProb);
+    setRing('jrProb', tot ? nProb / tot * 100 : 0);
     document.getElementById('jrProbSub').textContent = pct(nProb, tot) + ' del total';
     document.getElementById('jrRem').textContent = fmt(nRem);
     document.getElementById('jrRemSub').textContent = pct(nRem, tot) + ' del total';
@@ -6657,10 +6929,10 @@ function renderJuridico() {
       type:'doughnut',
       data:{ labels:['Probable','Remota','Otro'], datasets:[{
         data:[nProb, nRem, Math.max(0, tot - nProb - nRem)],
-        backgroundColor:[FIDE.teal, FIDE.gray, FIDE.grayLight], borderWidth:3, borderColor:'#fff' }] },
-      options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+        backgroundColor:[FIDE.teal, FIDE.gray, FIDE.grayLight], borderWidth:0, spacing:3, borderRadius:8 }] },
+      options:{ responsive:true, maintainAspectRatio:false, cutout:'72%',
         onClick: (evt, els) => { if (!els.length) return; const k = ['probable','remota','otro'][els[0].index]; setTimeout(() => xfJuridico(k), 0); },
-        plugins:{ legend:{ position:'bottom', onClick: (e, item) => { const k = ['probable','remota','otro'][item.index]; setTimeout(() => xfJuridico(k), 0); } }, datalabels:{ color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
+        plugins:{ centerText: { value: fmt(tot), label: 'procesos' }, legend:{ position:'bottom', onClick: (e, item) => { const k = ['probable','remota','otro'][item.index]; setTimeout(() => xfJuridico(k), 0); } }, datalabels:{ display:false, color:'#fff', font:{ weight:800, size:12 }, textStrokeColor:'rgba(0,0,0,0.5)', textStrokeWidth:3,
           formatter:(v,ctx)=>{ const t=ctx.dataset.data.reduce((a,b)=>a+b,0); return t&&v/t>=0.05?(v/t*100).toFixed(0)+'%':''; } } } },
       plugins: [ChartDataLabels]
     });
@@ -6790,6 +7062,7 @@ async function loadFinancieros() {
       `Antes impto: ${fmtM(antesImp)} · Impto renta: ${fmtM(impRenta)}` + yoy(s.utilidad_total, prevUti, false);
     const mEl = document.getElementById('efMargen');
     mEl.textContent = `${(s.margen_pct || 0).toFixed(1)}%`;
+    setRing('efMargen', Math.abs(s.margen_pct || 0), (s.margen_pct || 0) >= 0 ? '#00a79d' : '#b8680f');
     mEl.style.color = (s.margen_pct || 0) >= 0 ? '#0f7b6c' : '#b8680f';
     document.getElementById('efMargenSub').textContent =
       `Antes impto: ${(s.margen_antes_impuesto_pct || 0).toFixed(1)}%`;
@@ -6823,6 +7096,8 @@ async function loadFinancieros() {
         }
       }
     });
+
+    renderFinCascada(s);
 
     // Tabla jerárquica
     renderFinTable(rows);
@@ -6968,6 +7243,29 @@ function renderFinTable(rows) {
   }).join('');
 }
 
+// Cascada (waterfall): ingresos − costos − gastos − impuesto = utilidad.
+let _efCascada = null;
+function renderFinCascada(s) {
+  const el = document.getElementById('chartFinCascada'); if (!el) return;
+  if (_efCascada) { _efCascada.destroy(); _efCascada = null; }
+  const I = s.ingresos_total || 0, C = s.costos_total || 0, G = s.gastos_total || 0, T = s.impuesto_renta_total || 0, U = s.utilidad_total || 0;
+  const pasos = [{ n: 'Ingresos', de: 0, a: I, c: FIDE.teal, v: I }];
+  let run = I;
+  [['Costos', C], ['Gastos', G], ['Impuesto de renta', T]].forEach(([n, v]) => { if (v) { pasos.push({ n, de: run - v, a: run, c: '#c9ced6', v: -v }); run -= v; } });
+  const otros = U - run;
+  if (Math.abs(otros) > Math.max(1, Math.abs(I) * 0.005)) { pasos.push({ n: 'Otros', de: Math.min(run, U), a: Math.max(run, U), c: '#e3e8ee', v: otros }); }
+  pasos.push({ n: 'Utilidad', de: 0, a: U, c: U >= 0 ? FIDE.tealDark : FIDE.coral, v: U });
+  _efCascada = new Chart(el, {
+    type: 'bar',
+    data: { labels: pasos.map(p => p.n), datasets: [{ data: pasos.map(p => [p.de, p.a]), backgroundColor: pasos.map(p => p.c), borderRadius: 8, borderSkipped: false, maxBarThickness: 72 }] },
+    options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } },
+      plugins: { legend: { display: false },
+        datalabels: { anchor: 'end', align: 'end', offset: 2, color: '#30313d', font: { size: 12, weight: 600 }, formatter: (v, ctx) => (pasos[ctx.dataIndex].v < 0 ? '−' : '') + fmtM(Math.abs(pasos[ctx.dataIndex].v)) },
+        tooltip: { callbacks: { label: ctx => { const p = pasos[ctx.dataIndex]; return `${p.n}: ${fmtCurrency(p.v)}` + (I ? ` (${(Math.abs(p.v) / I * 100).toFixed(1)}% del ingreso)` : ''); } } } },
+      scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => fmtM(v) } } } },
+    plugins: [ChartDataLabels]
+  });
+}
 // Clic en un mes de la gráfica → se resalta esa columna en la tabla (y se
 // despliegan los grupos para verla completa). Clic de nuevo = quitar.
 let _finMesHl = null;
@@ -7399,6 +7697,7 @@ function renderAnalitica() {
   });
 
   document.getElementById('anAlDia').textContent = pctAlDia.toFixed(1) + '%';
+  setRing('anAlDia', pctAlDia);
   document.getElementById('anAlDiaSub').textContent =
     fmtCurrency(agingSaldo.b0) + ' de ' + fmtCurrency(saldoTotal) + ' activo';
   document.getElementById('anNPL').textContent = npl.toFixed(2) + '%';
@@ -7876,6 +8175,143 @@ async function respaldarAhora() {
     showToast('Respaldo creado: ' + d.nombre, 'ok');
     cargarRespaldos();
   } catch (e) { showToast('Error de conexión', 'err'); }
+}
+
+// ===================== CENTRO DE CARGAS (carga única) =====================
+let _cuItems = [];   // {file, estado: 'analizando'|'listo'|'error'|'cargando'|'ok'|'fallo', info, confirmar, msg}
+(function () {
+  const drop = document.getElementById('cuDrop'), inp = document.getElementById('cuInput');
+  if (!drop || !inp) return;
+  drop.addEventListener('click', () => inp.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inp.click(); } });
+  inp.addEventListener('change', () => { cuAgregar(inp.files); inp.value = ''; });
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('sobre'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('sobre'); }));
+  drop.addEventListener('drop', e => cuAgregar(e.dataTransfer.files));
+})();
+async function cuAgregar(fileList) {
+  const nuevos = Array.from(fileList || []).filter(f => /\.xlsx?$/i.test(f.name));
+  if (!nuevos.length) { showToast('Solo se aceptan archivos de Excel (.xlsx)', 'warn'); return; }
+  for (const f of nuevos) {
+    const it = { file: f, estado: 'analizando', info: null, confirmar: false, msg: '' };
+    _cuItems.push(it); cuPintar();
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const res = await fetch('/api/cargas/analizar', { method: 'POST', credentials: 'same-origin', body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { it.estado = 'error'; it.msg = d.detail || 'No se pudo leer el archivo'; }
+      else if (!d.tipo) { it.estado = 'error'; it.msg = d.motivo || 'No reconozco este archivo'; }
+      else if (d.error) { it.estado = 'error'; it.info = d; it.msg = d.error; }
+      else { it.estado = 'listo'; it.info = d; }
+    } catch (e) { it.estado = 'error'; it.msg = 'Error de conexión al analizar'; }
+    cuPintar();
+  }
+}
+function cuPintar() {
+  const box = document.getElementById('cuLista'), acc = document.getElementById('cuAcciones');
+  if (!box) return;
+  box.innerHTML = _cuItems.map((it, i) => {
+    const d = it.info || {}, v = d.validacion || {};
+    const pill = { analizando: '<span class="cu-pill">Analizando…</span>', listo: '<span class="cu-pill tipo">Listo para cargar</span>', error: '<span class="cu-pill mal">No se cargará</span>',
+                   cargando: '<span class="cu-pill">Cargando…</span>', ok: '<span class="cu-pill bien">Cargado</span>', fallo: '<span class="cu-pill mal">Falló</span>' }[it.estado];
+    let det = '';
+    if (d.tipo) {
+      det = `<span class="cu-pill tipo">${esc(d.etiqueta)}</span> ${fmt(v.registros_nuevo != null ? v.registros_nuevo : d.filas)} registros`;
+      if (v.registros_anterior != null) det += ` · antes ${fmt(v.registros_anterior)}` + (v.variacion_pct != null ? ` (${v.variacion_pct >= 0 ? '+' : ''}${Number(v.variacion_pct).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%)` : '');
+      else det += ' · primera carga de este tipo';
+    }
+    const alertas = (v.alertas || []);
+    const alertaHtml = (it.estado === 'listo' && alertas.length) ? `<div class="alerta">${alertas.map(a => '• ' + esc(a)).join('<br>')}
+        <label><input type="checkbox" ${it.confirmar ? 'checked' : ''} onchange="_cuItems[${i}].confirmar=this.checked;cuPintar()"> Revis&eacute; y quiero cargarlo de todas formas</label></div>` : '';
+    const msg = it.msg ? `<div class="det" style="color:#7a4a0a;">${esc(it.msg)}</div>` : '';
+    return `<div class="cu-item ${it.estado === 'error' || it.estado === 'fallo' ? 'error' : (it.estado === 'ok' ? 'ok' : '')}">
+      <span class="nom">${esc(it.file.name)}</span>${pill}
+      ${det ? `<div class="det">${det}</div>` : ''}${alertaHtml}${msg}</div>`;
+  }).join('');
+  const listos = _cuItems.filter(it => it.estado === 'listo');
+  const cargables = listos.filter(it => !((it.info.validacion || {}).alertas || []).length || it.confirmar);
+  if (acc) {
+    acc.style.display = _cuItems.length ? 'flex' : 'none';
+    const btn = document.getElementById('cuBtnCargar');
+    btn.disabled = !cargables.length || _cuItems.some(it => it.estado === 'analizando' || it.estado === 'cargando');
+    btn.textContent = cargables.length ? `Cargar ${cargables.length} archivo${cargables.length === 1 ? '' : 's'}` : 'Cargar';
+    const pend = listos.length - cargables.length;
+    document.getElementById('cuResumen').textContent = pend ? `${pend} con advertencias: marca la casilla para incluirlo${pend === 1 ? '' : 's'}.` : '';
+  }
+}
+async function cuCargarTodo() {
+  const cola = _cuItems.filter(it => it.estado === 'listo' && (!((it.info.validacion || {}).alertas || []).length || it.confirmar));
+  // Orden seguro: la cartera base antes que la incremental
+  const orden = ['cartera_vieja', 'cartera_nueva'];
+  cola.sort((a, b) => (orden.indexOf(a.info.tipo) + 99) % 99 - (orden.indexOf(b.info.tipo) + 99) % 99);
+  let ok = 0;
+  for (const it of cola) {
+    it.estado = 'cargando'; cuPintar();
+    try {
+      const fd = new FormData(); fd.append('file', it.file); fd.append('tipo', it.info.tipo); if (it.confirmar) fd.append('confirmar', '1');
+      const res = await fetch('/api/cargas/aplicar', { method: 'POST', credentials: 'same-origin', body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) { it.estado = 'ok'; it.msg = ''; ok++; }
+      else { it.estado = 'fallo'; it.msg = d.detail || ('Error ' + res.status); }
+    } catch (e) { it.estado = 'fallo'; it.msg = 'Error de conexión'; }
+    cuPintar();
+  }
+  showToast(ok ? `${ok} archivo${ok === 1 ? '' : 's'} cargado${ok === 1 ? '' : 's'}. Actualizando el tablero…` : 'No se cargó ningún archivo', ok ? 'ok' : 'warn');
+  cargarCentroCargas();
+  if (ok) { try { await loadData(); } catch (e) {} try { loadSaldoCartera(); } catch (e) {} }
+}
+function cuLimpiar() { _cuItems = _cuItems.filter(it => it.estado === 'cargando'); cuPintar(); }
+async function cargarCentroCargas() {
+  if ((sessionStorage.getItem('fide_role') || '') !== 'superadmin') return;
+  try {
+    const est = await fetchJson('/api/cargas/estado');
+    const box = document.getElementById('cuEstado');
+    if (box) box.innerHTML = est.map(e => {
+      const cls = e.dias == null ? '' : e.dias <= 2 ? 'f' : e.dias <= 7 ? 'v' : 'm';
+      const txt = e.ultima_carga ? `hace ${e.dias === 0 ? 'menos de un día' : e.dias + ' día' + (e.dias === 1 ? '' : 's')} · ${fmt(e.registros || 0)} reg.` : 'sin cargar';
+      return `<div><span>${esc(e.etiqueta)}</span><b><i class="${cls}"></i>${txt}</b></div>`;
+    }).join('');
+  } catch (e) {}
+  try {
+    const h = await fetchJson('/api/cargas/historial?limit=60');
+    const tb = document.getElementById('cuHistBody');
+    if (tb) tb.innerHTML = h.length ? h.map(r => {
+      const f = r.started_at ? new Date(String(r.started_at).replace(' ', 'T') + 'Z').toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+      const vr = r.variacion_pct == null ? '–' : `<span class="${r.variacion_pct >= 0 ? 'up' : 'down'}">${r.variacion_pct >= 0 ? '+' : ''}${Number(r.variacion_pct).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</span>`;
+      const st = r.status === 'success' ? '<span class="cu-pill bien">Correcta</span>' : (r.status === 'running' ? '<span class="cu-pill">En curso</span>' : `<span class="cu-pill mal" title="${esc(r.error || '')}">Falló</span>`);
+      return `<tr><td>${f}</td><td>${esc(r.etiqueta || r.tipo || r.source)}</td><td>${esc(r.usuario_nombre || r.usuario || '-')}</td><td class="num">${fmt(r.registros || 0)}</td><td class="num kpi-sub" style="margin:0;">${vr}</td><td>${st}</td></tr>`;
+    }).join('') : '<tr><td colspan="6">Aún no hay cargas registradas.</td></tr>';
+  } catch (e) {}
+}
+
+// ===================== CIERRES MENSUALES (foto de la cartera) =====================
+let _cierresChart = null;
+async function renderCierres() {
+  const el = document.getElementById('chartCierres'), nota = document.getElementById('cierresNota'), wrap = document.getElementById('cierresWrap');
+  if (!el) return;
+  try {
+    const sn = await fetchJson('/api/cartera/snapshots?meses=24');
+    if (_cierresChart) { _cierresChart.destroy(); _cierresChart = null; }
+    if (sn.length < 2) {
+      wrap.style.display = 'none';
+      const u = sn[0];
+      nota.innerHTML = u ? `Primer cierre guardado: <b>${_reEvoLbl(u.mes)}</b> con ICV de <b>${Number(u.icv_pct).toLocaleString('es-CO', { maximumFractionDigits: 1 })}%</b> y saldo activo de <b>${fmtM(u.saldo_activo)}</b>. La gráfica aparecerá cuando haya al menos dos meses; desde ahora cada carga de cartera actualiza el cierre del mes.`
+                     : 'Aún no hay cierres guardados. Se crea el primero con la próxima carga de cartera.';
+      return;
+    }
+    wrap.style.display = ''; nota.textContent = 'El mes en curso se actualiza con cada carga; los anteriores quedan como cierre.';
+    _cierresChart = new Chart(el, {
+      data: { labels: sn.map(x => _reEvoLbl(x.mes)), datasets: [
+        { type: 'bar', label: 'Saldo activo', data: sn.map(x => x.saldo_activo), backgroundColor: hexA(FIDE.teal, 0.25), yAxisID: 'y', order: 2 },
+        { type: 'line', label: 'ICV (%)', data: sn.map(x => x.icv_pct), borderColor: FIDE.coral, backgroundColor: FIDE.coral, borderWidth: 2.5, pointRadius: 3, yAxisID: 'y1', order: 1 },
+        { type: 'line', label: 'Mora > 90 días (%)', data: sn.map(x => x.npl_pct), borderColor: '#8a4d2a', borderDash: [5, 4], borderWidth: 2, yAxisID: 'y1', order: 1 },
+      ] },
+      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' }, datalabels: { display: false },
+          tooltip: { callbacks: { label: c => c.dataset.yAxisID === 'y' ? `${c.dataset.label}: ${fmtM(c.parsed.y)}` : `${c.dataset.label}: ${Number(c.parsed.y).toFixed(1)}%` } } },
+        scales: { y: { ticks: { callback: v => fmtM(v) } }, y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { callback: v => v + '%' }, beginAtZero: true } } }
+    });
+  } catch (e) { if (nota) nota.textContent = 'No se pudieron cargar los cierres mensuales.'; }
 }
 
 async function cargarMetas() {
@@ -8595,7 +9031,7 @@ function _drawSpark(canvas, values, color, opts) {
 function _reDrawHeroCanvases(d) {
   if (d.cartera) _drawGauge(document.getElementById('reGaugeIcv'), d.cartera.icv_pct || 0, _reMetas().icv, 20);
   const vals = _reSaldoHist.map(h => Number(h.saldo_cartera) || 0).filter(v => v > 0);
-  if (vals.length >= 2) _drawSpark(document.getElementById('reSparkSaldo'), vals, FIDE.teal, { pad: 0, top: 10 });
+  if (vals.length >= 2) _drawSpark(document.getElementById('reSparkSaldo'), vals, '#ffffff', { pad: 0, top: 10 });
 }
 
 // ---- Bloque 2: KPIs operativos ----
@@ -8893,17 +9329,20 @@ async function loadEvolucionMensual(filtros) {
     const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
     const enCurso = arr.map(x => x.mes === mesActual);
     if (note) note.textContent = enCurso.some(Boolean)
-      ? 'El mes en curso se muestra más claro: aún no está completo.'
+      ? 'El tramo punteado es el mes en curso: aún no está completo.'
       : 'Cada serie usa su fecha natural: desembolso, pago o radicación.';
     const metas = _reMetas();
     const datasets = [
-      { type: 'bar', label: 'Desembolsos', data: arr.map(x => x.desembolsos_valor),
-        backgroundColor: enCurso.map(c => FIDE.blue + (c ? '55' : 'cc')), borderRadius: 3, yAxisID: 'y', order: 3 },
-      { type: 'bar', label: 'Recaudo', data: arr.map(x => x.recaudo),
-        backgroundColor: enCurso.map(c => FIDE.teal + (c ? '55' : 'cc')), borderRadius: 3, yAxisID: 'y', order: 3 },
+      // Áreas con degradado (estilo Stripe); el tramo del mes en curso va punteado.
+      { type: 'line', label: 'Recaudo', data: arr.map(x => x.recaudo),
+        borderColor: FIDE.teal, backgroundColor: gradFill(FIDE.teal), fill: true, borderWidth: 2.5, pointBackgroundColor: FIDE.teal,
+        segment: { borderDash: c => enCurso[c.p1DataIndex] ? [5, 4] : undefined }, yAxisID: 'y', order: 2 },
+      { type: 'line', label: 'Desembolsos', data: arr.map(x => x.desembolsos_valor),
+        borderColor: FIDE.blue, backgroundColor: gradFill(FIDE.blue, 0.16), fill: true, borderWidth: 2.5, pointBackgroundColor: FIDE.blue,
+        segment: { borderDash: c => enCurso[c.p1DataIndex] ? [5, 4] : undefined }, yAxisID: 'y', order: 3 },
       { type: 'line', label: 'Solicitudes (#)', data: arr.map(x => x.solicitudes_n),
-        borderColor: '#5a6a6e', backgroundColor: '#5a6a6e', borderWidth: 2,
-        pointRadius: 3, tension: 0.3, yAxisID: 'y1', order: 1 },
+        borderColor: '#a3acb9', backgroundColor: '#a3acb9', borderWidth: 1.5, borderDash: [2, 3],
+        yAxisID: 'y1', order: 1 },
     ];
     if (YOY) {
       const byMes = {}; arrTodo.forEach(x => { byMes[x.mes] = x; });

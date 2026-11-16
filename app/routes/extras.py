@@ -187,29 +187,36 @@ def _transform_pago_row(row: tuple, col_map: dict) -> dict | None:
     return rec
 
 
+def cargar_recaudo(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    if len(rows) > MAX_ROWS:
+        raise ValueError(f"Excede {MAX_ROWS} filas")
+    if not rows or len(rows) < 2:
+        raise ValueError("Archivo vacío o sin filas de datos")
+    # Ubicar columnas por NOMBRE (robusto a cambios de formato de la plataforma)
+    col_map = _resolve_pago_columns(rows[0])
+    records = [r for r in (_transform_pago_row(row, col_map) for row in rows[1:]) if r]
+
+    cols = list(records[0].keys()) if records else []
+    with get_db() as conn:
+        conn.execute("DELETE FROM pagos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='recaudo_upload' AND id < ?)", (ctx.sync_id,))
+        placeholders = ', '.join(['?'] * (len(cols) + 1))
+        cols_sql = ', '.join(cols + ['sync_batch_id'])
+        for rec in records:
+            conn.execute(f"INSERT INTO pagos ({cols_sql}) VALUES ({placeholders})",
+                         [rec.get(c) for c in cols] + [ctx.sync_id])
+    ctx.set_counts(fetched=len(rows), inserted=len(records))
+    return {"status": "success", "records": len(records)}
+
+
 @recaudo.post("/upload")
 async def recaudo_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     async with upload_session(request, user, file, source="recaudo_upload",
                               max_mb=MAX_UPLOAD_MB) as ctx:
-        rows = ctx.read_excel()
-        if len(rows) > MAX_ROWS:
-            raise ValueError(f"Excede {MAX_ROWS} filas")
-        if not rows or len(rows) < 2:
-            raise ValueError("Archivo vacío o sin filas de datos")
-        # Ubicar columnas por NOMBRE (robusto a cambios de formato de la plataforma)
-        col_map = _resolve_pago_columns(rows[0])
-        records = [r for r in (_transform_pago_row(row, col_map) for row in rows[1:]) if r]
-
-        cols = list(records[0].keys()) if records else []
-        with get_db() as conn:
-            conn.execute("DELETE FROM pagos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='recaudo_upload' AND id < ?)", (ctx.sync_id,))
-            placeholders = ', '.join(['?'] * (len(cols) + 1))
-            cols_sql = ', '.join(cols + ['sync_batch_id'])
-            for rec in records:
-                conn.execute(f"INSERT INTO pagos ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [ctx.sync_id])
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        return {"status": "success", "records": len(records)}
+        return cargar_recaudo(ctx)
 
 
 @recaudo.get("")
@@ -365,6 +372,28 @@ def recaudo_status(_user=Depends(require_auth)):
     return _upload_status_for(['recaudo_upload', 'recaudo_legacy_upload'])
 
 
+def cargar_recaudo_legacy(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    if len(rows) > MAX_LEGACY_ROWS:
+        raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
+    records = _aggregate_pagos_legacy(rows)
+    cols = ['id_prestamo','id_solicitud','identificacion','nombre','num_pagos',
+            'valor_pago_total','iva_pagado_total','cargos_netos_total','interes_mora_total',
+            'fecha_primer_pago','fecha_ultimo_pago','prestamo_cancelado','metodo_pago_principal']
+    with get_db() as conn:
+        conn.execute("DELETE FROM pagos_legacy")
+        placeholders = ', '.join(['?'] * (len(cols) + 1))
+        cols_sql = ', '.join(cols + ['sync_batch_id'])
+        for rec in records:
+            conn.execute(f"INSERT INTO pagos_legacy ({cols_sql}) VALUES ({placeholders})",
+                         [rec.get(c) for c in cols] + [ctx.sync_id])
+    ctx.set_counts(fetched=len(rows), inserted=len(records))
+    return {"status": "success", "prestamos": len(records), "filas_origen": len(rows) - 1}
+
+
 @recaudo.post("/upload-legacy")
 async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de pagos de la plataforma vieja.
@@ -374,22 +403,7 @@ async def recaudo_upload_legacy(request: Request, user=Depends(require_superadmi
         max_mb=MAX_LEGACY_MB,
         generic_error_msg="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo."
     ) as ctx:
-        rows = ctx.read_excel()
-        if len(rows) > MAX_LEGACY_ROWS:
-            raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
-        records = _aggregate_pagos_legacy(rows)
-        cols = ['id_prestamo','id_solicitud','identificacion','nombre','num_pagos',
-                'valor_pago_total','iva_pagado_total','cargos_netos_total','interes_mora_total',
-                'fecha_primer_pago','fecha_ultimo_pago','prestamo_cancelado','metodo_pago_principal']
-        with get_db() as conn:
-            conn.execute("DELETE FROM pagos_legacy")
-            placeholders = ', '.join(['?'] * (len(cols) + 1))
-            cols_sql = ', '.join(cols + ['sync_batch_id'])
-            for rec in records:
-                conn.execute(f"INSERT INTO pagos_legacy ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [ctx.sync_id])
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        return {"status": "success", "prestamos": len(records), "filas_origen": len(rows) - 1}
+        return cargar_recaudo_legacy(ctx)
 
 
 @recaudo.get("/legacy")
@@ -481,43 +495,50 @@ def _transform_solic_row(row: tuple) -> dict | None:
     return rec
 
 
+def cargar_solicitudes(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    if len(rows) > MAX_ROWS:
+        raise ValueError(f"Excede {MAX_ROWS} filas")
+    # Firma del archivo: sin esto, cualquier Excel entraba con "success" y
+    # el DELETE de abajo borraba la carga buena anterior.
+    hdr_idx = check_file_signature(
+        rows, archivo="Informe de Solicitudes (plataforma nueva)",
+        require=('solicitud origen', 'paso ruta', 'hoja ruta', 'solicitante'),
+        reject=(
+            ('tipo mvto', 'Recaudo/Movimientos'),
+            ('fecha movimiento', 'Recaudo/Movimientos'),
+            ('saldo_capital', 'Cartera'),
+            ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
+            ('naturaleza del litigio', 'Procesos Judiciales'),
+        ),
+    )
+    records = [r for r in (_transform_solic_row(row) for row in rows[hdr_idx + 1:]) if r]
+    if not records:
+        raise ValueError(
+            "El archivo tiene los encabezados correctos pero no trae "
+            "solicitudes. No se importó nada — los datos actuales quedan "
+            "intactos. Revisa los filtros con los que exportaste el reporte."
+        )
+    cols = list(records[0].keys()) if records else []
+    with get_db() as conn:
+        conn.execute("DELETE FROM solicitudes WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND id < ?)", (ctx.sync_id,))
+        placeholders = ', '.join(['?'] * (len(cols) + 1))
+        cols_sql = ', '.join(cols + ['sync_batch_id'])
+        for rec in records:
+            conn.execute(f"INSERT INTO solicitudes ({cols_sql}) VALUES ({placeholders})",
+                         [rec.get(c) for c in cols] + [ctx.sync_id])
+    ctx.set_counts(fetched=len(rows), inserted=len(records))
+    return {"status": "success", "records": len(records)}
+
+
 @solicitudes.post("/upload")
 async def solic_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     async with upload_session(request, user, file, source="solicitudes_upload",
                               max_mb=MAX_UPLOAD_MB) as ctx:
-        rows = ctx.read_excel()
-        if len(rows) > MAX_ROWS:
-            raise ValueError(f"Excede {MAX_ROWS} filas")
-        # Firma del archivo: sin esto, cualquier Excel entraba con "success" y
-        # el DELETE de abajo borraba la carga buena anterior.
-        hdr_idx = check_file_signature(
-            rows, archivo="Informe de Solicitudes (plataforma nueva)",
-            require=('solicitud origen', 'paso ruta', 'hoja ruta', 'solicitante'),
-            reject=(
-                ('tipo mvto', 'Recaudo/Movimientos'),
-                ('fecha movimiento', 'Recaudo/Movimientos'),
-                ('saldo_capital', 'Cartera'),
-                ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
-                ('naturaleza del litigio', 'Procesos Judiciales'),
-            ),
-        )
-        records = [r for r in (_transform_solic_row(row) for row in rows[hdr_idx + 1:]) if r]
-        if not records:
-            raise ValueError(
-                "El archivo tiene los encabezados correctos pero no trae "
-                "solicitudes. No se importó nada — los datos actuales quedan "
-                "intactos. Revisa los filtros con los que exportaste el reporte."
-            )
-        cols = list(records[0].keys()) if records else []
-        with get_db() as conn:
-            conn.execute("DELETE FROM solicitudes WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='solicitudes_upload' AND id < ?)", (ctx.sync_id,))
-            placeholders = ', '.join(['?'] * (len(cols) + 1))
-            cols_sql = ', '.join(cols + ['sync_batch_id'])
-            for rec in records:
-                conn.execute(f"INSERT INTO solicitudes ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [ctx.sync_id])
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        return {"status": "success", "records": len(records)}
+        return cargar_solicitudes(ctx)
 
 
 @solicitudes.get("")
@@ -606,6 +627,26 @@ def solic_status(_user=Depends(require_auth)):
     return _upload_status_for(['solicitudes_upload', 'solicitudes_legacy_upload'])
 
 
+def cargar_solicitudes_legacy(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    if len(rows) > MAX_LEGACY_ROWS:
+        raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
+    records = [r for r in (_transform_solic_legacy_row(row) for row in rows[1:]) if r]
+    cols = list(records[0].keys()) if records else []
+    with get_db() as conn:
+        conn.execute("DELETE FROM solicitudes_legacy")
+        placeholders = ', '.join(['?'] * (len(cols) + 1))
+        cols_sql = ', '.join(cols + ['sync_batch_id'])
+        for rec in records:
+            conn.execute(f"INSERT INTO solicitudes_legacy ({cols_sql}) VALUES ({placeholders})",
+                         [rec.get(c) for c in cols] + [ctx.sync_id])
+    ctx.set_counts(fetched=len(rows), inserted=len(records))
+    return {"status": "success", "records": len(records)}
+
+
 @solicitudes.post("/upload-legacy")
 async def solic_upload_legacy(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     """Carga el archivo histórico de solicitudes de la plataforma vieja."""
@@ -614,20 +655,7 @@ async def solic_upload_legacy(request: Request, user=Depends(require_superadmin)
         max_mb=MAX_LEGACY_MB,
         generic_error_msg="No se pudo importar el archivo histórico. Revisa el formato y vuelve a intentarlo."
     ) as ctx:
-        rows = ctx.read_excel()
-        if len(rows) > MAX_LEGACY_ROWS:
-            raise ValueError(f"Excede {MAX_LEGACY_ROWS} filas")
-        records = [r for r in (_transform_solic_legacy_row(row) for row in rows[1:]) if r]
-        cols = list(records[0].keys()) if records else []
-        with get_db() as conn:
-            conn.execute("DELETE FROM solicitudes_legacy")
-            placeholders = ', '.join(['?'] * (len(cols) + 1))
-            cols_sql = ', '.join(cols + ['sync_batch_id'])
-            for rec in records:
-                conn.execute(f"INSERT INTO solicitudes_legacy ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [ctx.sync_id])
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        return {"status": "success", "records": len(records)}
+        return cargar_solicitudes_legacy(ctx)
 
 
 # Normalización de estados de solicitudes solicitada por la líder de cartera:
@@ -872,40 +900,47 @@ def _transform_juridico_row(row: tuple) -> dict | None:
     return rec
 
 
+def cargar_juridico(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    # El reporte trae una fila de título ("PROCESOS JUDICIALES") antes de
+    # los encabezados; check_file_signature la salta y devuelve el índice
+    # real del header (antes se asumía rows[2:] a ciegas).
+    hdr_idx = check_file_signature(
+        rows, archivo="Informe de Procesos Judiciales",
+        require=('naturaleza del litigio', 'juzgado', 'medida cautelar'),
+        reject=(
+            ('tipo mvto', 'Recaudo/Movimientos'),
+            ('paso ruta', 'Solicitudes'),
+            ('saldo_capital', 'Cartera'),
+            ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
+        ),
+    )
+    records = [r for r in (_transform_juridico_row(row) for row in rows[hdr_idx + 1:]) if r]
+    if not records:
+        raise ValueError(
+            "El archivo tiene los encabezados correctos pero no trae "
+            "procesos. No se importó nada — los datos actuales quedan intactos."
+        )
+    cols = list(records[0].keys()) if records else []
+    with get_db() as conn:
+        conn.execute("DELETE FROM procesos_juridicos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='juridico_upload' AND id < ?)", (ctx.sync_id,))
+        placeholders = ', '.join(['?'] * (len(cols) + 1))
+        cols_sql = ', '.join(cols + ['sync_batch_id'])
+        for rec in records:
+            conn.execute(f"INSERT INTO procesos_juridicos ({cols_sql}) VALUES ({placeholders})",
+                         [rec.get(c) for c in cols] + [ctx.sync_id])
+    ctx.set_counts(fetched=len(rows), inserted=len(records))
+    return {"status": "success", "records": len(records)}
+
+
 @juridico.post("/upload")
 async def jur_upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     async with upload_session(request, user, file, source="juridico_upload",
                               max_mb=MAX_UPLOAD_MB) as ctx:
-        rows = ctx.read_excel()
-        # El reporte trae una fila de título ("PROCESOS JUDICIALES") antes de
-        # los encabezados; check_file_signature la salta y devuelve el índice
-        # real del header (antes se asumía rows[2:] a ciegas).
-        hdr_idx = check_file_signature(
-            rows, archivo="Informe de Procesos Judiciales",
-            require=('naturaleza del litigio', 'juzgado', 'medida cautelar'),
-            reject=(
-                ('tipo mvto', 'Recaudo/Movimientos'),
-                ('paso ruta', 'Solicitudes'),
-                ('saldo_capital', 'Cartera'),
-                ('saldo vigente', 'Resumen Estado Cuenta (Saldo Cartera)'),
-            ),
-        )
-        records = [r for r in (_transform_juridico_row(row) for row in rows[hdr_idx + 1:]) if r]
-        if not records:
-            raise ValueError(
-                "El archivo tiene los encabezados correctos pero no trae "
-                "procesos. No se importó nada — los datos actuales quedan intactos."
-            )
-        cols = list(records[0].keys()) if records else []
-        with get_db() as conn:
-            conn.execute("DELETE FROM procesos_juridicos WHERE sync_batch_id IN (SELECT id FROM sync_logs WHERE source='juridico_upload' AND id < ?)", (ctx.sync_id,))
-            placeholders = ', '.join(['?'] * (len(cols) + 1))
-            cols_sql = ', '.join(cols + ['sync_batch_id'])
-            for rec in records:
-                conn.execute(f"INSERT INTO procesos_juridicos ({cols_sql}) VALUES ({placeholders})",
-                             [rec.get(c) for c in cols] + [ctx.sync_id])
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        return {"status": "success", "records": len(records)}
+        return cargar_juridico(ctx)
 
 
 @juridico.get("")

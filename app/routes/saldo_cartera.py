@@ -127,80 +127,101 @@ def _detect_snapshot_date(filename: str) -> str:
     return date.today().isoformat()
 
 
+def agregar_resumen_estado_cuenta(rows) -> dict:
+    """Agrega el Resumen Estado Cuenta SIN tocar la BD. Lo usan la carga
+    (cargar_saldo_cartera) y la validación previa de /api/cargas/analizar."""
+    if not rows or len(rows) < 2:
+        raise ValueError("Archivo vacío o sin filas de datos")
+
+    # Ubicar las columnas POR NOMBRE (robusto a inserción/reordenamiento
+    # de columnas por parte de la plataforma). Lanza ValueError claro si
+    # falta alguna (típico: archivo equivocado).
+    cols = _resolve_columns(rows[0])
+    c_cap, c_corr, c_mora = cols['capital'], cols['int_corr'], cols['int_mora']
+    c_carg, c_deu, c_ret, c_tot = (cols['cargos'], cols['deudores'],
+                                   cols['retencion'], cols['total'])
+    max_col = max(cols.values())
+
+    total_capital = total_int_corr = total_int_mora = 0.0
+    total_cargos = total_deudores = total_retencion = total_general = 0.0
+    n = 0
+    # Skip fila 1 (headers). Una fila válida tiene Numero Cuenta + algún monto.
+    for r in rows[1:]:
+        if not r or len(r) <= max_col:
+            continue
+        cuenta = r[0]
+        if cuenta is None or str(cuenta).strip() == '':
+            continue  # filas vacías al final
+        n += 1
+        total_capital      += to_float(r[c_cap]) or 0
+        total_int_corr     += to_float(r[c_corr]) or 0
+        total_int_mora     += to_float(r[c_mora]) or 0
+        total_cargos       += to_float(r[c_carg]) or 0
+        total_deudores     += to_float(r[c_deu]) or 0
+        total_retencion    += to_float(r[c_ret]) or 0
+        total_general      += to_float(r[c_tot]) or 0
+    saldo_cartera = total_general - total_int_mora
+    return {'n': n, 'total_capital': total_capital, 'total_int_corr': total_int_corr,
+            'total_int_mora': total_int_mora, 'total_cargos': total_cargos,
+            'total_deudores': total_deudores, 'total_retencion': total_retencion,
+            'total_general': total_general, 'saldo_cartera': saldo_cartera}
+
+
+def cargar_saldo_cartera(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` permite pasar el Excel ya parseado por el detector."""
+    if rows is None:
+        rows = ctx.read_excel()
+    a = agregar_resumen_estado_cuenta(rows)
+    n, saldo_cartera = a['n'], a['saldo_cartera']
+    total_capital, total_int_corr, total_int_mora = (
+        a['total_capital'], a['total_int_corr'], a['total_int_mora'])
+    total_cargos, total_deudores, total_retencion, total_general = (
+        a['total_cargos'], a['total_deudores'], a['total_retencion'], a['total_general'])
+    snapshot_date = _detect_snapshot_date(ctx.file.filename or "")
+
+    try:
+        with get_db() as conn:
+            # Reemplazar snapshot de la misma fecha si ya existe (re-upload del mismo día).
+            conn.execute(
+                "DELETE FROM saldo_cartera_snapshots WHERE snapshot_date = ?",
+                (snapshot_date,)
+            )
+            conn.execute("""
+                INSERT INTO saldo_cartera_snapshots
+                (snapshot_date, n_cuentas, total_capital, total_int_corriente,
+                 total_int_mora, total_cargos_admin, total_deudores_varios,
+                 total_retencion_fuente, total_general, saldo_cartera, sync_batch_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (snapshot_date, n, total_capital, total_int_corr, total_int_mora,
+                  total_cargos, total_deudores, total_retencion, total_general,
+                  saldo_cartera, ctx.sync_id))
+    except sqlite3.IntegrityError:
+        # Race condition: otro upload del mismo snapshot_date ganó la carrera.
+        raise HTTPException(
+            status_code=409,
+            detail=f"Otra carga del {snapshot_date} ya está procesándose. Espera unos segundos y reintenta."
+        )
+
+    ctx.set_counts(fetched=len(rows), inserted=n)
+    ctx.set_audit_extra(f"snapshot_date={snapshot_date} n_cuentas={n} saldo={saldo_cartera:.0f}")
+    return {
+        "status": "success",
+        "snapshot_date": snapshot_date,
+        "n_cuentas": n,
+        "saldo_cartera": saldo_cartera,
+        "total_general": total_general,
+        "total_int_mora": total_int_mora,
+    }
+
+
 @router.post("/upload")
 async def upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     async with upload_session(
         request, user, file, source="saldo_cartera_upload", max_mb=MAX_UPLOAD_MB,
         generic_error_msg="No se pudo importar el archivo. Revisa el formato del Resumen Estado Cuenta."
     ) as ctx:
-        rows = ctx.read_excel()
-        if not rows or len(rows) < 2:
-            raise ValueError("Archivo vacío o sin filas de datos")
-
-        # Ubicar las columnas POR NOMBRE (robusto a inserción/reordenamiento
-        # de columnas por parte de la plataforma). Lanza ValueError claro si
-        # falta alguna (típico: archivo equivocado).
-        cols = _resolve_columns(rows[0])
-        c_cap, c_corr, c_mora = cols['capital'], cols['int_corr'], cols['int_mora']
-        c_carg, c_deu, c_ret, c_tot = (cols['cargos'], cols['deudores'],
-                                       cols['retencion'], cols['total'])
-        max_col = max(cols.values())
-
-        snapshot_date = _detect_snapshot_date(file.filename or "")
-
-        total_capital = total_int_corr = total_int_mora = 0.0
-        total_cargos = total_deudores = total_retencion = total_general = 0.0
-        n = 0
-        # Skip fila 1 (headers). Una fila válida tiene Numero Cuenta + algún monto.
-        for r in rows[1:]:
-            if not r or len(r) <= max_col:
-                continue
-            cuenta = r[0]
-            if cuenta is None or str(cuenta).strip() == '':
-                continue  # filas vacías al final
-            n += 1
-            total_capital      += to_float(r[c_cap]) or 0
-            total_int_corr     += to_float(r[c_corr]) or 0
-            total_int_mora     += to_float(r[c_mora]) or 0
-            total_cargos       += to_float(r[c_carg]) or 0
-            total_deudores     += to_float(r[c_deu]) or 0
-            total_retencion    += to_float(r[c_ret]) or 0
-            total_general      += to_float(r[c_tot]) or 0
-        saldo_cartera = total_general - total_int_mora
-
-        try:
-            with get_db() as conn:
-                # Reemplazar snapshot de la misma fecha si ya existe (re-upload del mismo día).
-                conn.execute(
-                    "DELETE FROM saldo_cartera_snapshots WHERE snapshot_date = ?",
-                    (snapshot_date,)
-                )
-                conn.execute("""
-                    INSERT INTO saldo_cartera_snapshots
-                    (snapshot_date, n_cuentas, total_capital, total_int_corriente,
-                     total_int_mora, total_cargos_admin, total_deudores_varios,
-                     total_retencion_fuente, total_general, saldo_cartera, sync_batch_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (snapshot_date, n, total_capital, total_int_corr, total_int_mora,
-                      total_cargos, total_deudores, total_retencion, total_general,
-                      saldo_cartera, ctx.sync_id))
-        except sqlite3.IntegrityError:
-            # Race condition: otro upload del mismo snapshot_date ganó la carrera.
-            raise HTTPException(
-                status_code=409,
-                detail=f"Otra carga del {snapshot_date} ya está procesándose. Espera unos segundos y reintenta."
-            )
-
-        ctx.set_counts(fetched=len(rows), inserted=n)
-        ctx.set_audit_extra(f"snapshot_date={snapshot_date} n_cuentas={n} saldo={saldo_cartera:.0f}")
-        return {
-            "status": "success",
-            "snapshot_date": snapshot_date,
-            "n_cuentas": n,
-            "saldo_cartera": saldo_cartera,
-            "total_general": total_general,
-            "total_int_mora": total_int_mora,
-        }
+        return cargar_saldo_cartera(ctx)
 
 
 #: Ajuste de saldo de cartera que no proviene del archivo de la plataforma

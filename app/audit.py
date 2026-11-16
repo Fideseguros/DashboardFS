@@ -57,7 +57,7 @@ def _scrub_details(details: str) -> str:
 CRITICAL_ACTIONS = {
     "credit_reveal", "credit_reveal_denied", "csv_export",
     "excel_upload", "recaudo_legacy_upload", "solicitudes_legacy_upload",
-    "juridico_upload", "financieros_upload",
+    "juridico_upload", "financieros_upload", "carga_unica",
     "user_create", "user_update", "user_deactivate",
     "login_blocked_rate_limit",
 }

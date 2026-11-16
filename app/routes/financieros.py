@@ -99,142 +99,161 @@ def _detect_year(rows: list[tuple]) -> int | None:
     return None
 
 
+def parsear_estado_resultados(content: bytes) -> dict:
+    """Parsea el Excel del Estado de Resultados SIN tocar la BD.
+
+    Devuelve {year, records, months_in_file, n_rows}. Lo usan la carga
+    (cargar_financieros) y la validación previa de /api/cargas/analizar,
+    para que ambas cuenten exactamente lo mismo."""
+    # El Excel de Estados de Resultados usa una hoja específica (no la activa)
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    sheet_name = next((s for s in wb.sheetnames if 'mes' in s.lower() or 'res' in s.lower()), wb.sheetnames[0])
+    ws = wb[sheet_name]
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    year = _detect_year(rows)
+    if not year:
+        raise ValueError("No se pudo detectar el año en el archivo")
+
+    # Acumular por (cuenta_code, month) — el Excel tiene filas con códigos
+    # repetidos (ej. 'Total 41 OPERACIONALES' aparece varias veces).
+    # Sumamos los valores en lugar de fallar por UNIQUE constraint.
+    agg = {}  # (code, month) -> {valor, desc, nivel, parent, is_total}
+    # Detectamos meses PRESENTES en el archivo independiente del valor (puede
+    # ser 0). Esto evita el bug detectado por la auditoría: si una cuenta cae
+    # a 0 entre re-uploads, el DELETE no la limpiaba porque construíamos
+    # months_in_file desde 'records' (que excluye valores 0).
+    months_present_in_file = set()
+    for r in rows:
+        if not r or len(r) < 2:
+            continue
+        parsed = _parse_cuenta(r[1] if r[1] else '')
+        if not parsed:
+            continue
+        code, desc, nivel, parent, is_total = parsed
+        for month, col_idx in MONTH_COLS.items():
+            if col_idx >= len(r):
+                continue
+            raw_cell = r[col_idx]
+            # Si la celda NO está vacía (incluye 0), el mes está presente en el archivo
+            if raw_cell is not None and str(raw_cell).strip() != '':
+                months_present_in_file.add(month)
+            val = _to_float(raw_cell)
+            if val == 0:
+                continue
+            key = (code, month)
+            if key not in agg:
+                agg[key] = {
+                    'descripcion': desc, 'nivel': nivel, 'parent': parent,
+                    'is_total': 1 if is_total else 0, 'valor': 0.0,
+                }
+            # Subtotales duplicados (mismo 'Total xxxx' repetido) → tomar el último valor
+            # Cuentas detalle (is_total=0) → sumar (puede haber legit varias filas
+            # de la misma cuenta auxiliar en distintos renglones).
+            if is_total:
+                agg[key]['valor'] = val
+            else:
+                agg[key]['valor'] += val
+
+    # ROLLUP de categorías principales (códigos de 1 dígito) que aparecen
+    # como header en el Excel pero NO tienen 'Total X' explícito.
+    # Caso real: '5 GASTOS' en fila 61 es solo label; el contador no
+    # totalizó al nivel 1 (solo Total 51, 52, 53, 54). Sin este rollup,
+    # la cascada no muestra '5 GASTOS' como categoría principal del E.R.
+    nivel1_headers = {}
+    for r in rows:
+        if not r or len(r) < 2:
+            continue
+        raw = str(r[1]).strip() if r[1] else ''
+        if not raw or raw.lower().startswith('total'):
+            continue
+        m1 = re.match(r'^(\d)\s+(.+)', raw)
+        if m1 and m1.group(1) not in nivel1_headers:
+            nivel1_headers[m1.group(1)] = m1.group(2).strip()
+    for code1, desc1 in nivel1_headers.items():
+        # Si el contador YA totalizó este nivel (ej. 'Total 4 INGRESOS' →
+        # code '4' en agg), no sobrescribir.
+        if any(k[0] == code1 for k in agg.keys()):
+            continue
+        # Sumar descendientes detalle (is_total=0) cuyo código empiece con code1.
+        # Las contra-cuentas 4175 (devoluciones en ventas) restan: vienen
+        # registradas en positivo pero son de naturaleza débito.
+        for month in months_present_in_file:
+            total = sum(
+                -v['valor'] if c.startswith('4175') else v['valor']
+                for (c, mm), v in agg.items()
+                if mm == month and not v['is_total'] and c.startswith(code1)
+            )
+            if total != 0:
+                agg[(code1, month)] = {
+                    'descripcion': desc1, 'nivel': 1, 'parent': None,
+                    'is_total': 1, 'valor': total,
+                }
+
+    records = [
+        {
+            'year': year, 'month': m, 'cuenta_code': code,
+            'cuenta_descripcion': v['descripcion'], 'nivel': v['nivel'],
+            'parent_code': v['parent'], 'is_total': v['is_total'], 'valor': v['valor'],
+        }
+        for (code, m), v in agg.items()
+    ]
+
+    # Reemplazar meses presentes en el archivo (incluyendo aquellos con todas
+    # las celdas en 0 — el DELETE limpia el mes para que las cuentas que
+    # caían a 0 no queden con su valor anterior).
+    months_in_file = sorted(months_present_in_file)
+    return {'year': year, 'records': records,
+            'months_in_file': months_in_file, 'n_rows': len(rows)}
+
+
+def cargar_financieros(ctx, rows=None) -> dict:
+    """Cuerpo de la carga, reutilizado por /api/cargas/aplicar (carga única).
+    `rows` se ignora: este reporte se lee de una hoja específica."""
+    p = parsear_estado_resultados(ctx.content)
+    year, records, months_in_file, n_rows = (
+        p['year'], p['records'], p['months_in_file'], p['n_rows'])
+
+    with get_db() as conn:
+        # Reemplazar SOLO los meses presentes en el archivo. Si el usuario
+        # sube un archivo solo con la columna ABRIL → solo se reemplaza
+        # abril; los meses previos permanecen intactos. Si sube uno
+        # acumulado (Ene-Abr) → se reemplazan los 4.
+        if months_in_file:
+            placeholders = ','.join(['?'] * len(months_in_file))
+            conn.execute(
+                f"DELETE FROM estados_financieros WHERE year = ? AND month IN ({placeholders})",
+                [year, *months_in_file]
+            )
+        for rec in records:
+            conn.execute("""
+                INSERT INTO estados_financieros
+                (year, month, cuenta_code, cuenta_descripcion, nivel, parent_code, is_total, valor, sync_batch_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rec['year'], rec['month'], rec['cuenta_code'], rec['cuenta_descripcion'],
+                  rec['nivel'], rec['parent_code'], rec['is_total'], rec['valor'], ctx.sync_id))
+
+    nombres_mes = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
+    meses_str = ', '.join(nombres_mes[m] for m in months_in_file)
+    ctx.set_counts(fetched=n_rows, inserted=len(records))
+    ctx.set_audit_extra(f"year={year} meses=[{meses_str}]")
+    return {
+        "status": "success",
+        "year": year,
+        "meses_cargados": meses_str,
+        "n_meses": len(months_in_file),
+        "records": len(records),
+    }
+
+
 @router.post("/upload")
 async def upload(request: Request, user=Depends(require_superadmin), file: UploadFile = File(...)):
     async with upload_session(
         request, user, file, source="financieros_upload", max_mb=MAX_UPLOAD_MB,
         generic_error_msg="No se pudo importar el archivo. Revisa el formato del Estado de Resultados."
     ) as ctx:
-        # El Excel de Estados de Resultados usa una hoja específica (no la activa)
-        wb = openpyxl.load_workbook(io.BytesIO(ctx.content), data_only=True, read_only=True)
-        sheet_name = next((s for s in wb.sheetnames if 'mes' in s.lower() or 'res' in s.lower()), wb.sheetnames[0])
-        ws = wb[sheet_name]
-        rows = list(ws.iter_rows(values_only=True))
-        wb.close()
-
-        year = _detect_year(rows)
-        if not year:
-            raise ValueError("No se pudo detectar el año en el archivo")
-
-        # Acumular por (cuenta_code, month) — el Excel tiene filas con códigos
-        # repetidos (ej. 'Total 41 OPERACIONALES' aparece varias veces).
-        # Sumamos los valores en lugar de fallar por UNIQUE constraint.
-        agg = {}  # (code, month) -> {valor, desc, nivel, parent, is_total}
-        # Detectamos meses PRESENTES en el archivo independiente del valor (puede
-        # ser 0). Esto evita el bug detectado por la auditoría: si una cuenta cae
-        # a 0 entre re-uploads, el DELETE no la limpiaba porque construíamos
-        # months_in_file desde 'records' (que excluye valores 0).
-        months_present_in_file = set()
-        for r in rows:
-            if not r or len(r) < 2:
-                continue
-            parsed = _parse_cuenta(r[1] if r[1] else '')
-            if not parsed:
-                continue
-            code, desc, nivel, parent, is_total = parsed
-            for month, col_idx in MONTH_COLS.items():
-                if col_idx >= len(r):
-                    continue
-                raw_cell = r[col_idx]
-                # Si la celda NO está vacía (incluye 0), el mes está presente en el archivo
-                if raw_cell is not None and str(raw_cell).strip() != '':
-                    months_present_in_file.add(month)
-                val = _to_float(raw_cell)
-                if val == 0:
-                    continue
-                key = (code, month)
-                if key not in agg:
-                    agg[key] = {
-                        'descripcion': desc, 'nivel': nivel, 'parent': parent,
-                        'is_total': 1 if is_total else 0, 'valor': 0.0,
-                    }
-                # Subtotales duplicados (mismo 'Total xxxx' repetido) → tomar el último valor
-                # Cuentas detalle (is_total=0) → sumar (puede haber legit varias filas
-                # de la misma cuenta auxiliar en distintos renglones).
-                if is_total:
-                    agg[key]['valor'] = val
-                else:
-                    agg[key]['valor'] += val
-
-        # ROLLUP de categorías principales (códigos de 1 dígito) que aparecen
-        # como header en el Excel pero NO tienen 'Total X' explícito.
-        # Caso real: '5 GASTOS' en fila 61 es solo label; el contador no
-        # totalizó al nivel 1 (solo Total 51, 52, 53, 54). Sin este rollup,
-        # la cascada no muestra '5 GASTOS' como categoría principal del E.R.
-        nivel1_headers = {}
-        for r in rows:
-            if not r or len(r) < 2:
-                continue
-            raw = str(r[1]).strip() if r[1] else ''
-            if not raw or raw.lower().startswith('total'):
-                continue
-            m1 = re.match(r'^(\d)\s+(.+)', raw)
-            if m1 and m1.group(1) not in nivel1_headers:
-                nivel1_headers[m1.group(1)] = m1.group(2).strip()
-        for code1, desc1 in nivel1_headers.items():
-            # Si el contador YA totalizó este nivel (ej. 'Total 4 INGRESOS' →
-            # code '4' en agg), no sobrescribir.
-            if any(k[0] == code1 for k in agg.keys()):
-                continue
-            # Sumar descendientes detalle (is_total=0) cuyo código empiece con code1.
-            # Las contra-cuentas 4175 (devoluciones en ventas) restan: vienen
-            # registradas en positivo pero son de naturaleza débito.
-            for month in months_present_in_file:
-                total = sum(
-                    -v['valor'] if c.startswith('4175') else v['valor']
-                    for (c, mm), v in agg.items()
-                    if mm == month and not v['is_total'] and c.startswith(code1)
-                )
-                if total != 0:
-                    agg[(code1, month)] = {
-                        'descripcion': desc1, 'nivel': 1, 'parent': None,
-                        'is_total': 1, 'valor': total,
-                    }
-
-        records = [
-            {
-                'year': year, 'month': m, 'cuenta_code': code,
-                'cuenta_descripcion': v['descripcion'], 'nivel': v['nivel'],
-                'parent_code': v['parent'], 'is_total': v['is_total'], 'valor': v['valor'],
-            }
-            for (code, m), v in agg.items()
-        ]
-
-        # Reemplazar meses presentes en el archivo (incluyendo aquellos con todas
-        # las celdas en 0 — el DELETE limpia el mes para que las cuentas que
-        # caían a 0 no queden con su valor anterior).
-        months_in_file = sorted(months_present_in_file)
-
-        with get_db() as conn:
-            # Reemplazar SOLO los meses presentes en el archivo. Si el usuario
-            # sube un archivo solo con la columna ABRIL → solo se reemplaza
-            # abril; los meses previos permanecen intactos. Si sube uno
-            # acumulado (Ene-Abr) → se reemplazan los 4.
-            if months_in_file:
-                placeholders = ','.join(['?'] * len(months_in_file))
-                conn.execute(
-                    f"DELETE FROM estados_financieros WHERE year = ? AND month IN ({placeholders})",
-                    [year, *months_in_file]
-                )
-            for rec in records:
-                conn.execute("""
-                    INSERT INTO estados_financieros
-                    (year, month, cuenta_code, cuenta_descripcion, nivel, parent_code, is_total, valor, sync_batch_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (rec['year'], rec['month'], rec['cuenta_code'], rec['cuenta_descripcion'],
-                      rec['nivel'], rec['parent_code'], rec['is_total'], rec['valor'], ctx.sync_id))
-
-        nombres_mes = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
-        meses_str = ', '.join(nombres_mes[m] for m in months_in_file)
-        ctx.set_counts(fetched=len(rows), inserted=len(records))
-        ctx.set_audit_extra(f"year={year} meses=[{meses_str}]")
-        return {
-            "status": "success",
-            "year": year,
-            "meses_cargados": meses_str,
-            "n_meses": len(months_in_file),
-            "records": len(records),
-        }
+        return cargar_financieros(ctx)
 
 
 @router.get("/years")

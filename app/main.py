@@ -13,8 +13,9 @@ from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
 from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente, resumen, audit_events
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
-from app.routes import export, admin_backup
+from app.routes import export, admin_backup, cargas
 from app.backup import start_backup_scheduler
+from app.snapshots import backfill_snapshot_cartera
 
 # Sin /docs, /redoc ni /openapi.json: exponían el mapa completo de la API a
 # cualquiera sin autenticar. Para desarrollo local: FIDE_ENABLE_DOCS=1.
@@ -44,6 +45,8 @@ app.include_router(resumen.router)
 app.include_router(audit_events.router)
 app.include_router(export.router)
 app.include_router(admin_backup.router)
+app.include_router(cargas.router)
+app.include_router(cargas.router_cartera)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
@@ -144,6 +147,7 @@ def _startup():
     # Backfill de PII enmascarada para acelerar /api/credits.
     # Solo corre si hay filas pendientes — idempotente.
     backfill_masked_pii()
+    backfill_snapshot_cartera()  # foto mensual inicial si la tabla está vacía
     start_backup_scheduler()  # hilo daemon; no corre con APP_ENV=test
 
 

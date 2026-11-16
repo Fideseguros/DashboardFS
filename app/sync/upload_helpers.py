@@ -300,28 +300,37 @@ def _create_sync_log(uploaded_by: int, source: str) -> int:
 
 
 def _finalize_sync(sync_id: int, status: str, fetched: int, inserted: int, error: str = ''):
+    # duration_seconds: antes solo lo registraban las cargas de cartera; el
+    # historial de cargas (/api/cargas/historial) lo muestra para todas.
+    ahora = datetime.utcnow().isoformat()
     with get_db() as conn:
         conn.execute(
             "UPDATE sync_logs SET status=?, completed_at=?, "
-            "records_fetched=?, records_inserted=?, error_message=? WHERE id=?",
-            (status, datetime.utcnow().isoformat(), fetched, inserted, error[:400], sync_id)
+            "records_fetched=?, records_inserted=?, error_message=?, "
+            "duration_seconds=ROUND((julianday(?) - julianday(started_at)) * 86400.0, 2) "
+            "WHERE id=?",
+            (status, ahora, fetched, inserted, error[:400], ahora, sync_id)
         )
 
 
 @asynccontextmanager
 async def upload_session(request: Request, user: dict, file: UploadFile,
                           source: str, max_mb: int = 25,
-                          generic_error_msg: str = "No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo."):
+                          generic_error_msg: str = "No se pudo importar el archivo. Revisa el formato y vuelve a intentarlo.",
+                          content: bytes | None = None):
     """Context manager que encapsula el patrón completo de upload.
 
-    - Lee el cuerpo del archivo
+    - Lee el cuerpo del archivo (o usa `content` si quien llama ya lo leyó:
+      la carga única /api/cargas/aplicar lee el archivo una sola vez para
+      detectar el tipo y luego lo pasa aquí)
     - Valida tipo y tamaño
     - Crea sync_log
     - Provee UploadContext al bloque
     - En éxito: actualiza sync_log a 'success' + audit positivo
     - En error: actualiza a 'failed' + audit negativo + HTTPException 500 con mensaje genérico
     """
-    content = await file.read()
+    if content is None:
+        content = await file.read()
     _check_upload_file(file, content, max_mb)
     sync_id = _create_sync_log(user["user_id"], source)
     ctx = UploadContext(request, user, file, source, content)

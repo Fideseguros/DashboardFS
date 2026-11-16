@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>fide. Seguros &mdash; Iniciar Sesi&oacute;n</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900;1,700;1,800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   --fide-teal: #00a79d;
@@ -141,6 +142,18 @@ body::after {
   font-size: 0.75rem;
   color: #a0a8ab;
 }
+
+/* Tema v3 (nov-2026): fondo claro, tarjeta limpia, Inter */
+body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; background: #f7f8fa; -webkit-font-smoothing: antialiased; letter-spacing: -0.006em; }
+body::before { background: radial-gradient(circle, rgba(0,167,157,0.20) 0%, transparent 68%); }
+body::after { background: radial-gradient(circle, rgba(79,214,165,0.18) 0%, transparent 68%); }
+.login-card { border: 1px solid #eceef2; border-radius: 22px; box-shadow: 0 24px 60px rgba(16,24,40,0.10); }
+.login-card .subtitle { color: #687385; }
+.form-group label { text-transform: none; letter-spacing: 0; color: #414552; font-weight: 600; font-size: 0.9rem; }
+.form-group input { border: 1px solid #e3e8ee; border-radius: 12px; }
+.form-group input:focus { border-color: #00a79d; box-shadow: 0 0 0 4px rgba(0,167,157,0.14); outline: none; }
+.btn-login { border-radius: 12px; font-weight: 600; background: #00a79d; box-shadow: 0 6px 16px rgba(0,122,115,0.25); }
+.btn-login:hover { background: #007a73; }
 </style>
 </head>
 <body>
