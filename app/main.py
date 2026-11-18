@@ -13,7 +13,7 @@ from datetime import datetime
 from app.database import init_db, get_connection, get_db, backfill_masked_pii
 from app.routes import auth, credits, sync, users, financieros, saldo_cartera, habeas_data, cliente, resumen, audit_events
 from app.routes.extras import recaudo, solicitudes as solicitudes_router, juridico
-from app.routes import export, admin_backup, cargas
+from app.routes import export, admin_backup, cargas, respaldo_externo
 from app.backup import start_backup_scheduler
 from app.snapshots import backfill_snapshot_cartera
 
@@ -45,6 +45,7 @@ app.include_router(resumen.router)
 app.include_router(audit_events.router)
 app.include_router(export.router)
 app.include_router(admin_backup.router)
+app.include_router(respaldo_externo.router)
 app.include_router(cargas.router)
 app.include_router(cargas.router_cartera)
 
